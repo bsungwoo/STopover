@@ -1,3 +1,12 @@
+"""
+Created on Sat Apr 3 18:39:34 2021
+Last modified on Thurs March 31 09:16:00 2022
+
+@author: 
+Original matlab code for graph filtration: Hye Kyung Lee
+Translation to python and addition of visualization code: Sungwoo Bae with the help of matlab2python
+
+"""
 import numpy as np
     
 def make_dendrogram_bar(history,duration,cvertical_x=None,cvertical_y=None,chorizontal_x=None,chorizontal_y=None,cdots=None): 
