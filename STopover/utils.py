@@ -24,6 +24,7 @@ class STopover(AnnData):
     min_size: minimum size of a connected component
     thres_per: lower percentile value threshold to remove the connected components
     save_path: path to save the data files
+    J_count: number of jaccard similarity calculations after the first definition
     '''
     adata: AnnData
     load_path: str
@@ -32,9 +33,9 @@ class STopover(AnnData):
     fwhm: float
     thres_per: float
     save_path: str
+    J_count: int
 
-    def __init__(self, adata=None, load_path='.', adata_format = 'log', 
-                 min_size=20, fwhm=2.5, thres_per=30, save_path='.'):
+    def __init__(self, adata=None, load_path='.', adata_format = 'log', min_size=20, fwhm=2.5, thres_per=30, save_path='.', J_count=0):
         assert min_size > 0
         assert fwhm > 0
         assert (thres_per >= 0) and (thres_per <= 100)
@@ -49,9 +50,10 @@ class STopover(AnnData):
             except: 
                 try: adata = sc.read_visium(load_path)
                 except: raise ValueError("'load_path': path to 10X-formatted Visium dataset directory or .h5ad Anndata object should be provided")
-        
-        # Add the key parameters in the .uns
-        adata.uns['min_size'], adata.uns['fwhm'], adata.uns['thres_per'] = min_size, fwhm, thres_per
+        else:
+            # Add the key parameters in the .uns
+            if J_count==0: adata.uns['obs_raw'] = adata.obs
+            adata.uns['min_size'], adata.uns['fwhm'], adata.uns['thres_per'] = min_size, fwhm, thres_per
 
         # Preprocess the Visium spatial transcriptomic data
         if adata_format == 'raw':
@@ -68,10 +70,10 @@ class STopover(AnnData):
         self.fwhm = fwhm
         self.thres_per = thres_per
         self.save_path = save_path
+        self.J_count = J_count
 
 
-
-    def topological_similarity(self, feat_pairs, group_list=None, group_name='Layer_label'):
+    def topological_similarity(self, feat_pairs, group_list=None, group_name='Layer_label', J_result_name='result'):
         '''
         ## Calculate Jaccard index for given feature pairs and return dataframe
             : if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
@@ -90,6 +92,8 @@ class STopover(AnnData):
             spatial data is divided according to the group and calculate topological overlap separately in each group
         group_list: list of the name of groups 
 
+        J_result_name: the name of the jaccard index data file name
+
         ### Output
         df_top_total: dataframe that contains spatial overlap measures represented by (Jmax, Jmean, Jmmx, Jmmy) for the feature pairs 
         and average value for the feature across the spatial spots (if group is provided, then calculate average for the spots in each group)
@@ -98,8 +102,8 @@ class STopover(AnnData):
         df, adata = topological_sim_multi_pairs_(data=self, feat_pairs=feat_pairs, group_list=group_list, group_name=group_name,
                                                 fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per)
         # save jaccard index result in .uns of anndata
-        adata.uns['J_result'] = df
-        self.__init__(adata=adata, adata_format='log', min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path)
+        adata.uns['_'.join(('J',str(J_result_name),str(self.J_count)))] = df
+        self.__init__(adata=adata, adata_format='log', min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count+1)
     
 
     def save_connected_loc_data(self, save_format='h5ad', filename = 'cc_location'):
@@ -115,6 +119,15 @@ class STopover(AnnData):
         save_connected_loc_data_(data=self, save_format=save_format, path=self.save_path, filename=filename)
 
     
+    def J_result_reset(self):
+        '''
+        ## Remove the results for jaccard similarity and connected component location and reset
+        '''
+        adata = self
+        adata.obs = adata.uns['obs_raw']
+        self.__init__(adata=adata, adata_format='log', min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=0)
+    
+
     def jaccard_similarity(self, feat_name_x="", feat_name_y="", J_metric=False):
         '''
         ## Calculate jaccard index for connected components
@@ -144,7 +157,7 @@ class STopover(AnnData):
         -> top 1, 2, 3, ... intersecting connected component locations are separately saved
         '''
         adata = jaccard_top_n_connected_loc_(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y, top_n = top_n)
-        self.__init__(adata=adata, adata_format='log', min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path)
+        self.__init__(adata=adata, adata_format='log', min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count+1)
 
 
     def vis_jaccard_top_n_pair(self, top_n = 5, cmap='tab20', spot_size=1,

@@ -56,11 +56,13 @@ def vis_jaccard_top_n_pair_(data, top_n = 5, cmap='tab20', spot_size=1,
 
     # Find keys for the image
     batch_keys = list(data.uns['spatial'].keys())
-    batch_map = dict(zip(batch_keys, range(len(batch_keys))))
-    # Rearrange the batch number
-    batch_num = batch_map[batch_keys[batch_num]]
-    # Subest the dataset to contain only the batch_num slide
-    data_mod = data_mod[data_mod.obs[batch_colname]==str(batch_num)].copy()
+    
+    if len(batch_keys) > 1:
+        batch_map = dict(zip(batch_keys, range(len(batch_keys))))
+        # Rearrange the batch number
+        batch_num = batch_map[batch_keys[batch_num]]
+        # Subest the dataset to contain only the batch_num slide
+        data_mod = data_mod[data_mod.obs[batch_colname]==str(batch_num)].copy()
 
     if adjust_image:
         # Crop the image with certain borders
@@ -140,11 +142,13 @@ def vis_all_connected_(data, vis_intersect_only = False, cmap='tab20', spot_size
 
     # Find keys for the image
     batch_keys = list(data.uns['spatial'].keys())
-    batch_map = dict(zip(batch_keys, range(len(batch_keys))))
-    # Rearrange the batch number
-    batch_num = batch_map[batch_keys[batch_num]]
-    # Subest the dataset to contain only the batch_num slide
-    data_mod_x = data_mod_x[data_mod_y.obs[batch_colname]==str(batch_num)].copy()
+
+    if len(batch_keys) > 1:
+        batch_map = dict(zip(batch_keys, range(len(batch_keys))))
+        # Rearrange the batch number
+        batch_num = batch_map[batch_keys[batch_num]]
+        # Subest the dataset to contain only the batch_num slide
+        data_mod_x = data_mod_x[data_mod_y.obs[batch_colname]==str(batch_num)].copy()
 
     # Calculate intersecting spots between connected component x and y to be visualized
     if vis_intersect_only:
