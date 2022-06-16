@@ -7,13 +7,88 @@
 
 ## Code Example  
 ```Plain Text
-
+from STopover.STopover.utils import STopover  
 ```
 
-## Python for STopover implementation    
+### 1. Create STopover object 
+load_path: path to file  
+save_path: path to save file  
+adata_format = 'raw': when raw count matrix is in .X  
+adata_format = 'log': when log-normalized count matrix is in .X  
+
+#### 1-1 Create object with Anndata object (sp_adata)  
+```Plain Text
+sp_adata = STopover(adata=sp_adata, adata_format='log', min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
+```
+
+#### 1-2 Create object with saved .h5ad file or 10X-formatted Visium directory  
+```Plain Text
+sp_adata = STopover(load_path='~/*.h5ad', adata_format='log', min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
+sp_adata = STopover(load_path='~/Visium_dir', adata_format='log', min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
+```
+
+### 2. Calculate topological similarity between the two values (expression or metadata)  
+feat_pairs: list of features (genes or metadata) with the format [('A','B'),('C','D')] or the pandas dataframe equivalent  
+group_name: name of the group to evaluate the topological similarity (usually when there is multiple Visium slides)  
+group_list: list of elements of the given group  
+J_result_name: name to save the jaccard similarity index results in adata.uns  
+
+Jaccard indexes bewteen all feature pairs are saved in adata.uns under the name 'J_'  
+Connected component locations are saved in adata.obs  
+```Plain Text
+## Analysis for the dataset containing 4 Visium slides with batch number 0 ~ 3  
+# Between two gene expression patterns (CD274 & PDCD1)  
+sp_adata.topological_similarity(feat_pairs=[('CD274','PDCD1')], group_name='batch', group_list=[str(i) for i in range(4)], J_result_name='result')   
+# Between cell fraction metadata and gene (Tumor & PDCD1)  
+sp_adata.topological_similarity(feat_pairs=[('Tumor','PDCD1')], group_name='batch', group_list=[str(i) for i in range(4)], J_result_name='result')   
+```
+
+### 3. Save the data file  
+```Plain Text
+sp_adata.save_connected_loc_data(save_format='h5ad', filename = 'adata_cc_loc')  
+```
+
+### 4. Visualize the overlapping connected components between two values  
+```Plain Text  
+# All connected component location for each feature  
+sp_adata.vis_all_connected(vis_intersect_only=False, cmap='tab20', spot_size=1, 
+                           alpha_img=0.8, alpha=0.8,  
+                           feat_name_x='CD274', feat_name_y='PDCD1',  
+                           fig_size=(5,5), 
+                           batch_colname ='batch', batch_num=0, image_res='hires',  
+                           adjust_image=True, border = 50,  
+                           fontsize=20, title = 'Locations of', return_axis=False,  
+                           save=True, save_name_add='test', dpi=300)  
+
+# Only the overlapping connected component location (color of connected components for feature x)  
+sp_adata.vis_all_connected(vis_intersect_only=True, cmap='tab20', spot_size=1, 
+                           alpha_img=0.8, alpha=0.8,  
+                           feat_name_x='CD274', feat_name_y='PDCD1',  
+                           fig_size=(5,5), 
+                           batch_colname='batch', batch_num=0, image_res='hires',  
+                           adjust_image=True, border=50,  
+                           fontsize=20, title='Locations of', return_axis=False,  
+                           save=True, save_name_add='test', dpi=300)  
+
+# Visualize top 2 connected components  
+sp_adata.vis_jaccard_top_n_pair(top_n=2, cmap='tab20', spot_size=1,
+                                alpha_img=0.8, alpha=0.8, 
+                                feat_name_x='CD274', feat_name_y='PDCD1',  
+                                fig_size=(5,5), 
+                                batch_colname='batch', batch_num=0, image_res='hires', 
+                                adjust_image=True, border=50, 
+                                fontsize=20, title = 'J', return_axis=False,
+                                save=False, save_name_add='test', dpi=300)
+```
+### 5. Initialize the STopover object for recalculation  
+```Plain Text 
+sp_adata.J_result_reset()
+```
+
+## Python for STopover implementation   
 ### Install conda environment and add jupyter kernel  
 ```Plain Text  
-  conda create --n STopover -c conda-forge graph-tool=2.45 python=3.7  
+  conda create -n STopover -c conda-forge graph-tool=2.45 python=3.7  
   conda activate STopover  
   pip install git+https://github.com/bsungwoo/STopover.git  
   python -m ipykernel install --user --name STopover --display-name STopover  

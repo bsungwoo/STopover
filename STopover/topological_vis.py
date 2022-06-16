@@ -13,7 +13,7 @@ simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 def vis_jaccard_top_n_pair_(data, top_n = 5, cmap='tab20', spot_size=1,
                             alpha_img=0.8, alpha = 0.8, feat_name_x='', feat_name_y='',
-                            fig_size = (10,10), batch_colname='batch', batch_num=0, image_res = 'hires', adjust_image = False, border = 50, 
+                            fig_size = (10,10), batch_colname='batch', batch_num=0, image_res = 'hires', adjust_image = True, border = 50, 
                             fontsize = 30, title = 'J', return_axis=False,
                             save = False, path = os.getcwd(), save_name_add = '', dpi=300):
     '''
@@ -42,9 +42,6 @@ def vis_jaccard_top_n_pair_(data, top_n = 5, cmap='tab20', spot_size=1,
     ### Outut
     axs: matplotlib axis for the plot
     '''
-    # Calculate top n connected component location
-    data_mod = jaccard_top_n_connected_loc_(data, CCx=None, CCy=None, 
-                                            feat_name_x=feat_name_x, feat_name_y=feat_name_y, top_n = top_n)
     
     xsize = ((top_n-1)//4)+1
     if xsize > 1: ysize = 4
@@ -62,8 +59,13 @@ def vis_jaccard_top_n_pair_(data, top_n = 5, cmap='tab20', spot_size=1,
         # Rearrange the batch number
         batch_num = batch_map[batch_keys[batch_num]]
         # Subest the dataset to contain only the batch_num slide
-        data_mod = data_mod[data_mod.obs[batch_colname]==str(batch_num)].copy()
+        data_mod = data[data.obs[batch_colname]==str(batch_num)].copy()
 
+    # Calculate top n connected component location
+    data_mod = jaccard_top_n_connected_loc_(data_mod, CCx=None, CCy=None, 
+                                            feat_name_x=feat_name_x, feat_name_y=feat_name_y, top_n = top_n)
+
+    # Adjust the image to contain the whole slide image
     if adjust_image:
         # Crop the image with certain borders
         height = data.uns['spatial'][batch_keys[batch_num]]['images'][image_res].shape[1]
@@ -79,7 +81,8 @@ def vis_jaccard_top_n_pair_(data, top_n = 5, cmap='tab20', spot_size=1,
         data_mod_xy = data_mod[data_mod.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))] != 0, :].copy()
     
         # Make categorical variables
-        data_mod_xy.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))] = data_mod_xy.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))].astype('category')  
+        data_mod_xy.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))] = \
+            data_mod_xy.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))].astype('category')
     
         sc.pl.spatial(data_mod_xy, img_key=image_res,
                       color='_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y)),
@@ -178,6 +181,7 @@ def vis_all_connected_(data, vis_intersect_only = False, cmap='tab20', spot_size
     else:
         fig, axs = plt.subplots(1, 2, sharey=True, tight_layout=True)
     
+    # Adjust the image to contain the whole slide image
     if adjust_image:
         # Crop the image with certain borders
         height = data.uns['spatial'][batch_keys[batch_num]]['images'][image_res].shape[1]

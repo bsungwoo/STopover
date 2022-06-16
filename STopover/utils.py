@@ -73,7 +73,7 @@ class STopover(AnnData):
         self.J_count = J_count
 
 
-    def topological_similarity(self, feat_pairs, group_list=None, group_name='Layer_label', J_result_name='result'):
+    def topological_similarity(self, feat_pairs, group_name='batch', group_list=None, J_result_name='result'):
         '''
         ## Calculate Jaccard index for given feature pairs and return dataframe
             : if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
@@ -90,7 +90,7 @@ class STopover(AnnData):
         group_name: 
             the column name for the groups saved in metadata(.obs)
             spatial data is divided according to the group and calculate topological overlap separately in each group
-        group_list: list of the name of groups 
+        group_list: list of the elements in the group 
 
         J_result_name: the name of the jaccard index data file name
 
@@ -162,7 +162,7 @@ class STopover(AnnData):
 
     def vis_jaccard_top_n_pair(self, top_n = 5, cmap='tab20', spot_size=1,
                                alpha_img=0.8, alpha = 0.8, feat_name_x='', feat_name_y='',
-                               fig_size = (10,10), batch_colname='batch', batch_num=0, image_res = 'hires', adjust_image = False, border = 50, 
+                               fig_size = (10,10), batch_colname='batch', batch_num=0, image_res = 'hires', adjust_image = True, border = 50, 
                                fontsize = 30, title = 'J', return_axis=False,
                                save = False, save_name_add = '', dpi=300):
         '''

@@ -3,7 +3,6 @@ import pandas as pd
 
 from scipy.spatial.distance import pdist, squareform
 
-from .topological_comp import add_connected_loc
 from .topological_comp import split_connected_loc
 from .topological_comp import extract_connected_loc_arr
 
@@ -16,12 +15,12 @@ def jaccard_and_connected_loc_(data=None, CCx=None, CCy=None, CCx_loc_arr=None, 
     ### Input
     data: spatial data (format: anndata) containing log-normalized gene expression
     CCx, CCy: list containing index of spots for each connected component x and y
-    CCx_loc_arr, CCy_loc_arr: location array representing the connected 
+    CCx_loc_arr, CCy_loc_arr: array representing the connected component location separately in each column
     feat_name_x, feat_name_y: name of the feature x and y
     J_metric: whether to calculate Jaccard index (Jmax, Jmean, Jmmx, Jmmy) between CCx and CCy pair 
 
     return_mode: mode of return
-        'all': return jaccard index result along with dataframe for location of connected components
+        'all': return jaccard index result along with dataframe for location of connected components and number of connected components of feature x
         'jaccard': return jaccard index result only
         'cc_loc_df': return numpy array for location of connected components only
     return_sep_loc:
@@ -87,7 +86,7 @@ def jaccard_and_connected_loc_(data=None, CCx=None, CCy=None, CCx_loc_arr=None, 
         CCxy_loc_arr = np.concatenate((np.sum(CCxy_loc_arr[:,:num_ccx], axis=1).reshape((-1,1)),
                                         np.sum(CCxy_loc_arr[:,num_ccx:], axis=1).reshape((-1,1))), axis=1)
 
-    if return_mode=='all': return J_result, CCxy_loc_arr
+    if return_mode=='all': return J_result, CCxy_loc_arr, num_ccx
     elif return_mode=='jaccard': return J_result
     else: return CCxy_loc_arr
 
@@ -116,26 +115,20 @@ def jaccard_top_n_connected_loc_(data, CCx=None, CCy=None, feat_name_x='', feat_
     if not (set(['Comb_CC_'+str(feat_name_x),'Comb_CC_'+str(feat_name_y)]) <= set(data.obs.columns)):
         if (CCx is None) or (CCy is None): 
             raise ValueError("No CC locations in 'data': 'CCx' and 'CCy' should be provided")
-        data_mod, CCx_loc_arr = add_connected_loc(data_mod, CCx, title='CC', feat_name=feat_name_x, 
-                                                  return_splitted_loc=True, thres_cc = False)
-        data_mod, CCy_loc_arr = add_connected_loc(data_mod, CCy, title='CC', feat_name=feat_name_y, 
-                                                  return_splitted_loc=True, thres_cc = False)
-    else:
-        CCx_loc_arr = data_mod.obs[['Comb_CC_'+str(feat_name_x)]].to_numpy()
-        CCy_loc_arr = data_mod.obs[['Comb_CC_'+str(feat_name_y)]].to_numpy()
-        # CCx_loc_arr = filter_connected_loc_exp(data_mod.obs[['Comb_CC_'+str(feat_name_x)]].to_numpy(), 
-        #                                        data=None, feat=feat_name_x, thres_per=0)
-        # CCy_loc_arr = filter_connected_loc_exp(data_mod.obs[['Comb_CC_'+str(feat_name_y)]].to_numpy(), 
-        #                                        data=None, feat=feat_name_y, thres_per=0)
-                                                    
-    J, CCxy_loc_arr = jaccard_and_connected_loc_(data=None, CCx=None, CCy=None, 
-                                                CCx_loc_arr=CCx_loc_arr, CCy_loc_arr=CCy_loc_arr,
-                                                feat_name_x=feat_name_x,feat_name_y=feat_name_y, J_metric=False, 
-                                                return_mode='all', return_sep_loc=True)
 
-    column_names = ['_'.join(('CC',str(i+1),str(feat_name_x))) for i in range(CCx_loc_arr.shape[1])] + \
-                                ['_'.join(('CC',str(i+1),str(feat_name_y))) for i in range(CCy_loc_arr.shape[1])]
+        J, CCxy_loc_arr, num_ccx = jaccard_and_connected_loc_(data=data_mod, CCx=CCx, CCy=CCy, 
+                                                              feat_name_x=feat_name_x,feat_name_y=feat_name_y, 
+                                                              J_metric=False, 
+                                                              return_mode='all', return_sep_loc=True)
+    else:
+        J, CCxy_loc_arr, num_ccx = jaccard_and_connected_loc_(data=data_mod, feat_name_x=feat_name_x,feat_name_y=feat_name_y, 
+                                                              J_metric=False, 
+                                                              return_mode='all', return_sep_loc=True)
+
+    column_names = ['_'.join(('CC',str(i+1),str(feat_name_x))) for i in range(num_ccx)] + \
+                                ['_'.join(('CC',str(i+1),str(feat_name_y))) for i in range(CCxy_loc_arr.shape[1]-num_ccx)]
     CCxy_df = pd.DataFrame(CCxy_loc_arr, columns=column_names).astype(int)
+    CCxy_df.index = data_mod.obs.index
     data_mod.obs = pd.concat([data_mod.obs, CCxy_df], axis=1)
     
     # Flatten int jaccard array and find the top n indexes
@@ -147,14 +140,12 @@ def jaccard_top_n_connected_loc_(data, CCx=None, CCy=None, feat_name_x='', feat_
         raise ValueError("'top_n' is larger than the non-zero J number")
     
     for num, (i, j) in enumerate(J_top_n_arg):
-        locx = data_mod.obs['_'.join(('CC',str(i+1),str(feat_name_x)))].to_numpy()
-        locy = data_mod.obs['_'.join(('CC',str(j+1),str(feat_name_y)))].to_numpy()
-        locxy = np.add(locx, locy)
-        locxy = (locxy==np.max(locxy)).astype(int)
+        locx = data_mod.obs['_'.join(('CC',str(i+1),str(feat_name_x)))]
+        locy = data_mod.obs['_'.join(('CC',str(j+1),str(feat_name_y)))]
+
         # Find intersecting location for the top n location and assign the number
-        locxy[np.nonzero(locxy)] = (num + 1)
-        # Save the result in the array
-        data_mod.obs['_'.join(('CCxy_top',str(num+1),feat_name_x,feat_name_y))] = locxy
+        data_mod.obs['_'.join(('CCxy_top',str(num+1),feat_name_x,feat_name_y))] = \
+            (num + 1) * ((locx != 0) & (locy != 0))
 
     return data_mod
 
