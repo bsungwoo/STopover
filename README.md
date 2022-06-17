@@ -1,23 +1,45 @@
 # STopover: graph filtration for extraction of spatial overlap patterns in spatial transcriptomic data
 
-## Optimal parameter choices  
-  minimum size of connected components (min_size) = 20  
-  Full width half maximum of Gaussian smoothing kernel (fwhm) = 2.5  
-  Lower percentile value threshold to remove the connected components (thres_per) = 30  
-
-## Code Example  
-```Plain Text
-from STopover.STopover.utils import STopover  
+## Python environment for implementation     
+### Install conda environment and add jupyter kernel  
+```Plain Text  
+  conda create -n STopover -c conda-forge graph-tool=2.45 python=3.7  
+  conda activate STopover  
+  ## For the private code (using token)    
+  pip install git+https://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@github.com/bsungwoo/STopover.git  
+  ## For the public code  
+  (pip install git+https://github.com/bsungwoo/STopover.git)  
+  python -m ipykernel install --user --name STopover --display-name STopover  
 ```
 
+### Dependency (python)  
+```Plain Text
+python 3.7  
+scanpy 1.5.1  
+numpy 1.21.2  
+pandas 1.3.2  
+h5py 2.10.0  
+scikit-learn 0.24.2  
+scipy 1.7.1  
+graph-tool 2.45  
+```
+
+## Code Example  
 ### 1. Create STopover object 
 load_path: path to file  
 save_path: path to save file  
 adata_format = 'raw': when raw count matrix is in .X  
 adata_format = 'log': when log-normalized count matrix is in .X  
 
+#### 1-0. Optimal parameter choices  
+  minimum size of connected components (min_size) = 20  
+  Full width half maximum of Gaussian smoothing kernel (fwhm) = 2.5  
+  Lower percentile value threshold to remove the connected components (thres_per) = 30  
+
 #### 1-1 Create object with Anndata object (sp_adata)  
 ```Plain Text
+from STopover.STopover.utils import STopover  
+
 sp_adata = STopover(adata=sp_adata, adata_format='log', min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
 ```
 
@@ -83,25 +105,4 @@ sp_adata.vis_jaccard_top_n_pair(top_n=2, cmap='tab20', spot_size=1,
 ### 5. Initialize the STopover object for recalculation  
 ```Plain Text 
 sp_adata.J_result_reset()
-```
-
-## Python for STopover implementation   
-### Install conda environment and add jupyter kernel  
-```Plain Text  
-  conda create -n STopover -c conda-forge graph-tool=2.45 python=3.7  
-  conda activate STopover  
-  pip install git+https://github.com/bsungwoo/STopover.git  
-  python -m ipykernel install --user --name STopover --display-name STopover  
-```
-
-### Dependency (python)  
-```Plain Text
-python 3.7  
-scanpy 1.5.1  
-numpy 1.21.2  
-pandas 1.3.2  
-h5py 2.10.0  
-scikit-learn 0.24.2  
-scipy 1.7.1  
-graph-tool 2.45  
 ```

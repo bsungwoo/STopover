@@ -103,6 +103,7 @@ class STopover(AnnData):
                                                 fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per)
         # save jaccard index result in .uns of anndata
         adata.uns['_'.join(('J',str(J_result_name),str(self.J_count)))] = df
+        # Initialize the object
         self.__init__(adata=adata, adata_format='log', min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count+1)
     
 
@@ -124,7 +125,15 @@ class STopover(AnnData):
         ## Remove the results for jaccard similarity and connected component location and reset
         '''
         adata = self
+        # Move the raw .obs file
         adata.obs = adata.uns['obs_raw']
+        # Remove the J_result data saved in .uns
+        import re
+        pattern = re.compile("^J_.*_[0-9]$")
+        adata_keys = adata.uns.keys()
+        for J_result_name in adata_keys:
+            if pattern.match(J_result_name): del adata.uns[J_result_name]
+        # Initialize the object
         self.__init__(adata=adata, adata_format='log', min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=0)
     
 
@@ -157,6 +166,7 @@ class STopover(AnnData):
         -> top 1, 2, 3, ... intersecting connected component locations are separately saved
         '''
         adata = jaccard_top_n_connected_loc_(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y, top_n = top_n)
+        # Initialize the object
         self.__init__(adata=adata, adata_format='log', min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count+1)
 
 
@@ -190,7 +200,6 @@ class STopover(AnnData):
         ### Outut
         axs: matplotlib axis for the plot
         '''
-
         axis = vis_jaccard_top_n_pair_(data=self, top_n=top_n, cmap=cmap, spot_size=spot_size,
                                        alpha_img=alpha_img, alpha=alpha, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
                                        fig_size=fig_size, batch_colname=batch_colname, batch_num=batch_num, image_res=image_res, adjust_image=adjust_image, border=border, 
