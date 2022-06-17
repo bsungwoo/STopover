@@ -42,13 +42,12 @@ def vis_jaccard_top_n_pair_(data, top_n = 5, cmap='tab20', spot_size=1,
     ### Outut
     axs: matplotlib axis for the plot
     '''
-    
     xsize = ((top_n-1)//4)+1
     if xsize > 1: ysize = 4
     else: ysize = ((top_n-1)%4)+1
     
-    plt.rcParams.update(plt.rcParamsDefault)
-    plt.rcParams["figure.figsize"] = (fig_size[0]*ysize, fig_size[1]*xsize)
+    # Set figure parameters
+    sc.set_figure_params(figsize=(fig_size[0]*ysize, fig_size[1]*xsize), facecolor='white', frameon=False)
     fig, axs = plt.subplots(xsize, ysize, sharey=True, tight_layout=True, squeeze=False)
 
     # Find keys for the image
@@ -90,8 +89,6 @@ def vis_jaccard_top_n_pair_(data, top_n = 5, cmap='tab20', spot_size=1,
                       cmap = cmap, size=spot_size, alpha = alpha,
                       alpha_img = alpha_img,
                       legend_loc = None, ax = axs[i//4][i%4], show = False, crop_coord = crop_coord_list)
-        
-        axs[i//4][i%4].axis('off')
         axs[i//4][i%4].set_title(feat_name_x+' & '+feat_name_y+'\n'+title+" top "+str(i+1)+" CCxy", fontsize = fontsize)
         
     if save: plt.savefig(os.path.join(path,'_'.join(('J_top',str(top_n),
@@ -135,7 +132,6 @@ def vis_all_connected_(data, vis_intersect_only = False, cmap='tab20', spot_size
     ### Outut
     axs: matplotlib axis for the plot
     '''
-    
     # Check the feasibility of the dataset
     if set(['Comb_CC_'+feat_name_x,'Comb_CC_'+feat_name_y]) <= set(data.obs.columns):
         data_mod_x = data.copy()
@@ -174,8 +170,8 @@ def vis_all_connected_(data, vis_intersect_only = False, cmap='tab20', spot_size
         data_mod_x.obs['Comb_CC_'+feat_name_x] = data_mod_x.obs['Comb_CC_'+feat_name_x].astype('category')
         data_mod_y.obs['Comb_CC_'+feat_name_y] = data_mod_y.obs['Comb_CC_'+feat_name_y].astype('category')
             
-    plt.rcParams.update(plt.rcParamsDefault)
-    plt.rcParams["figure.figsize"] = fig_size
+    # Set figure parameters
+    sc.set_figure_params(figsize=fig_size, facecolor='white', frameon=False)
     if vis_intersect_only:
         fig, axs = plt.subplots(1, 1, sharey=True, tight_layout=True)
     else:
@@ -194,27 +190,22 @@ def vis_all_connected_(data, vis_intersect_only = False, cmap='tab20', spot_size
 
     if vis_intersect_only:
         sc.pl.spatial(data_mod_x, img_key=image_res, color='_'.join(('Comb_CCxy_int',feat_name_x,feat_name_y)),
-                    library_id=batch_keys[batch_num],
-                    cmap = cmap, size=spot_size, alpha_img = alpha_img,
-                    alpha = alpha, legend_loc = None, ax = axs, show = False, crop_coord = crop_coord_list)
-        axs.axis('off')
+                      library_id=batch_keys[batch_num],
+                      cmap = cmap, size=spot_size, alpha_img = alpha_img,
+                      alpha = alpha, legend_loc = None, ax = axs, show = False, crop_coord = crop_coord_list)
         axs.set_title(feat_name_x+' & '+feat_name_y+'\n'+title+" CC", fontsize = fontsize)
     else:
         # Plot the top genes
         sc.pl.spatial(data_mod_x, img_key=image_res, color='_'.join(('Comb_CC',feat_name_x)),
-                    library_id=batch_keys[batch_num],
-                    cmap = cmap, size=spot_size, alpha_img = alpha_img,
-                    alpha = alpha, legend_loc = None, ax = axs[0], show = False, crop_coord = crop_coord_list)
+                      library_id=batch_keys[batch_num],
+                      cmap = cmap, size=spot_size, alpha_img = alpha_img,
+                      alpha = alpha, legend_loc = None, ax = axs[0], show = False, crop_coord = crop_coord_list)
         sc.pl.spatial(data_mod_y, img_key=image_res, color='_'.join(('Comb_CC',feat_name_y)),
-                    library_id=batch_keys[batch_num],
-                    cmap = cmap, size=spot_size, alpha_img = alpha_img,
-                    alpha = alpha, legend_loc = None, ax = axs[1], show = False, crop_coord = crop_coord_list)
-        
-        axs[0].axis('off')
-        axs[1].axis('off')
+                      library_id=batch_keys[batch_num],
+                      cmap = cmap, size=spot_size, alpha_img = alpha_img,
+                      alpha = alpha, legend_loc = None, ax = axs[1], show = False, crop_coord = crop_coord_list)
         axs[0].set_title(feat_name_x+'\n'+title+" CC", fontsize = fontsize)
         axs[1].set_title(feat_name_y+'\n'+title+" CC", fontsize = fontsize)
-        # cax = plt.colorbar(mat, ticks=np.arange(np.min(data), np.max(data) + 1))
     
     if save: plt.savefig(os.path.join(path,
                                     '_'.join(('Loc_CCxy',feat_name_x,feat_name_y,save_name_add+'.png'))), dpi=dpi)

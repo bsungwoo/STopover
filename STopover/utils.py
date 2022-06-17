@@ -1,6 +1,4 @@
-import os
 import scanpy as sc
-
 from anndata import AnnData
 
 from .topological_sim import topological_sim_multi_pairs_
