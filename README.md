@@ -51,18 +51,26 @@ sp_adata = STopover(load_path='~/Visium_dir', adata_format='log', min_size=20, f
 
 ### 2. Calculate topological similarity between the two values (expression or metadata)  
 feat_pairs: list of features (genes or metadata) with the format [('A','B'),('C','D')] or the pandas dataframe equivalent  
-group_name: name of the group to evaluate the topological similarity (usually when there is multiple Visium slides)  
+group_name: name of the group to seprately evaluate the topological similarity (usually when there is multiple Visium slides)  
+-> when there is only one slide, then group_name = None
+-> when there are multiple slides, then group_name = (group name to identify slides; e.g. 'batch')
 group_list: list of elements of the given group  
 J_result_name: name to save the jaccard similarity index results in adata.uns  
 
 Jaccard indexes bewteen all feature pairs are saved in adata.uns under the name 'J_'  
 Connected component locations are saved in adata.obs  
 ```Plain Text
+## Analysis for the dataset having 1 Visium slide
+# Between two gene expression patterns (CD274 & PDCD1)  
+sp_adata.topological_similarity(feat_pairs=[('CD274','PDCD1')], J_result_name='result')   
+# Between cell fraction metadata and gene (Tumor & PDCD1)  
+sp_adata.topological_similarity(feat_pairs=[('Tumor','PDCD1')], J_result_name='result')  
+
 ## Analysis for the dataset containing 4 Visium slides with batch number 0 ~ 3  
 # Between two gene expression patterns (CD274 & PDCD1)  
 sp_adata.topological_similarity(feat_pairs=[('CD274','PDCD1')], group_name='batch', group_list=[str(i) for i in range(4)], J_result_name='result')   
 # Between cell fraction metadata and gene (Tumor & PDCD1)  
-sp_adata.topological_similarity(feat_pairs=[('Tumor','PDCD1')], group_name='batch', group_list=[str(i) for i in range(4)], J_result_name='result')   
+sp_adata.topological_similarity(feat_pairs=[('Tumor','PDCD1')], group_name='batch', group_list=[str(i) for i in range(4)], J_result_name='result')  
 ```
 
 ### 3. Save the data file  

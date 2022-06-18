@@ -81,7 +81,7 @@ def topological_sim_pair(data=None, feat_x=None, feat_y=None, fwhm = 2.5, min_si
             if var_data:
                 # Load feature expression
                 if isinstance(data.X, np.ndarray): value_list.append(data[:,feat].X)
-                elif isinstance(data.X, sparse.csr_matrix): value_list.append(data[:,feat].X.toarray())
+                elif isinstance(data.X, sparse.spmatrix): value_list.append(data[:,feat].X.toarray())
                 else: raise ValueError("'data.X' should be either numpy ndarray or scipy sparse matrix")                
     else:
         if feat_y is None: value_list = [feat_x]
@@ -197,8 +197,8 @@ def topological_sim_multi_pairs_(data, feat_pairs, group_list=None, group_name='
     
     # Determine the type of the data
     if isinstance(data.X, np.ndarray): data_type = 'array'
-    elif isinstance(data.X, sparse.csr_matrix): data_type = 'sparse'
-    else: ValueError("'data.X' should be either numpy ndarray or scipy sparse matrix")
+    elif isinstance(data.X, sparse.spmatrix): data_type = 'sparse'
+    else: raise ValueError("'data.X' should be either numpy ndarray or scipy sparse matrix")
 
     # Change the column names if nan is included
     if np.nan in data.obs.columns:

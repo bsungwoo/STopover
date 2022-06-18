@@ -44,14 +44,17 @@ class STopover(AnnData):
             try: 
                 adata = sc.read_h5ad(load_path)
                 try: min_size, fwhm, thres_per = adata.uns['min_size'], adata.uns['fwhm'], adata.uns['thres_per']
-                except: pass
+                except: adata.uns['min_size'], adata.uns['fwhm'], adata.uns['thres_per'] = min_size, fwhm, thres_per
             except: 
-                try: adata = sc.read_visium(load_path)
+                try:
+                    adata = sc.read_visium(load_path)
+                    adata.uns['min_size'], adata.uns['fwhm'], adata.uns['thres_per'] = min_size, fwhm, thres_per
                 except: raise ValueError("'load_path': path to 10X-formatted Visium dataset directory or .h5ad Anndata object should be provided")
         else:
             # Add the key parameters in the .uns
-            if J_count==0: adata.uns['obs_raw'] = adata.obs
             adata.uns['min_size'], adata.uns['fwhm'], adata.uns['thres_per'] = min_size, fwhm, thres_per
+        # Preserve raw .obs data in .uns
+        if J_count==0: adata.uns['obs_raw'] = adata.obs
 
         # Preprocess the Visium spatial transcriptomic data
         if adata_format == 'raw':
@@ -128,7 +131,7 @@ class STopover(AnnData):
         # Remove the J_result data saved in .uns
         import re
         pattern = re.compile("^J_.*_[0-9]$")
-        adata_keys = adata.uns.keys()
+        adata_keys = list(adata.uns.keys())
         for J_result_name in adata_keys:
             if pattern.match(J_result_name): del adata.uns[J_result_name]
         # Initialize the object

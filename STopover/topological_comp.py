@@ -140,7 +140,7 @@ def filter_connected_loc_exp(CC_loc_arr, data=None, feat=None, thres_per=30):
         elif feat in data.var.index: 
             # Determine the type of the data
             if isinstance(data.X, np.ndarray): feat_data = data[:,feat].X
-            elif isinstance(data.X, sparse.csr_matrix): feat_data = data[:,feat].X.toarray()
+            elif isinstance(data.X, sparse.spmatrix): feat_data = data[:,feat].X.toarray()
             else: ValueError("'data.X' should be either numpy ndarray or scipy sparse matrix")
         else: raise ValueError("'feat_exp' is not found among gene names and metadata")
     elif isinstance(feat, np.ndarray): feat_data = feat
