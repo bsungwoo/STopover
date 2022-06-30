@@ -51,9 +51,9 @@ sp_adata = STopover(load_path='~/Visium_dir', adata_format='log', min_size=20, f
 
 ### 2. Calculate topological similarity between the two values (expression or metadata)  
 feat_pairs: list of features (genes or metadata) with the format [('A','B'),('C','D')] or the pandas dataframe equivalent  
-group_name: name of the group to seprately evaluate the topological similarity (usually when there is multiple Visium slides)  
--> when there is only one slide, then group_name = None  
--> when there are multiple slides, then group_name = (group name to identify slides; e.g. 'batch')  
+group_name: name of the group to seprately evaluate the topological similarity  
+  -> when there is only one slide, then group_name = None  
+  -> when there are multiple slides, then group_name = (group name to identify slides; e.g. 'batch')  
 group_list: list of elements of the given group  
 J_result_name: name to save the jaccard similarity index results in adata.uns  
 
@@ -85,7 +85,7 @@ sp_adata.vis_all_connected(vis_intersect_only=False, cmap='tab20', spot_size=1,
                            alpha_img=0.8, alpha=0.8,  
                            feat_name_x='CD274', feat_name_y='PDCD1',  
                            fig_size=(5,5), 
-                           batch_colname ='batch', batch_num=0, image_res='hires',  
+                           batch_colname ='batch', batch_name='0', image_res='hires',  
                            adjust_image=True, border = 50,  
                            fontsize=20, title = 'Locations of', return_axis=False,  
                            save=True, save_name_add='test', dpi=300)  
@@ -94,21 +94,21 @@ sp_adata.vis_all_connected(vis_intersect_only=False, cmap='tab20', spot_size=1,
 sp_adata.vis_all_connected(vis_intersect_only=True, cmap='tab20', spot_size=1, 
                            alpha_img=0.8, alpha=0.8,  
                            feat_name_x='CD274', feat_name_y='PDCD1',  
-                           fig_size=(5,5), 
-                           batch_colname='batch', batch_num=0, image_res='hires',  
+                           fig_size=(5,5),  
+                           batch_colname='batch', batch_name='0', image_res='hires',  
                            adjust_image=True, border=50,  
                            fontsize=20, title='Locations of', return_axis=False,  
                            save=True, save_name_add='test', dpi=300)  
 
 # Visualize top 2 connected components  
-sp_adata.vis_jaccard_top_n_pair(top_n=2, cmap='tab20', spot_size=1,
+sp_adata.vis_jaccard_top_n_pair(top_n=2, cmap='tab20', spot_size=1,  
                                 alpha_img=0.8, alpha=0.8, 
                                 feat_name_x='CD274', feat_name_y='PDCD1',  
                                 fig_size=(5,5), 
-                                batch_colname='batch', batch_num=0, image_res='hires', 
-                                adjust_image=True, border=50, 
-                                fontsize=20, title = 'J', return_axis=False,
-                                save=False, save_name_add='test', dpi=300)
+                                batch_colname='batch', batch_name='0', image_res='hires', 
+                                adjust_image=True, border=50,  
+                                fontsize=20, title = 'J', return_axis=False,  
+                                save=False, save_name_add='test', dpi=300)  
 ```
 ### 5. Initialize the STopover object for recalculation  
 ```Plain Text 

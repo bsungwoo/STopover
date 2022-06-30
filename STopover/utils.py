@@ -173,7 +173,8 @@ class STopover(AnnData):
 
     def vis_jaccard_top_n_pair(self, top_n = 5, cmap='tab20', spot_size=1,
                                alpha_img=0.8, alpha = 0.8, feat_name_x='', feat_name_y='',
-                               fig_size = (10,10), batch_colname='batch', batch_num=0, image_res = 'hires', adjust_image = True, border = 50, 
+                               fig_size = (10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
+                               image_res = 'hires', adjust_image = True, border = 50, 
                                fontsize = 30, title = 'J', return_axis=False,
                                save = False, save_name_add = '', dpi=300):
         '''
@@ -187,7 +188,11 @@ class STopover(AnnData):
 
         fig_size: size of the drawn figure
         batch_colname: column name to categorize the batch in .obs
-        batch_num: batch number for the image if the multiple slides are merged and provided as one AnnData
+        batch_name: the name of the batch slide to visualize (should be one of the elements of batch in .obs)
+        batch_library_dict: dictionary that matches batch name with library keys in adata.uns["spatial"]
+            -> can be utilized When the multiple Visium slides are merged.
+            -> if not provided, then categories for batch_colname in .obs will be matched with library keys in adata.uns["spatial"]
+
         image_res: resolution of the tissue image to be used in visualization ('hires' or 'lowres')
         adjust_image: whether to adjust the image to show the whole tissue image, if False then crop and show the location of connected component spots only
         border: border of the spots around the spots; this information is used to adjust the image
@@ -203,7 +208,8 @@ class STopover(AnnData):
         '''
         axis = vis_jaccard_top_n_pair_(data=self, top_n=top_n, cmap=cmap, spot_size=spot_size,
                                        alpha_img=alpha_img, alpha=alpha, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
-                                       fig_size=fig_size, batch_colname=batch_colname, batch_num=batch_num, image_res=image_res, adjust_image=adjust_image, border=border, 
+                                       fig_size=fig_size, batch_colname=batch_colname, batch_name=batch_name, batch_library_dict=batch_library_dict,
+                                       image_res=image_res, adjust_image=adjust_image, border=border, 
                                        fontsize=fontsize, title=title, return_axis=return_axis,
                                        save = save, path = self.save_path, save_name_add = save_name_add, dpi=dpi)
         return axis
@@ -211,7 +217,8 @@ class STopover(AnnData):
 
     def vis_all_connected(self, vis_intersect_only = False, cmap='tab20', spot_size=1, 
                           alpha_img=0.8, alpha = 0.8, feat_name_x='', feat_name_y='',
-                          fig_size=(20,10), batch_colname='batch', batch_num=0, image_res = 'hires', adjust_image = True, border = 50, 
+                          fig_size=(20,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
+                          image_res = 'hires', adjust_image = True, border = 50, 
                           fontsize=30, title = 'Locations of', return_axis=False,
                           save = False, save_name_add = '', dpi = 300):
         '''
@@ -227,7 +234,11 @@ class STopover(AnnData):
 
         fig_size: size of the drawn figure
         batch_colname: column name to categorize the batch in .obs
-        batch_num: batch number for the image if the multiple slides are merged and provided as one AnnData
+        batch_name: the name of the batch slide to visualize (should be one of the elements of batch in .obs)
+        batch_library_dict: dictionary that matches batch name with library keys in adata.uns["spatial"]
+            -> can be utilized When the multiple Visium slides are merged.
+            -> if not provided, then categories for batch_colname in .obs will be matched with library keys in adata.uns["spatial"]
+
         image_res: resolution of the tissue image to be used in visualization ('hires' or 'lowres')
         adjust_image: whether to adjust the image to show the whole tissue image, if False then crop and show the location of connected component spots only
         border: border of the spots around the spots; this information is used to adjust the image
@@ -243,7 +254,8 @@ class STopover(AnnData):
         '''
         axis = vis_all_connected_(data=self, vis_intersect_only = vis_intersect_only, cmap=cmap, spot_size=spot_size, 
                                   alpha_img = alpha_img, alpha = alpha, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
-                                  fig_size = fig_size, batch_colname=batch_colname, batch_num = batch_num, image_res = image_res, adjust_image = adjust_image, border = border, 
+                                  fig_size = fig_size, batch_colname=batch_colname, batch_name = batch_name, batch_library_dict=batch_library_dict,
+                                  image_res = image_res, adjust_image = adjust_image, border = border, 
                                   fontsize = fontsize, title = title, return_axis=return_axis,
                                   save = save, path = self.save_path, save_name_add = save_name_add, dpi = dpi)
         return axis

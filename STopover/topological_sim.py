@@ -90,7 +90,8 @@ def topological_sim_pair(data=None, feat_x=None, feat_y=None, fwhm = 2.5, min_si
     # Calculate adjacency matrix and mask if data is provided
     if data is not None:
         # Load location information of spots
-        loc = data.obs.loc[:,['array_row','array_col']].to_numpy()
+        try: loc = data.obs.loc[:,['array_row','array_col']].to_numpy()
+        except: raise ValueError("'data' should contain coordinates of spots in .obs as 'array_row' and 'array_col'")
         # Calculate spatial adjacency matrix and mask for gaussian smoothing
         A, mask = extract_adjacency_spatial(loc, fwhm=fwhm)
 
@@ -309,7 +310,8 @@ def topological_sim_multi_pairs_(data, feat_pairs, group_list=None, group_name='
         df_top_total = df_top_total.append(df_tmp)
 
         # Add the location information of the spots
-        loc_list.append(data_sub.obs.loc[:,['array_row','array_col']].to_numpy())
+        try: loc_list.append(data_sub.obs.loc[:,['array_row','array_col']].to_numpy())
+        except: raise ValueError("'data' should contain coordinates of spots in .obs as 'array_row' and 'array_col'")
         
     # Make dataframe for the list of feature 1 and 2 across the groups
     column_names = [group_name,'Feat_1','Feat_2','Avg_1','Avg_2','Index_1','Index_2']
