@@ -55,7 +55,7 @@ class STopover(AnnData):
             # Add the key parameters in the .uns
             adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'] = min_size, fwhm, thres_per
         # Preserve raw .obs data in .uns
-        if J_count==0: adata.uns['obs_raw'] = adata_mod.obs
+        if J_count==0: adata_mod.uns['obs_raw'] = adata_mod.obs
 
         # Preprocess the Visium spatial transcriptomic data
         if adata_format == 'raw':
