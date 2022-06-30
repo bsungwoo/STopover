@@ -38,7 +38,7 @@ adata_format = 'log': when log-normalized count matrix is in .X
 
 #### 1-1 Create object with Anndata object (sp_adata)  
 ```Plain Text
-from STopover.utils import STopover  
+from STopover import STopover  
 
 sp_adata = STopover(adata=sp_adata, adata_format='log', min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
 ```
