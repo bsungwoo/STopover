@@ -28,8 +28,8 @@ graph-tool 2.45
 ### 1. Create STopover object 
 load_path: path to file  
 save_path: path to save file  
-adata_format = 'raw': when raw count matrix is in .X  
-adata_format = 'log': when log-normalized count matrix is in .X  
+adata_type: type of spatial data ('visium' or 'cosmx')  
+lognorm: whether to lognormalize the count matrix saved in adata.X  
 
 #### 1-0. Optimal parameter choices  
   minimum size of connected components (min_size) = 20  
@@ -40,13 +40,13 @@ adata_format = 'log': when log-normalized count matrix is in .X
 ```Plain Text
 from STopover import STopover  
 
-sp_adata = STopover(adata=sp_adata, adata_format='log', min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
+sp_adata = STopover(adata=sp_adata, adata_type='visium', lognorm=False, min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
 ```
 
 #### 1-2 Create object with saved .h5ad file or 10X-formatted Visium directory  
 ```Plain Text
-sp_adata = STopover(load_path='~/*.h5ad', adata_format='log', min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
-sp_adata = STopover(load_path='~/Visium_dir', adata_format='log', min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
+sp_adata = STopover(load_path='~/*.h5ad', adata_type='visium', lognorm=False, min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
+sp_adata = STopover(load_path='~/Visium_dir', adata_type='visium', lognorm=False, min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
 ```
 
 ### 2. Calculate topological similarity between the two values (expression or metadata)  

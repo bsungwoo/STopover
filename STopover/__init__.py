@@ -1,12 +1,12 @@
 import scanpy as sc
 from anndata import AnnData
 
-from .topological_sim import topological_sim_multi_pairs_
+from .topological_sim import topological_sim_pairs_
 from .topological_comp import save_connected_loc_data_
 from .jaccard import jaccard_and_connected_loc_
 from .jaccard import jaccard_top_n_connected_loc_
-from .topological_vis import vis_all_connected_
-from .topological_vis import vis_jaccard_top_n_pair_
+from .topological_vis import vis_all_connected_visium
+from .topological_vis import vis_jaccard_top_n_pair_visium
 
 
 
@@ -16,8 +16,9 @@ class STopover(AnnData):
     
     ### Input
     adata: Anndata object for spatial transcriptomic data with count matrix ('raw') in .X
-    adata_format: format of the given count matrix in adata.X ('log' for log-normalized count and 'raw' for raw count matrix)
     load_path: path to 10X-formatted Visium dataset directory or .h5ad Anndata object
+    adata_type: type of the Anndata object('visium' or 'cosmx')
+    lognorm: whether to lognormalize (total count normalize and log transform) the count matrix saved in adata.X
     fwhm: full width half maximum value for the gaussian smoothing kernal
     min_size: minimum size of a connected component
     thres_per: lower percentile value threshold to remove the connected components
@@ -26,17 +27,19 @@ class STopover(AnnData):
     '''
     adata: AnnData
     load_path: str
-    adata_format: str
+    adata_type: str
+    lognorm: bool
     min_size: int
     fwhm: float
     thres_per: float
     save_path: str
     J_count: int
 
-    def __init__(self, adata=None, load_path='.', adata_format = 'log', min_size=20, fwhm=2.5, thres_per=30, save_path='.', J_count=0):
+    def __init__(self, adata=None, load_path='.', adata_type='visium', lognorm=False, min_size=20, fwhm=2.5, thres_per=30, save_path='.', J_count=0):
         assert min_size > 0
         assert fwhm > 0
         assert (thres_per >= 0) and (thres_per <= 100)
+        assert adata_type in ['visium','cosmx'], "'data_type' should be either 'visium' or 'cosmx'"
 
         # Load the Visium spatial transcriptomic data if no AnnData file was provided
         if adata is None:
@@ -58,16 +61,12 @@ class STopover(AnnData):
         if J_count==0: adata_mod.uns['obs_raw'] = adata_mod.obs
 
         # Preprocess the Visium spatial transcriptomic data
-        if adata_format == 'raw':
+        if lognorm:
+            if 'log1p' in adata_mod.uns.keys(): print("'adata' seems to be already log-transformed")
             sc.pp.normalize_total(adata_mod, target_sum=1e4, inplace=True)
             sc.pp.log1p(adata_mod)
-            super(STopover, self).__init__(X=adata_mod.X, obs=adata_mod.obs, var=adata_mod.var, uns=adata_mod.uns, obsm=adata_mod.obsm)
-        elif adata_format == 'log':
-            super(STopover, self).__init__(X=adata_mod.X, obs=adata_mod.obs, var=adata_mod.var, uns=adata_mod.uns, obsm=adata_mod.obsm)
-        else:
-            raise ValueError("'adata_format' should be either 'raw' or 'log'")
+        super(STopover, self).__init__(X=adata_mod.X, obs=adata_mod.obs, var=adata_mod.var, uns=adata_mod.uns, obsm=adata_mod.obsm)
 
-        self.adata_format = adata_format
         self.min_size = min_size
         self.fwhm = fwhm
         self.thres_per = thres_per
@@ -101,12 +100,12 @@ class STopover(AnnData):
         and average value for the feature across the spatial spots (if group is provided, then calculate average for the spots in each group)
         data_mod: AnnData with summed location of all connected components in metadata(.obs) across all feature pairs
         '''
-        df, adata = topological_sim_multi_pairs_(data=self, feat_pairs=feat_pairs, group_list=group_list, group_name=group_name,
-                                                fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per)
+        df, adata = topological_sim_pairs_(data=self, feat_pairs=feat_pairs, group_list=group_list, group_name=group_name,
+                                            fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per)
         # save jaccard index result in .uns of anndata
         adata.uns['_'.join(('J',str(J_result_name),str(self.J_count)))] = df
         # Initialize the object
-        self.__init__(adata=adata, adata_format='log', min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count+1)
+        self.__init__(adata=adata, lognorm=False, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count+1)
     
 
     def save_connected_loc_data(self, save_format='h5ad', filename = 'cc_location'):
@@ -136,22 +135,22 @@ class STopover(AnnData):
         for J_result_name in adata_keys:
             if pattern.match(J_result_name): del adata.uns[J_result_name]
         # Initialize the object
-        self.__init__(adata=adata, adata_format='log', min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=0)
+        self.__init__(adata=adata, lognorm=False, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=0)
     
 
-    def jaccard_similarity(self, feat_name_x="", feat_name_y="", J_metric=False):
+    def jaccard_similarity(self, feat_name_x="", feat_name_y="", J_index=False):
         '''
         ## Calculate jaccard index for connected components
         ### Input
         feat_name_x, feat_name_y: name of the feature x and y
-        J_metric: whether to calculate Jaccard index (Jmax, Jmean, Jmmx, Jmmy) between CCx and CCy pair 
+        J_index: whether to calculate Jaccard index (Jmax, Jmean, Jmmx, Jmmy) between CCx and CCy pair 
 
         ### Output
-        if J_metric is True, then jaccard simliarity metrics calculated from jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
+        if J_index is True, then jaccard simliarity metrics calculated from jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
             (Jmax, Jmean, Jmmx, Jmmy): maximum jaccard index, mean jaccard index and mean of maximum jaccard for CCx and CCy
-        if J_metric is False, then return jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
+        if J_index is False, then return jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
         '''
-        J_result = jaccard_and_connected_loc_(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y, J_metric=J_metric, 
+        J_result = jaccard_and_connected_loc_(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y, J_index=J_index, 
                                               return_mode='jaccard', return_sep_loc=False)
         return J_result
 
@@ -169,11 +168,11 @@ class STopover(AnnData):
         '''
         adata = jaccard_top_n_connected_loc_(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y, top_n = top_n)
         # Initialize the object
-        self.__init__(adata=adata, adata_format='log', min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count+1)
+        self.__init__(adata=adata, lognorm=False, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count+1)
 
 
-    def vis_jaccard_top_n_pair(self, top_n = 5, cmap='tab20', spot_size=1,
-                               alpha_img=0.8, alpha = 0.8, feat_name_x='', feat_name_y='',
+    def vis_jaccard_top_n_pair(self, feat_name_x='', feat_name_y='',
+                               top_n = 5, spot_size=1, alpha_img=0.8, alpha = 0.8, 
                                fig_size = (10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
                                image_res = 'hires', adjust_image = True, border = 50, 
                                fontsize = 30, title = 'J', return_axis=False,
@@ -181,11 +180,10 @@ class STopover(AnnData):
         '''
         ## Visualizing top n connected component x and y showing maximum Jaccard index
         ### Input
+        feat_name_x, feat_name_y: name of the feature x and y
         top_n: the number of the top connected component pairs withthe  highest Jaccard similarity index
-        cmap: colormap for the visualization of CC identity
         spot_size: size of the spot visualized on the tissue
         alpha_img: transparency of the tissue, alpha: transparency of the colored spot
-        feat_name_x, feat_name_y: name of the feature x and y
 
         fig_size: size of the drawn figure
         batch_colname: column name to categorize the batch in .obs
@@ -207,17 +205,18 @@ class STopover(AnnData):
         ### Outut
         axs: matplotlib axis for the plot
         '''
-        axis = vis_jaccard_top_n_pair_(data=self, top_n=top_n, cmap=cmap, spot_size=spot_size,
-                                       alpha_img=alpha_img, alpha=alpha, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
-                                       fig_size=fig_size, batch_colname=batch_colname, batch_name=batch_name, batch_library_dict=batch_library_dict,
-                                       image_res=image_res, adjust_image=adjust_image, border=border, 
-                                       fontsize=fontsize, title=title, return_axis=return_axis,
-                                       save = save, path = self.save_path, save_name_add = save_name_add, dpi=dpi)
+        if self.data_type=="visium":
+            axis = vis_jaccard_top_n_pair_visium(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
+                                        top_n=top_n, spot_size=spot_size, alpha_img=alpha_img, alpha=alpha, 
+                                        fig_size=fig_size, batch_colname=batch_colname, batch_name=batch_name, batch_library_dict=batch_library_dict,
+                                        image_res=image_res, adjust_image=adjust_image, border=border, 
+                                        fontsize=fontsize, title=title, return_axis=return_axis,
+                                        save = save, path = self.save_path, save_name_add = save_name_add, dpi=dpi)
         return axis
     
 
-    def vis_all_connected(self, vis_intersect_only = False, cmap='tab20', spot_size=1, 
-                          alpha_img=0.8, alpha = 0.8, feat_name_x='', feat_name_y='',
+    def vis_all_connected(self, feat_name_x='', feat_name_y='',
+                          spot_size=1, alpha_img=0.8, alpha = 0.8, 
                           fig_size=(20,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
                           image_res = 'hires', adjust_image = True, border = 50, 
                           fontsize=30, title = 'Locations of', return_axis=False,
@@ -225,13 +224,9 @@ class STopover(AnnData):
         '''
         ## Visualizing all connected components x and y on tissue  
         ### Input  
-        vis_intersect_only: 
-            visualize only the intersecting spots for connected components of featrure x and y
-            -> spots are color-coded by connected component in x
-        cmap: colormap for the visualization of CC identity
+        feat_name_x, feat_name_y: name of the feature x and y
         spot_size: size of the spot visualized on the tissue
         alpha_img: transparency of the tissue, alpha: transparency of the colored spot
-        feat_name_x, feat_name_y: name of the feature x and y
 
         fig_size: size of the drawn figure
         batch_colname: column name to categorize the batch in .obs
@@ -253,10 +248,11 @@ class STopover(AnnData):
         ### Outut
         axs: matplotlib axis for the plot
         '''
-        axis = vis_all_connected_(data=self, vis_intersect_only = vis_intersect_only, cmap=cmap, spot_size=spot_size, 
-                                  alpha_img = alpha_img, alpha = alpha, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
-                                  fig_size = fig_size, batch_colname=batch_colname, batch_name = batch_name, batch_library_dict=batch_library_dict,
-                                  image_res = image_res, adjust_image = adjust_image, border = border, 
-                                  fontsize = fontsize, title = title, return_axis=return_axis,
-                                  save = save, path = self.save_path, save_name_add = save_name_add, dpi = dpi)
+        if self.data_type=="visium":
+            axis = vis_all_connected_visium(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
+                                            spot_size=spot_size, alpha_img = alpha_img, alpha = alpha, 
+                                            fig_size = fig_size, batch_colname=batch_colname, batch_name = batch_name, batch_library_dict=batch_library_dict,
+                                            image_res = image_res, adjust_image = adjust_image, border = border, 
+                                            fontsize = fontsize, title = title, return_axis=return_axis,
+                                            save = save, path = self.save_path, save_name_add = save_name_add, dpi = dpi)
         return axis

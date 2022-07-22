@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
+from matplotlib import offsetbox
 from .jaccard import jaccard_top_n_connected_loc_
 
 from warnings import simplefilter
@@ -12,21 +14,20 @@ simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 
 
-def vis_jaccard_top_n_pair_(data, top_n = 5, cmap='tab20', spot_size=1,
-                            alpha_img=0.8, alpha = 0.8, feat_name_x='', feat_name_y='',
-                            fig_size = (10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
-                            image_res = 'hires', adjust_image = True, border = 50, 
-                            fontsize = 30, title = 'J', return_axis=False,
-                            save = False, path = os.getcwd(), save_name_add = '', dpi=300):
+def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
+                                  top_n = 5, spot_size=1, alpha_img=0.8, alpha = 0.8, 
+                                  fig_size = (10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
+                                  image_res = 'hires', adjust_image = True, border = 50, 
+                                  fontsize = 30, title = 'J', return_axis=False,
+                                  save = False, path = os.getcwd(), save_name_add = '', dpi=300):
     '''
     ## Visualizing top n connected component x and y showing maximum Jaccard index
     ### Input
     data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
+    feat_name_x, feat_name_y: name of the feature x and y
     top_n: the number of the top connected component pairs withthe  highest Jaccard similarity index
-    cmap: colormap for the visualization of CC identity
     spot_size: size of the spot visualized on the tissue
     alpha_img: transparency of the tissue, alpha: transparency of the colored spot
-    feat_name_x, feat_name_y: name of the feature x and y
 
     fig_size: size of the drawn figure
     batch_colname: column name to categorize the batch in .obs
@@ -59,6 +60,7 @@ def vis_jaccard_top_n_pair_(data, top_n = 5, cmap='tab20', spot_size=1,
     # Check the feasibility of the dataset
     if batch_name not in data.obs[batch_colname].values:
         raise ValueError("'batch_name' not among the elements of 'batch_colname' in .obs")
+
     batch_keys = pd.unique(data.obs[batch_colname]).tolist()
     # Generate dictionary between batch keys and library keys if not given
     if batch_library_dict is None:
@@ -71,8 +73,8 @@ def vis_jaccard_top_n_pair_(data, top_n = 5, cmap='tab20', spot_size=1,
         data_mod = data[data.obs[batch_colname]==batch_name].copy()
 
     # Calculate top n connected component location
-    data_mod = jaccard_top_n_connected_loc_(data_mod, CCx=None, CCy=None, 
-                                            feat_name_x=feat_name_x, feat_name_y=feat_name_y, top_n = top_n)
+    data_mod, J_top_n = jaccard_top_n_connected_loc_(data_mod, CCx=None, CCy=None, 
+                                                     feat_name_x=feat_name_x, feat_name_y=feat_name_y, top_n = top_n)
 
     # Adjust the image to contain the whole slide image
     if adjust_image:
@@ -85,14 +87,17 @@ def vis_jaccard_top_n_pair_(data, top_n = 5, cmap='tab20', spot_size=1,
     else:
         crop_coord_list = None
 
+    # Define the colormap with three different colors: for CC locations of feature x, feature_y and intersecting regions
+    cmap = colors.ListedColormap(["#FBBC05","#4285F4","#34A853"])
+
     for i in range(top_n):
         # Remove the spots not included in the top connected components
-        data_mod_xy = data_mod[data_mod.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))] != 0, :].copy()
-    
+        data_mod_xy = data_mod[(data_mod.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))] != 0).sparse.to_dense(), :].copy()
+        
         # Make categorical variables
         data_mod_xy.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))] = \
-            data_mod_xy.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))].astype('category')
-    
+            data_mod_xy.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))].sparse.to_dense().astype('category')
+
         sc.pl.spatial(data_mod_xy, img_key=image_res,
                       color='_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y)),
                       library_id=batch_library_dict[batch_name],
@@ -100,6 +105,7 @@ def vis_jaccard_top_n_pair_(data, top_n = 5, cmap='tab20', spot_size=1,
                       alpha_img = alpha_img,
                       legend_loc = None, ax = axs[i//4][i%4], show = False, crop_coord = crop_coord_list)
         axs[i//4][i%4].set_title(feat_name_x+' & '+feat_name_y+'\n'+title+" top "+str(i+1)+" CCxy", fontsize = fontsize)
+        axs[i//4][i%4].add_artist(offsetbox.AnchoredText(f'J = {J_top_n[i]:.3}', loc='upper right', frameon=False, prop=dict(size = fig_size[0]*2)))
         
     if save: plt.savefig(os.path.join(path,'_'.join(('J_top',str(top_n),
                                                     feat_name_x,feat_name_y+save_name_add+'.png'))), dpi=dpi)
@@ -109,23 +115,23 @@ def vis_jaccard_top_n_pair_(data, top_n = 5, cmap='tab20', spot_size=1,
 
 
 
-def vis_all_connected_(data, vis_intersect_only = False, cmap='tab20', spot_size=1, 
-                       alpha_img=0.8, alpha = 0.8, feat_name_x='', feat_name_y='',
-                       fig_size=(20,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
-                       image_res = 'hires', adjust_image = True, border = 50, 
-                       fontsize=30, title = 'Locations of', return_axis=False,
-                       save = False, path = os.getcwd(), save_name_add = '', dpi = 300):
+def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
+                             spot_size=1, alpha_img=0.8, alpha = 0.8, 
+                             fig_size=(20,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
+                             image_res = 'hires', adjust_image = True, border = 50, 
+                             fontsize=30, title = 'Locations of', return_axis=False,
+                             save = False, path = os.getcwd(), save_name_add = '', dpi = 300):
     '''
     ## Visualizing all connected components x and y on tissue  
     ### Input  
     data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
+    feat_name_x, feat_name_y: name of the feature x and y
     vis_intersect_only: 
         visualize only the intersecting spots for connected components of featrure x and y
         -> spots are color-coded by connected component in x
     cmap: colormap for the visualization of CC identity
     spot_size: size of the spot visualized on the tissue
     alpha_img: transparency of the tissue, alpha: transparency of the colored spot
-    feat_name_x, feat_name_y: name of the feature x and y
 
     fig_size: size of the drawn figure
     batch_colname: column name to categorize the batch in .obs
@@ -157,6 +163,7 @@ def vis_all_connected_(data, vis_intersect_only = False, cmap='tab20', spot_size
     # Check the feasibility of the dataset
     if batch_name not in data.obs[batch_colname].values:
         raise ValueError("'batch_name' not among the elements of 'batch_colname' in .obs")
+
     batch_keys = pd.unique(data.obs[batch_colname]).tolist()
     # Generate dictionary between batch keys and library keys if not given
     if batch_library_dict is None:
@@ -169,32 +176,19 @@ def vis_all_connected_(data, vis_intersect_only = False, cmap='tab20', spot_size
         data_mod_x = data_mod_x[data_mod_x.obs[batch_colname]==batch_name].copy()
 
     # Calculate intersecting spots between connected component x and y to be visualized
-    if vis_intersect_only:
-        cc_loc_x_df = data_mod_x.obs['Comb_CC_'+feat_name_x].astype(int)
-        cc_loc_y_df = data_mod_y.obs['Comb_CC_'+feat_name_y].astype(int)
-        data_mod_x.obs['_'.join(('Comb_CCxy_int',feat_name_x,feat_name_y))] = \
-            (cc_loc_x_df * ((cc_loc_x_df != 0) & (cc_loc_y_df != 0))).astype('category')
+    cc_loc_x_df = data_mod_x.obs['Comb_CC_'+feat_name_x].astype(int)
+    cc_loc_y_df = data_mod_y.obs['Comb_CC_'+feat_name_y].astype(int)
+    data_mod_x.obs['_'.join(('Comb_CCxy_int',feat_name_x,feat_name_y))] = \
+            ((1 * ((cc_loc_x_df == 0) & (cc_loc_y_df != 0))) + \
+            (2 * ((cc_loc_x_df != 0) & (cc_loc_y_df == 0))) + \
+            (3 * ((cc_loc_x_df != 0) & (cc_loc_y_df != 0)))).sparse.to_dense().astype('category')
         
-        # Remove the spots not included in the top connected components
-        data_mod_x = data_mod_x[data_mod_x.obs['_'.join(('Comb_CCxy_int',feat_name_x,feat_name_y))] != 0, :].copy()
-    else:
-        # Subest the dataset to contain only the batch_name slide
-        data_mod_y = data_mod_y[data_mod_y.obs[batch_colname]==batch_name].copy()
-
-        # Remove the spots not included in the top connected components
-        data_mod_x = data_mod_x[data_mod_x.obs['Comb_CC_'+feat_name_x] != 0, :].copy()
-        data_mod_y = data_mod_y[data_mod_y.obs['Comb_CC_'+feat_name_y] != 0, :].copy()
-
-        # Make categorical variables
-        data_mod_x.obs['Comb_CC_'+feat_name_x] = data_mod_x.obs['Comb_CC_'+feat_name_x].astype('category')
-        data_mod_y.obs['Comb_CC_'+feat_name_y] = data_mod_y.obs['Comb_CC_'+feat_name_y].astype('category')
+    # Remove the spots not included in the top connected components
+    data_mod_x = data_mod_x[data_mod_x.obs['_'.join(('Comb_CCxy_int',feat_name_x,feat_name_y))] != 0, :].copy()
             
     # Set figure parameters
     sc.set_figure_params(figsize=fig_size, facecolor='white', frameon=False)
-    if vis_intersect_only:
-        fig, axs = plt.subplots(1, 1, sharey=True, tight_layout=True)
-    else:
-        fig, axs = plt.subplots(1, 2, sharey=True, tight_layout=True)
+    fig, axs = plt.subplots(1, 1, sharey=True, tight_layout=True)
     
     # Adjust the image to contain the whole slide image
     if adjust_image:
@@ -206,31 +200,18 @@ def vis_all_connected_(data, vis_intersect_only = False, cmap='tab20', spot_size
         crop_coord_list = [crop_min[0]-border, crop_max[0]+border, height-crop_min[1]+border, height-crop_max[1]-border]
     else:
         crop_coord_list = None
+    
+    # Define the colormap with three different colors: for CC locations of feature x, feature_y and intersecting regions
+    cmap = colors.ListedColormap(["#FBBC05","#4285F4","#34A853"])
 
-    if vis_intersect_only:
-        sc.pl.spatial(data_mod_x, img_key=image_res, color='_'.join(('Comb_CCxy_int',feat_name_x,feat_name_y)),
-                      library_id=batch_library_dict[batch_name],
-                      cmap = cmap, size=spot_size, alpha_img = alpha_img,
-                      alpha = alpha, legend_loc = None, ax = axs, show = False, crop_coord = crop_coord_list)
-        axs.set_title(feat_name_x+' & '+feat_name_y+'\n'+title+" CC", fontsize = fontsize)
-    else:
-        # Plot the top genes
-        sc.pl.spatial(data_mod_x, img_key=image_res, color='_'.join(('Comb_CC',feat_name_x)),
-                      library_id=batch_library_dict[batch_name],
-                      cmap = cmap, size=spot_size, alpha_img = alpha_img,
-                      alpha = alpha, legend_loc = None, ax = axs[0], show = False, crop_coord = crop_coord_list)
-        sc.pl.spatial(data_mod_y, img_key=image_res, color='_'.join(('Comb_CC',feat_name_y)),
-                      library_id=batch_library_dict[batch_name],
-                      cmap = cmap, size=spot_size, alpha_img = alpha_img,
-                      alpha = alpha, legend_loc = None, ax = axs[1], show = False, crop_coord = crop_coord_list)
-        axs[0].set_title(feat_name_x+'\n'+title+" CC", fontsize = fontsize)
-        axs[1].set_title(feat_name_y+'\n'+title+" CC", fontsize = fontsize)
+    sc.pl.spatial(data_mod_x, img_key=image_res, color='_'.join(('Comb_CCxy_int',feat_name_x,feat_name_y)),
+                  library_id=batch_library_dict[batch_name],
+                  cmap = cmap, size=spot_size, alpha_img = alpha_img,
+                  alpha = alpha, legend_loc = None, ax = axs, show = False, crop_coord = crop_coord_list)
+    axs.set_title(feat_name_x+' & '+feat_name_y+'\n'+title+" CC", fontsize = fontsize)
     
     if save: plt.savefig(os.path.join(path,
                                     '_'.join(('Loc_CCxy',feat_name_x,feat_name_y,save_name_add+'.png'))), dpi=dpi)
 
-    if return_axis: 
-        if vis_intersect_only: return axs
-        else: return (axs[0], axs[1])
-    else:
-        plt.show()
+    if return_axis: return axs
+    else: plt.show()

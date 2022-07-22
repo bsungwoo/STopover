@@ -2,37 +2,58 @@ import numpy as np
 import pandas as pd
 
 from scipy.spatial.distance import pdist, squareform
+from scipy import sparse
 
 from .topological_comp import split_connected_loc
-from .topological_comp import extract_connected_loc_arr
+from .topological_comp import extract_connected_loc_mat
 
 
-def jaccard_and_connected_loc_(data=None, CCx=None, CCy=None, CCx_loc_arr=None, CCy_loc_arr=None,
-                                feat_name_x="", feat_name_y="", J_metric=False, 
+def jaccard_composite(CCx_loc_sum, CCy_loc_sum):
+    '''
+    ## Calculate jaccard composite index from the connected component location array
+    ### Input
+    CCx_loc, CCy_loc: numpy ndarray or scipy sparse matrix representing the summed connected component location (x or y) in one column
+    
+    ### Output
+    return composite jaccard simliarity index calculated between all CCx and all CCy (jaccard between all connected components)
+    '''
+    if isinstance(CCx_loc_sum, np.ndarray) and isinstance(CCy_loc_sum, np.ndarray): 
+        CCxy_loc_sum = np.concatenate((CCx_loc_sum, CCy_loc_sum), axis=1)
+    elif isinstance(CCx_loc_sum, sparse.spmatrix) and isinstance(CCy_loc_sum, sparse.spmatrix): 
+        CCxy_loc_sum = np.concatenate((CCx_loc_sum.toarray(), CCy_loc_sum.toarray()), axis=1)
+    else: raise ValueError("'CCx_loc' and 'CCy_loc' should be both numpy ndarray or scipy sparse matrix")
+
+    if np.count_nonzero(CCxy_loc_sum) == 0: J_comp = 0
+    else: J_comp = 1 - pdist((CCxy_loc_sum != 0).T, 'jaccard')[0]
+    
+    return J_comp
+
+
+
+def jaccard_and_connected_loc_(data, CCx=None, CCy=None, feat_name_x="", feat_name_y="", J_index=False, 
                                 return_mode='jaccard', return_sep_loc=False):
     '''
     ## Calculate jaccard index and extract location for connected components
     ### Input
     data: spatial data (format: anndata) containing log-normalized gene expression
     CCx, CCy: list containing index of spots for each connected component x and y
-    CCx_loc_arr, CCy_loc_arr: array representing the connected component location separately in each column
     feat_name_x, feat_name_y: name of the feature x and y
-    J_metric: whether to calculate Jaccard index (Jmax, Jmean, Jmmx, Jmmy) between CCx and CCy pair 
+    J_index: whether to calculate Jaccard index (Jmax, Jcomp) between CCx and CCy pair 
 
     return_mode: mode of return
         'all': return jaccard index result along with dataframe for location of connected components and number of connected components of feature x
         'jaccard': return jaccard index result only
-        'cc_loc_df': return numpy array for location of connected components only
+        'cc_loc_df': return pandas dataframe for location of connected components only
     return_sep_loc:
         whether to return dataframe of connected component location separately for feature x and y 
         or return merged dataframe representing summed location of all connected components for feature x and y, respectively
 
     ### Output
-    CCxy_df: pandas dataframe including the summed location of all connected components in feature x and y 
+    CCxy_loc_arr: numpy ndarray including the location of all connected components in feature x and y 
     J_result:
-        if J_metric is True, then jaccard simliarity metrics calculated from jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
-        -> (Jmax, Jmean, Jmmx, Jmmy): maximum jaccard index, mean jaccard index and mean of maximum jaccard for CCx and CCy
-        if J_metric is False, then return jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
+        if J_metric is True, then composite jaccard simliarity index calculated between all CCx and all CCy (jaccard between all connected components)
+        if J_metric is False, then return pairwise jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
+    num_ccx: number of connected components for the feature x
     '''
     # Check the feasibility of the dataset given
     if return_mode not in ['all','jaccard','cc_loc_arr']:
@@ -42,50 +63,41 @@ def jaccard_and_connected_loc_(data=None, CCx=None, CCy=None, CCx_loc_arr=None, 
         raise ValueError("'feat_x' and 'feat_y' should be both string")
 
     # Calculate CCxy_loc_arr: combined connected component location array for feature x and y
+    data_mod = data.copy()
     if (CCx is None) or (CCy is None):
-        if (data is None) and ((CCx_loc_arr is None) or (CCy_loc_arr is None)): 
-            raise ValueError("'CCx_loc_arr' and 'CCy_loc_arr' should be given when 'data' is None and 'CCx' or 'CCy' is None")
-        if data is None:
-            CCxy_loc_arr = np.concatenate((CCx_loc_arr, CCy_loc_arr), axis=1)
-            num_ccx = CCx_loc_arr.shape[1]
+        if len([i for i in data_mod.obs.columns if str(i).startswith('CC_1')])<2:
+            data_mod, CCxy_loc_arr, num_ccx = split_connected_loc(data_mod, feat_name_x=feat_name_x, feat_name_y=feat_name_y, return_loc_arr=True)
         else:
-            data_mod = data.copy()
-            if len([i for i in data_mod.obs.columns if str(i).startswith('CC_1')])<2:
-                data_mod, CCxy_loc_arr, num_ccx = split_connected_loc(data_mod, feat_name_x=feat_name_x, feat_name_y=feat_name_y, return_loc_array=True)
-            else:
-                column_names_x = [i for i in data_mod.obs.columns if ('CC_' in str(i)) and (feat_name_x in str(i))]
-                column_names_y = [i for i in data_mod.obs.columns if ('CC_' in str(i)) and (feat_name_y in str(i))]
-                CCxy_loc_arr = data_mod.obs[:,(column_names_x+column_names_y)].to_numpy()
-                num_ccx = len(column_names_x)
+            column_names_x = [i for i in data_mod.obs.columns if ('CC_' in str(i)) and (feat_name_x in str(i))]
+            column_names_y = [i for i in data_mod.obs.columns if ('CC_' in str(i)) and (feat_name_y in str(i))]
+            CCxy_loc_arr = data_mod.obs.loc[:,(column_names_x+column_names_y)].to_numpy()
+            num_ccx = len(column_names_x)   
     else:
-        if data is None: raise ValueError("'data' should be provided when 'CCx' and 'CCy' is given")
         data_mod = data.copy()
         # Extract the connected component location for feature x and y
-        CCx_loc_arr = extract_connected_loc_arr(CCx, data_mod.shape[0])
-        CCy_loc_arr = extract_connected_loc_arr(CCy, data_mod.shape[0])
+        CCx_loc_arr = extract_connected_loc_mat(CCx, data_mod.shape[0], format='array')
+        CCy_loc_arr = extract_connected_loc_mat(CCy, data_mod.shape[0], format='array')
         num_ccx = CCx_loc_arr.shape[1]
-
-        # Concat connected component location array for feature x and y
+        # Concat connected component location sparse matrix for feature x and y
         CCxy_loc_arr = np.concatenate((CCx_loc_arr, CCy_loc_arr), axis=1)
 
-    # Make binary location array for feature x and y
-    CCxy_loc_bool = (CCxy_loc_arr != 0)
-    # Calculate jaccard array for feature x and y
-    J_dist = pdist(CCxy_loc_bool.T, 'jaccard')
-    J_result = (1-squareform(J_dist))[:num_ccx,num_ccx:]
-
-    if J_metric:
-        if np.count_nonzero(J_result.shape)==2: 
-            # Calculate maximum, mean, and mean of maximum jaccard indices
-            J_result = (np.max(J_result), np.mean(J_result), 
-                        np.mean(np.max(J_result, axis = 1)), np.mean(np.max(J_result, axis = 0)))
-        else: 
-            J_result = (0, 0, 0, 0)
+    if np.count_nonzero(CCxy_loc_arr) == 0:
+        if J_index: J_result = 0
+        else: J_result = np.array([])
+    else:
+        if J_index:            
+            CCxy_loc_sum = np.concatenate((CCxy_loc_arr[:,:num_ccx].sum(axis=1).reshape((-1,1)), 
+                                           CCxy_loc_arr[:,num_ccx:].sum(axis=1).reshape((-1,1))), axis=1)
+            J_result = 1 - pdist((CCxy_loc_sum != 0).T, 'jaccard')[0]
+        else:
+            # Calculate jaccard matrix for feature x and y
+            J_dist = pdist((CCxy_loc_arr != 0).T, 'jaccard')
+            J_result = (1-squareform(J_dist))[:num_ccx,num_ccx:]
     
-    if not return_sep_loc: 
-        CCxy_loc_arr = np.concatenate((np.sum(CCxy_loc_arr[:,:num_ccx], axis=1).reshape((-1,1)),
-                                        np.sum(CCxy_loc_arr[:,num_ccx:], axis=1).reshape((-1,1))), axis=1)
-
+    if (not return_sep_loc) and (return_mode != 'jaccard'):
+        CCxy_loc_arr = np.concatenate((CCxy_loc_arr[:,:num_ccx].sum(axis=1).reshape((-1,1)), 
+                                        CCxy_loc_arr[:,num_ccx:].sum(axis=1).reshape((-1,1))), axis=1)
+    
     if return_mode=='all': return J_result, CCxy_loc_arr, num_ccx
     elif return_mode=='jaccard': return J_result
     else: return CCxy_loc_arr
@@ -118,11 +130,11 @@ def jaccard_top_n_connected_loc_(data, CCx=None, CCy=None, feat_name_x='', feat_
 
         J, CCxy_loc_arr, num_ccx = jaccard_and_connected_loc_(data=data_mod, CCx=CCx, CCy=CCy, 
                                                               feat_name_x=feat_name_x,feat_name_y=feat_name_y, 
-                                                              J_metric=False, 
+                                                              J_index=False, 
                                                               return_mode='all', return_sep_loc=True)
     else:
         J, CCxy_loc_arr, num_ccx = jaccard_and_connected_loc_(data=data_mod, feat_name_x=feat_name_x,feat_name_y=feat_name_y, 
-                                                              J_metric=False, 
+                                                              J_index=False, 
                                                               return_mode='all', return_sep_loc=True)
 
     column_names = ['_'.join(('CC',str(i+1),str(feat_name_x))) for i in range(num_ccx)] + \
@@ -131,8 +143,9 @@ def jaccard_top_n_connected_loc_(data, CCx=None, CCy=None, feat_name_x='', feat_
     CCxy_df.index = data_mod.obs.index
     data_mod.obs = pd.concat([data_mod.obs, CCxy_df], axis=1)
     
-    # Flatten int jaccard array and find the top n indexes
+    # Flatten int jaccard array and find the top n indexes and corresponding jaccard indices
     top_n_flat_index = np.argsort(-J, axis=None)[:top_n]
+    J_top_n = J.flatten()[top_n_flat_index]
     J_top_n_arg = [np.unravel_index(i, J.shape) for i in top_n_flat_index]
 
     # Raise error if top_n value is larger than total number of J
@@ -145,7 +158,7 @@ def jaccard_top_n_connected_loc_(data, CCx=None, CCy=None, feat_name_x='', feat_
 
         # Find intersecting location for the top n location and assign the number
         data_mod.obs['_'.join(('CCxy_top',str(num+1),feat_name_x,feat_name_y))] = \
-            (num + 1) * ((locx != 0) & (locy != 0))
+            (1 * ((locx == 0) & (locy != 0))) + (2 * ((locx != 0) & (locy == 0))) + (3 * ((locx != 0) & (locy != 0)))
 
-    return data_mod
+    return data_mod, J_top_n
 
