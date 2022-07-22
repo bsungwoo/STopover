@@ -67,6 +67,7 @@ class STopover(AnnData):
             sc.pp.log1p(adata_mod)
         super(STopover, self).__init__(X=adata_mod.X, obs=adata_mod.obs, var=adata_mod.var, uns=adata_mod.uns, obsm=adata_mod.obsm)
 
+        self.adata_type = adata_type
         self.min_size = min_size
         self.fwhm = fwhm
         self.thres_per = thres_per
@@ -205,7 +206,7 @@ class STopover(AnnData):
         ### Outut
         axs: matplotlib axis for the plot
         '''
-        if self.data_type=="visium":
+        if self.adata_type=="visium":
             axis = vis_jaccard_top_n_pair_visium(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
                                         top_n=top_n, spot_size=spot_size, alpha_img=alpha_img, alpha=alpha, 
                                         fig_size=fig_size, batch_colname=batch_colname, batch_name=batch_name, batch_library_dict=batch_library_dict,
@@ -248,7 +249,7 @@ class STopover(AnnData):
         ### Outut
         axs: matplotlib axis for the plot
         '''
-        if self.data_type=="visium":
+        if self.adata_type=="visium":
             axis = vis_all_connected_visium(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
                                             spot_size=spot_size, alpha_img = alpha_img, alpha = alpha, 
                                             fig_size = fig_size, batch_colname=batch_colname, batch_name = batch_name, batch_library_dict=batch_library_dict,
