@@ -6,7 +6,7 @@
   conda create -n STopover -c conda-forge graph-tool=2.45 python=3.7  
   conda activate STopover  
   ## For the private code (using token)    
-  pip install git+https://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@github.com/bsungwoo/STopover.git  
+  pip install git+https://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@github.com/bsungwoo/STopover.git  
   ## For the public code  
   (pip install git+https://github.com/bsungwoo/STopover.git)  
   python -m ipykernel install --user --name STopover --display-name STopover  
@@ -46,7 +46,7 @@ sp_adata = STopover(adata=sp_adata, adata_type='visium', lognorm=False, min_size
 #### 1-2 Create object with saved .h5ad file or 10X-formatted Visium directory  
 ```Plain Text
 sp_adata = STopover(load_path='~/*.h5ad', adata_type='visium', lognorm=False, min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
-sp_adata = STopover(load_path='~/Visium_dir', adata_type='visium', lognorm=False, min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
+sp_adata = STopover(load_path='~/Visium_dir', adata_type='visium', lognorm=True, min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
 ```
 
 ### 2. Calculate topological similarity between the two values (expression or metadata)  
