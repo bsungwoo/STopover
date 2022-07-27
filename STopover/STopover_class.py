@@ -332,12 +332,11 @@ class STopover_cosmx(STopover_visium):
                                                    x_bins=x_bins, y_bins=y_bins)
         else:
             adata_mod = sp_adata.copy()
-
-        # Preprocess the CosMx spatial transcriptomic data
-        super(STopover_cosmx, self).__init__(sp_adata=adata_mod, lognorm=False, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
         adata_mod.uns['x_bins'] = x_bins
         adata_mod.uns['y_bins'] = y_bins
         adata_mod.uns['sc_norm_total'] = sc_norm_total
+        # Generate object with the help of STopover_visium
+        super(STopover_cosmx, self).__init__(sp_adata=adata_mod, lognorm=False, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
 
         self.x_bins = x_bins
         self.y_bins = y_bins
