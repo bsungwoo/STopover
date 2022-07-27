@@ -313,18 +313,17 @@ class STopover_cosmx(STopover_visium):
                 try: min_size, fwhm, thres_per = adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per']
                 except: pass
             except: 
-                try: adata_mod = read_cosmx(sp_load_path, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, sc_norm_total=sc_norm_total,
-                                            tx_file_name = tx_file_name, cell_exprmat_file_name=cell_exprmat_file_name, cell_metadata_file_name=cell_metadata_file_name, 
-                                            fov_colname = fov_colname, cell_id_colname=cell_id_colname, 
-                                            tx_xcoord_colname=tx_xcoord_colname, tx_ycoord_colname=tx_ycoord_colname, transcript_colname=transcript_colname,
-                                            meta_xcoord_colname=meta_xcoord_colname, meta_ycoord_colname=meta_ycoord_colname,
-                                            x_bins=x_bins, y_bins=y_bins)
-                except: raise ValueError("'load_path': path to 10X-formatted Visium dataset directory or .h5ad Anndata object should be provided")
+                adata_mod = read_cosmx(sp_load_path, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, sc_norm_total=sc_norm_total,
+                                       tx_file_name = tx_file_name, cell_exprmat_file_name=cell_exprmat_file_name, cell_metadata_file_name=cell_metadata_file_name, 
+                                       fov_colname = fov_colname, cell_id_colname=cell_id_colname, 
+                                       tx_xcoord_colname=tx_xcoord_colname, tx_ycoord_colname=tx_ycoord_colname, transcript_colname=transcript_colname,
+                                       meta_xcoord_colname=meta_xcoord_colname, meta_ycoord_colname=meta_ycoord_colname,
+                                       x_bins=x_bins, y_bins=y_bins)
         else:
             adata_mod = sp_adata.copy()
 
         # Preprocess the CosMx spatial transcriptomic data
-        super(STopover_visium, self).__init__(sp_adata=adata_mod, lognorm=False, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
+        super(STopover_cosmx, self).__init__(sp_adata=adata_mod, lognorm=False, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
 
         self.x_bins = x_bins
         self.y_bins = y_bins

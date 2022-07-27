@@ -90,37 +90,41 @@ def read_cosmx(load_path, sc_adata, sc_celltype_colname = 'celltype', sc_norm_to
     ### Output
     sp_adata_grid: grid-based count anndata with cell abundance information saved in .obs
     '''
+    # Check data feasibility
+    if sc_celltype_colname not in sc_adata.obs.columns:
+        raise ValueError("Cell type annotation (sc_celltype_colname) not found in sc_adata.obs")
+        
     ## Read transcript information file
     start_time = time.time()
     tx_coord_all = csv.read_csv(os.path.join(load_path, tx_file_name)).to_pandas().loc[:,[fov_colname,cell_id_colname,
-                                                                                     tx_xcoord_colname,tx_ycoord_colname,transcript_colname]]
+                                                                                          tx_xcoord_colname,tx_ycoord_colname,transcript_colname]]
     # Remove transcript data not included in a cell
     tx_coord_all = tx_coord_all[tx_coord_all[cell_id_colname] != 0]
 
     ## Grid-based aggregation of CosMx: divide coordinates by x_bins and y_bins and aggregate
     # Find the x and y coordinate arrays
-    x_coord = tx_coord_all[['x_global_px']].to_numpy()
-    y_coord = tx_coord_all[['y_global_px']].to_numpy()
+    x_coord = tx_coord_all[[tx_xcoord_colname]].to_numpy()
+    y_coord = tx_coord_all[[tx_ycoord_colname]].to_numpy()
     # Find the coordinates that equally divides the x and y axis into x_bins and y_bins
     x_div_arr = np.linspace(np.min(x_coord), np.max(x_coord), num=x_bins, endpoint=False)[1:]
     y_div_arr = np.linspace(np.min(y_coord), np.max(y_coord), num=y_bins, endpoint=False)[1:]
     # Assigning the grid column and row number to each transcript based on the coordinates by x_div_arr and y_div_arr
     tx_coord_all['array_col'] = (np.matlib.repmat(x_div_arr.reshape(1,-1), len(x_coord), 1) < np.matlib.repmat(x_coord, 1, len(x_div_arr))).sum(axis=1).astype(int)
     tx_coord_all['array_row'] = (np.matlib.repmat(y_div_arr.reshape(1,-1), len(y_coord), 1) < np.matlib.repmat(y_coord, 1, len(y_div_arr))).sum(axis=1).astype(int)
-    print("End of grid-based aggregation of CosMx: %s seconds" % (time.time()-start_time))
+    print("End of grid-based aggregation of CosMx: %.2f seconds" % (time.time()-start_time))
 
     ## Normalize the transcript number in each grid by total count in the cell
     tx_by_cell_grid = tx_coord_all.groupby([fov_colname,cell_id_colname,'array_col','array_row',transcript_colname])[transcript_colname].count().to_frame('count')
-    tx_by_cell_grid['tx_fx_by_grid'] = tx_by_cell_grid['count'] / tx_by_cell_grid.groupby(['fov','cell_ID']).transform('sum')['count']
+    tx_by_cell_grid['tx_fx_by_grid'] = tx_by_cell_grid['count'] / tx_by_cell_grid.groupby([fov_colname,cell_id_colname]).transform('sum')['count']
     # Generate normalization count matrix by grid
     grid_tx_count = tx_by_cell_grid.pivot_table(index=['array_col','array_row'], columns=transcript_colname, values='tx_fx_by_grid', aggfunc=['sum']).fillna(0)
     # Saving grid barcode and gene symbol names
-    var_names = grid_tx_count.columns.to_frame()['target'].to_numpy()
+    var_names = grid_tx_count.columns.to_frame()[transcript_colname].to_numpy()
     grid_metadata = grid_tx_count.index.to_frame()
     grid_metadata.index = grid_metadata['array_col'].astype(str) + '_' + grid_metadata['array_row'].astype(str)
     # Log transformation of grid based count
     grid_tx_count = (sc_norm_total*sparse.csr_matrix(grid_tx_count, dtype=np.float32)).log1p()
-    print("End of generating grid-based count matrix: %s seconds" % (time.time()-start_time))
+    print("End of generating grid-based count matrix: %.2f seconds" % (time.time()-start_time))
 
     # Cell annotation for spatial data
     ## Generate AnnData for the problem
@@ -129,23 +133,23 @@ def read_cosmx(load_path, sc_adata, sc_celltype_colname = 'celltype', sc_norm_to
     exp_mat = exp_mat[exp_mat[fov_colname] != 0].set_index([fov_colname,cell_id_colname])
     # Generate cell barcodes for CosMx SMI data
     cell_names_expmat = exp_mat.index.to_frame()
-    cell_names_expmat = (cell_names_expmat['fov'].astype(str) + '_' + cell_names_expmat['cell_ID'].astype(str)).to_numpy()
+    cell_names_expmat = (cell_names_expmat[fov_colname].astype(str) + '_' + cell_names_expmat[cell_id_colname].astype(str)).to_numpy()
     # Load CosMx SMI cell metadata
     cell_meta = csv.read_csv(os.path.join(load_path, cell_metadata_file_name)).to_pandas().loc[:,[meta_xcoord_colname, meta_ycoord_colname]]
     cell_meta = pd.concat([cell_meta, exp_mat.index.to_frame().reset_index(drop=True)], axis=1)
     # Generate CosMx SMI spatial anndata file
-    sp_adata_cell = an(X = sparse.csr_matrix(exp_mat), obs=cell_meta)
+    sp_adata_cell = an(X = sparse.csr_matrix(exp_mat, dtype=np.float32), obs=cell_meta)
     sp_adata_cell.var_names = var_names
     sp_adata_cell.obs_names = cell_names_expmat
     # Remove cells with total transcript count of 0
     sc.pp.filter_cells(sp_adata_cell, min_counts=1)
-    print("End of creating CosMx cell-level anndata: %s seconds" % (time.time()-start_time))
+    print("End of creating CosMx cell-level anndata: %.2f seconds" % (time.time()-start_time))
 
     ## Annotation of cell-level CosMx SMI data
     df_celltype = annotate_cosmx(sp_adata_cell, sc_adata, sc_norm_total=sc_norm_total,
                                  sc_celltype_colname = sc_celltype_colname, 
                                  fov_colname = fov_colname, cell_id_colname=cell_id_colname, return_format='dataframe')
-    print("End of annotating CosMx cell-level anndata: %s seconds" % (time.time()-start_time))
+    print("End of annotating CosMx cell-level anndata: %.2f seconds" % (time.time()-start_time))
 
     ## Create dataframe with cell type abundance in each grid
     # Create dataframe with transcript count according to cell ID and grid number: cell type information added
@@ -158,13 +162,13 @@ def read_cosmx(load_path, sc_adata, sc_celltype_colname = 'celltype', sc_norm_to
     grid_celltype.index = grid_index['array_col'].astype(str) + '_' + grid_index['array_row'].astype(str)
     # Modify metadata to contain cell type information in each grid
     grid_metadata = grid_metadata.join(grid_celltype, how='inner')
-    print("End of generating grid-based cell type abundance metadata: %s seconds" % (time.time()-start_time))
+    print("End of generating grid-based cell type abundance metadata: %.2f seconds" % (time.time()-start_time))
 
     ## Generating grid-based CosMx SMI spatial anndata
     sp_adata_grid = an(X = grid_tx_count, obs=grid_metadata)
     sp_adata_grid.var_names = var_names
     sp_adata_grid.uns['tx_by_cell_grid'] = tx_by_cell_grid.reset_index()
-    print("End of generating grid-based CosMx spatial anndata: %s seconds" % (time.time()-start_time))
+    print("End of generating grid-based CosMx spatial anndata: %.2f seconds" % (time.time()-start_time))
 
     return sp_adata_grid
 

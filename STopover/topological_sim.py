@@ -184,7 +184,7 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
     df_top_total.index = range(df_top_total.shape[0])
 
     print('End of data preparation')
-    print("Elapsed time: %s seconds " % (time.time()-start_time))
+    print("Elapsed time: %.2f seconds " % (time.time()-start_time))
 
     # Extract connected components for the features
     procs = []
@@ -203,7 +203,7 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
     output_cc = [[proc.get() for proc in proc_grp] for proc_grp in procs]
 
     print('End of computation for topological similarity')
-    print("Elapsed time: %s seconds " % (time.time()-start_time))
+    print("Elapsed time: %.2f seconds " % (time.time()-start_time))
     
     # Make dataframe for the similarity between feature 1 and 2 across the groups
     jaccard_total = []; output_cc_loc = []
@@ -261,6 +261,6 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
     # Create dataframe with pairwise topological similarity measures
     df_top_total = pd.concat([df_top_total.iloc[:,:-2], output_j], axis=1)
     
-    print("End of the whole process: %s seconds" % (time.time()-start_time))
+    print("End of the whole process: %.2f seconds" % (time.time()-start_time))
     
     return df_top_total, data_mod
