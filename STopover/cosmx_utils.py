@@ -9,6 +9,8 @@ from pyarrow import csv
 from scipy import sparse
 from anndata import AnnData as an
 
+import warnings
+warnings.filterwarnings("ignore")
 
 
 def annotate_cosmx(sp_adata, sc_adata, sc_norm_total=1e3,
@@ -139,7 +141,7 @@ def read_cosmx(load_path, sc_adata, sc_celltype_colname = 'celltype', sc_norm_to
     cell_meta = csv.read_csv(os.path.join(load_path, cell_metadata_file_name)).to_pandas().loc[:,[meta_xcoord_colname, meta_ycoord_colname]]
     cell_meta = pd.concat([cell_meta, exp_mat.index.to_frame().reset_index(drop=True)], axis=1)
     # Generate CosMx SMI spatial anndata file
-    sp_adata_cell = an(X = sparse.csr_matrix(exp_mat.reset_index(drop=True,inplace=True), dtype=np.float32), obs=cell_meta)
+    sp_adata_cell = an(X = sparse.csr_matrix(exp_mat, dtype=np.float32), obs=cell_meta)
     sp_adata_cell.var_names = var_names
     sp_adata_cell.obs_names = cell_names_expmat
     # Remove cells with total transcript count of 0
