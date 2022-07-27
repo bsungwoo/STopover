@@ -64,7 +64,7 @@ sp_adata = STopover_cosmx(sp_adata=sp_adata, sc_adata=sc_adata, sc_celltype_coln
 ```Plain Text
 sp_adata = STopover_visium(sp_load_path='~/*.h5ad', adata_type='visium', lognorm=False, min_size=20, fwhm=2.5, thres_per=30, save_path='.')
 sp_adata = STopover_visium(sp_load_path='~/Visium_dir', adata_type='visium', lognorm=True, min_size=20, fwhm=2.5, thres_per=30, save_path='.')
-sp_adata = STopover_cosmx(sp_adata='~/CosMx dir', sc_adata=sc_adata, sc_celltype_colname = 'celltype', sc_norm_total=1e3,
+sp_adata = STopover_cosmx(sp_load_path='~/CosMx dir', sc_adata=sc_adata, sc_celltype_colname = 'celltype', sc_norm_total=1e3,
                           tx_file_name = 'tx_file.csv', cell_exprmat_file_name='exprMat_file.csv', 
                           cell_metadata_file_name='metadata_file.csv', 
                           x_bins=100, y_bins=100, min_size=20, fwhm=2.5, thres_per=30, save_path='.')
