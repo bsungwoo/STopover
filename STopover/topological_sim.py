@@ -112,7 +112,7 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
             if data_type=='array':
                 df_tmp['Avg_1'] = np.log1p(np.mean(np.expm1(data_sub[:,df_tmp.iloc[:,1].tolist()].X), axis=0))
             else:
-                df_tmp['Avg_1'] = np.log1p(data_sub[:,df_tmp.iloc[:,1].tolist()].X.expm1().mean(axis = 0))
+                df_tmp['Avg_1'] = np.asarray(np.log1p(data_sub[:,df_tmp.iloc[:,1].tolist()].X.expm1().mean(axis = 0))).reshape(-1)
         if obs_tf_y:
             # Load the data from the data_sub.obs
             data_y = data_sub.obs[df_tmp.iloc[:,2].tolist()].to_numpy()
@@ -123,7 +123,7 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
             if data_type=='array':
                 df_tmp['Avg_2'] = np.log1p(np.mean(np.expm1(data_sub[:,df_tmp.iloc[:,2].tolist()].X), axis=0))
             else:
-                df_tmp['Avg_2'] = np.log1p(data_sub[:,df_tmp.iloc[:,2].tolist()].X.expm1().mean(axis = 0))
+                df_tmp['Avg_2'] = np.asarray(np.log1p(data_sub[:,df_tmp.iloc[:,2].tolist()].X.expm1().mean(axis = 0))).reshape(-1)
 
         # Remove the features which have zero values only
         df_tmp = df_tmp[(df_tmp['Avg_1']!=0) & (df_tmp['Avg_2']!=0)].reset_index(drop=True)
@@ -172,7 +172,7 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
                 if data_type=='array': val_list.append(data_sub[:,comb_feat_list.index].X)
                 else: val_list.append(data_sub[:,comb_feat_list.index].X.toarray())
         # Append the dataframe
-        df_top_total = df_top_total.append(df_tmp)
+        df_top_total = pd.concat([df_top_total, df_tmp], axis=0)
 
         # Add the location information of the spots
         try: loc_list.append(data_sub.obs.loc[:,['array_col','array_row']].to_numpy())
@@ -214,7 +214,7 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
         # Find the subset of the given data
         data_sub = data[data.obs[group_name]==element].copy()
         # Add the connected component location
-        df_cc_loc = pd.concat([pd.DataFrame(mat).astype(pd.SparseDtype(int)) for mat in output_cc[num]], axis=1)
+        df_cc_loc = pd.concat([pd.DataFrame(mat) for mat in output_cc[num]], axis=1)
 
         # Make dataframe representing location of CC when the data type is different between feature x and y
         if obs_tf_x != obs_tf_y:
@@ -249,11 +249,11 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
 
     # Get the output for connected component location and save
     data_mod = data.copy()
-    output_cc_loc = pd.concat(output_cc_loc, axis=0).fillna(0)
+    output_cc_loc = pd.concat(output_cc_loc, axis=0).fillna(0).astype(int).astype('category')
     data_mod.obs = pd.concat([data_mod.obs, output_cc_loc], axis=1)
 
     # Get the output for jaccard
-    output_j = [jaccard.get() for jaccard in jaccard_total]
+    output_j = [jaccard.get() for jaccard in jaccard_total] 
     
     # Create dataframe for J metrics
     output_j = pd.DataFrame(output_j, columns=['J_comp'])

@@ -86,6 +86,94 @@ def extract_connected_comp(tx, A_sparse, threshold_x, num_spots, min_size=5):
 
 
 
+def extract_connected_loc_mat(CC, num_spots, format='sparse'):
+    '''
+    ## Calculate the integer array which explains the location of each connected component
+    ### Input
+    CC: list containing index of spots for each connected component
+    num_spots: total number of spots in the spatial data used for analysis
+    format: format of the connected location data
+
+    ### Output
+    Returns connected component location sparse matrix: positive integers are assigned to the corresponding spots composing each connected components
+    For example 1 was given to the spots composing the first connected component, 2 to the spots composing the second connected components, and so on.
+
+    Different connected components of a feature are separated along the axis=1 of numpy array
+    Therefore, when the number of spot is p and the number of connected component is m then the shape of array is p*m
+    If two conneceted components(CCs) are found in a total of 5 spots and CC1 is composed of 4th-5th spots and CC2 of 2nd-3rd spots,
+    then the array will be np.array([[0, 0], [0, 2], [0, 2], [1, 0], [1, 0]])
+    '''
+    if format not in ['sparse', 'array']: raise ValueError("'format' should be either 'sparse' or 'array'")
+
+    if len(CC) > 0:
+        for num, element in enumerate(CC):
+            # if len(element) == 0: continue
+            # Convert CC location index list to array
+            CC_loc_index = np.array(element, dtype=int)   
+            # Assign the same number (num+1) to the location of each connected component
+            CC_zero_arr = np.zeros(num_spots)
+            np.put(CC_zero_arr, CC_loc_index, (num+1))
+            # Concatenate the location array of connected components
+            if num == 0: CC_loc_arr = CC_zero_arr.reshape((-1,1))
+            else: CC_loc_arr = np.concatenate((CC_loc_arr, CC_zero_arr.reshape((-1,1))), axis=1)
+    else:
+        CC_loc_arr = np.zeros((num_spots, 1))
+    
+    if format == 'sparse': return sparse.csr_matrix(CC_loc_arr.astype(int))
+    else: return CC_loc_arr.astype(int)
+
+
+
+def filter_connected_loc_exp(CC_loc_mat, data=None, feat=None, thres_per=30, return_sep_loc=False):
+    '''
+    ## Filter connected component location according to the expression value or metadata value
+    ### Input
+    data: spatial data (format: anndata) containing log-normalized gene expression
+    CC_loc_mat: connected component matrix representing all connected component location separately for one feature
+        -> when the number of spot is p and the number of connected component is m then the shape of matrix is p*m
+    feat: name of the feature to calculate CC or values
+    thres_per: lower percentile value threshold to remove the connected components
+    return_sep_loc:
+        whether to return dataframe of connected component location separately for feature x and y 
+        or return merged dataframe representing summed location of all connected components for feature x and y, respectively
+
+    ### Output
+    CC_loc_mat_fin: connected component location sparse matrix filtered according to the expression values in each connected component cluster
+        -> the matrix represents all connected component location separately for one feature
+        -> when the number of spot is p and the number of connected component is m then the shape of matrix is p*m
+    '''
+    # Extract expression information
+    if isinstance(feat, str):
+        if data is None: 
+            raise ValueError("Anndata object with log-normalized count matrix should be provided in 'data'")
+        if feat in data.obs.columns: feat_data = data.obs[[feat]].to_numpy()
+        elif feat in data.var.index: 
+            # Determine the type of the data
+            if isinstance(data.X, np.ndarray): feat_data = sparse.csr_matrix(data[:,feat].X)
+            elif isinstance(data.X, sparse.spmatrix): feat_data = data[:,feat].X
+            else: ValueError("'data.X' should be either numpy ndarray or scipy sparse matrix")
+        else: raise ValueError("'feat_exp' is not found among gene names and metadata")
+    elif isinstance(feat, np.ndarray): feat_data = feat
+    else: raise ValueError("'feat' should be either string or numpy ndarray")
+
+    # Calculate the sum of the sparse matrix which summarizes the location of all connected components
+    CC_mat_sum = CC_loc_mat.sum(axis=1)
+
+    ## Remove the connected components with lower values (below the threshold percentile)    
+    df_CC_loc_exp = pd.DataFrame(np.concatenate((CC_mat_sum, feat_data), axis=1))
+    # Calculate the mean value for each connected components (expression or metadata values)
+    CC_mean = df_CC_loc_exp.groupby([0]).mean().sort_values(by=[1], ascending=False)
+    # Filter the data for the percentile threshold for the values (expression or metadata values)
+    CC_mean = CC_mean.iloc[:int(len(CC_mean)*(1-(thres_per/100))),:]
+    # Save the location of connected component only for the high values (expression or metadata values)
+    CC_loc_mat_fin = CC_loc_mat[:, (np.sort(CC_mean.index[CC_mean.index != 0]).astype(int) - 1)]
+    
+    # Return sparse csr matrix format connected component location separately in each column
+    if return_sep_loc: return CC_loc_mat_fin
+    else: return CC_loc_mat_fin.sum(axis=1)
+
+
+
 def topological_comp_res(feat=None, min_size = 5, thres_per=30, return_mode='all', A=None, mask=None):
     '''
     ## Calculate topological connected components for the given feature value
@@ -145,93 +233,6 @@ def topological_comp_res(feat=None, min_size = 5, thres_per=30, return_mode='all
 
 
 
-def extract_connected_loc_mat(CC, num_spots, format='sparse'):
-    '''
-    ## Calculate the integer array which explains the location of each connected component
-    ### Input
-    CC: list containing index of spots for each connected component
-    num_spots: total number of spots in the spatial data used for analysis
-    format: format of the connected location data
-
-    ### Output
-    Returns connected component location sparse matrix: positive integers are assigned to the corresponding spots composing each connected components
-    For example 1 was given to the spots composing the first connected component, 2 to the spots composing the second connected components, and so on.
-
-    Different connected components of a feature are separated along the axis=1 of numpy array
-    Therefore, when the number of spot is p and the number of connected component is m then the shape of array is p*m
-    If two conneceted components(CCs) are found in a total of 5 spots and CC1 is composed of 4th-5th spots and CC2 of 2nd-3rd spots,
-    then the array will be np.array([[0, 0], [0, 2], [0, 2], [1, 0], [1, 0]])
-    '''
-    if format not in ['sparse', 'array']: raise ValueError("'format' should be either 'sparse' or 'array'")
-
-    if len(CC) > 0:
-        for num, element in enumerate(CC):
-            # Convert CC location index list to array
-            CC_loc_index = np.array(element, dtype=int)   
-            # Assign the same number (num+1) to the location of each connected component
-            CC_zero_arr = np.zeros(num_spots)
-            np.put(CC_zero_arr, CC_loc_index, (num+1))
-            # Concatenate the location array of connected components
-            if num == 0: CC_loc_arr = CC_zero_arr.reshape((-1,1))
-            else: CC_loc_arr = np.concatenate((CC_loc_arr, CC_zero_arr.reshape((-1,1))), axis=1)
-    else:
-        CC_loc_arr = np.zeros((num_spots, 1))
-    
-    if format == 'sparse': return sparse.csr_matrix(CC_loc_arr.astype(int))
-    else: return CC_loc_arr.astype(int)
-
-
-
-def filter_connected_loc_exp(CC_loc_mat, data=None, feat=None, thres_per=30, return_sep_loc=False):
-    '''
-    ## Filter connected component location according to the expression value or metadata value
-    ### Input
-    data: spatial data (format: anndata) containing log-normalized gene expression
-    CC_loc_mat: connected component matrix representing all connected component location separately for one feature
-        -> when the number of spot is p and the number of connected component is m then the shape of matrix is p*m
-    feat: name of the feature to calculate CC or values
-    thres_per: lower percentile value threshold to remove the connected components
-    return_sep_loc:
-        whether to return dataframe of connected component location separately for feature x and y 
-        or return merged dataframe representing summed location of all connected components for feature x and y, respectively
-
-    ### Output
-    CC_loc_mat_fin: connected component location sparse matrix filtered according to the expression values in each connected component cluster
-        -> the matrix represents all connected component location separately for one feature
-        -> when the number of spot is p and the number of connected component is m then the shape of matrix is p*m
-    '''
-    # Extract expression information
-    if isinstance(feat, str):
-        if data is None: 
-            raise ValueError("Anndata object with log-normalized count matrix should be provided in 'data'")
-        if feat in data.obs.columns: feat_data = data.obs[[feat]].to_numpy()
-        elif feat in data.var.index: 
-            # Determine the type of the data
-            if isinstance(data.X, np.ndarray): feat_data = sparse.csr_matrix(data[:,feat].X)
-            elif isinstance(data.X, sparse.spmatrix): feat_data = data[:,feat].X
-            else: ValueError("'data.X' should be either numpy ndarray or scipy sparse matrix")
-        else: raise ValueError("'feat_exp' is not found among gene names and metadata")
-    elif isinstance(feat, np.ndarray): feat_data = feat
-    else: raise ValueError("'feat' should be either string or numpy ndarray")
-
-    # Calculate the sum of the sparse matrix which summarizes the location of all connected components
-    CC_mat_sum = CC_loc_mat.sum(axis=1)
-
-    ## Remove the connected components with lower values (below the threshold percentile)    
-    df_CC_loc_exp = pd.DataFrame(np.concatenate((CC_mat_sum, feat_data), axis=1))
-    # Calculate the mean value for each connected components (expression or metadata values)
-    CC_mean = df_CC_loc_exp.groupby([0]).mean().sort_values(by=[1], ascending=False)
-    # Filter the data for the percentile threshold for the values (expression or metadata values)
-    CC_mean = CC_mean.iloc[:int(len(CC_mean)*(1-(thres_per/100))),:]
-    # Save the location of connected component only for the high values (expression or metadata values)
-    CC_loc_mat_fin = CC_loc_mat[:, (np.array(CC_mean.index[CC_mean.index != 0], dtype=int) - 1)]
-    
-    # Return sparse csr matrix format connected component location separately in each column
-    if return_sep_loc: return CC_loc_mat_fin
-    else: return CC_loc_mat_fin.sum(axis=1)
-
-
-
 def split_connected_loc(data, feat_name_x='', feat_name_y='', return_loc_arr=True):
     '''
     ## Return anndata with location for each connected component separately to .obs
@@ -254,27 +255,28 @@ def split_connected_loc(data, feat_name_x='', feat_name_y='', return_loc_arr=Tru
     CCxy = data_mod.obs.loc[:,['Comb_CC_'+feat_name_x,'Comb_CC_'+feat_name_y]].to_numpy()
 
     # Number of total connected components for CCx and CCy
-    num_ccx = int(np.max(CCxy, axis=0)[0])
-    num_ccy = int(np.max(CCxy, axis=0)[1])
+    CCx_unique, CCy_unique = np.unique(CCxy[:,0])[1:], np.unique(CCxy[:,1])[1:]
+    num_ccx, num_ccy = len(CCx_unique), len(CCy_unique)
 
     # Define numpy replicative array with the CCx and CCy index in each column
-    CCx = np.matlib.repmat(np.arange(1,(num_ccx+1)), len(CCxy), 1)
-    CCy = np.matlib.repmat(np.arange(1,(num_ccy+1)), len(CCxy), 1)
+    CCx = np.matlib.repmat(CCx_unique, len(CCxy), 1)
+    CCy = np.matlib.repmat(CCy_unique, len(CCxy), 1)
     CCxy_index = np.concatenate((CCx, CCy), axis=1)
     # Define numpy replicate array for CCxy across the rows
     CCxy_rep = np.concatenate((np.matlib.repmat(CCxy[:,0].reshape((-1,1)), 1, num_ccx), 
                                 np.matlib.repmat(CCxy[:,1].reshape((-1,1)), 1, num_ccy)), axis=1)
     
-    # Return anndata with location for each CC separately
     # Create array for the intersecting elements between CCxy_index and CCxy_rep
     CCxy_fin = CCxy_index*(CCxy_index == CCxy_rep)
-    column_names = ['_'.join(('CC',str(i+1),feat_name_x)) for i in range(num_ccx)] + \
-                    ['_'.join(('CC',str(i+1),feat_name_y)) for i in range(num_ccy)]
-    CCxy_df = pd.DataFrame(CCxy_fin, columns=column_names).astype(int)
-    CCxy_df.index = data_mod.obs.index
-    data_mod.obs = pd.concat([data_mod.obs, CCxy_df], axis=1)
+    # Return anndata with location for each CC separately
+    if not return_loc_arr:
+        column_names = ['_'.join(('CC',str(i+1),feat_name_x)) for i in CCx_unique] + \
+                        ['_'.join(('CC',str(i+1),feat_name_y)) for i in CCy_unique]
+        CCxy_df = pd.DataFrame(CCxy_fin, columns=column_names).astype('category')
+        CCxy_df.index = data_mod.obs.index
+        data_mod.obs = pd.concat([data_mod.obs, CCxy_df], axis=1)
 
-    if return_loc_arr: return data_mod, CCxy_fin, num_ccx
+    if return_loc_arr: return CCxy_fin, num_ccx
     else: return data_mod
 
 

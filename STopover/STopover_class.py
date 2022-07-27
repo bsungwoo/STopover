@@ -1,0 +1,466 @@
+import scanpy as sc
+from anndata import AnnData
+
+from .cosmx_utils import *
+from .topological_sim import topological_sim_pairs_
+from .topological_comp import save_connected_loc_data_
+from .jaccard import jaccard_and_connected_loc_
+from .jaccard import jaccard_top_n_connected_loc_
+from .topological_vis import *
+
+
+
+class STopover_visium(AnnData):
+    '''
+    ## Class to calculate connected component location and jaccard similarity indices in visium dataset
+    
+    ### Input
+    sp_adata: Anndata object for spatial transcriptomic data with count matrix ('raw') in .X
+    sp_load_path: path to 10X-formatted Visium dataset directory or .h5ad Anndata object
+    lognorm: whether to lognormalize (total count normalize and log transform) the count matrix saved in adata.X
+    min_size: minimum size of a connected component
+    fwhm: full width half maximum value for the gaussian smoothing kernal
+    thres_per: lower percentile value threshold to remove the connected components
+    save_path: path to save the data files
+    J_count: number of jaccard similarity calculations after the first definition
+    '''
+    sp_adata: AnnData
+    sp_load_path: str
+    lognorm: bool
+    min_size: int
+    fwhm: float
+    thres_per: float
+    save_path: str
+    J_count: int
+
+    def __init__(self, sp_adata=None, sp_load_path='.', lognorm=False, min_size=20, fwhm=2.5, thres_per=30, save_path='.', J_count=0):
+        assert min_size > 0
+        assert fwhm > 0
+        assert (thres_per >= 0) and (thres_per <= 100)
+
+        # Load the Visium spatial transcriptomic data if no AnnData file was provided
+        if sp_adata is None:
+            print("Anndata object is not provided: searching for files in 'load_path'")
+            try: 
+                adata_mod = sc.read_h5ad(sp_load_path)
+                try: min_size, fwhm, thres_per = adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per']
+                except: adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'] = min_size, fwhm, thres_per
+            except: 
+                try:
+                    adata_mod = sc.read_visium(sp_load_path)
+                    adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'] = min_size, fwhm, thres_per
+                except: raise ValueError("'load_path': path to 10X-formatted Visium dataset directory or .h5ad Anndata object should be provided")
+        else:
+            adata_mod = sp_adata.copy()
+            # Add the key parameters in the .uns
+            adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'] = min_size, fwhm, thres_per
+        # Preserve raw .obs data in .uns
+        if J_count==0: adata_mod.uns['obs_raw'] = adata_mod.obs
+
+        # Preprocess the Visium spatial transcriptomic data
+        if lognorm:
+            if 'log1p' in adata_mod.uns.keys(): print("'adata' seems to be already log-transformed")
+            sc.pp.normalize_total(adata_mod, target_sum=1e4, inplace=True)
+            sc.pp.log1p(adata_mod)
+        super(STopover_visium, self).__init__(X=adata_mod.X, obs=adata_mod.obs, var=adata_mod.var, uns=adata_mod.uns, obsm=adata_mod.obsm)
+
+        self.min_size = min_size
+        self.fwhm = fwhm
+        self.thres_per = thres_per
+        self.save_path = save_path
+        self.J_count = J_count
+    
+
+    def reinitalize(self, sp_adata, lognorm, min_size, fwhm, thres_per, save_path, J_count):
+        '''
+        ## Reinitialize the class
+        '''
+        self.__init__(sp_adata=sp_adata, lognorm=lognorm, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
+
+
+    def topological_similarity(self, feat_pairs, group_name='batch', group_list=None, J_result_name='result'):
+        '''
+        ## Calculate Jaccard index for given feature pairs and return dataframe
+            : if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
+
+        ### Input
+        data: spatial data (format: anndata) containing log-normalized gene expression
+        feat_pairs: 
+            list of features with the format [('A','B'),('C','D')] or the pandas equivalent
+            -> (A and C) should be same data format: all in metadata (.obs.columns) or all in gene names(.var.index)
+            -> (C and D) should be same data format: all in metadata (.obs.columns) or all in gene names(.var.index)
+            -> If the data format is not same the majority of the data format will be automatically searched
+            -> and the rest of the features with different format will be removed from the pairs
+
+        group_name: 
+            the column name for the groups saved in metadata(.obs)
+            spatial data is divided according to the group and calculate topological overlap separately in each group
+        group_list: list of the elements in the group 
+
+        J_result_name: the name of the jaccard index data file name
+
+        ### Output
+        df_top_total: dataframe that contains spatial overlap measures represented by (Jmax, Jmean, Jmmx, Jmmy) for the feature pairs 
+        and average value for the feature across the spatial spots (if group is provided, then calculate average for the spots in each group)
+        data_mod: AnnData with summed location of all connected components in metadata(.obs) across all feature pairs
+        '''
+        df, adata = topological_sim_pairs_(data=self, feat_pairs=feat_pairs, group_list=group_list, group_name=group_name,
+                                            fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per)
+        # save jaccard index result in .uns of anndata
+        adata.uns['_'.join(('J',str(J_result_name),str(self.J_count)))] = df
+        # Initialize the object
+        self.reinitalize(sp_adata=adata, lognorm=False, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count+1)
+    
+
+    def save_connected_loc_data(self, save_format='h5ad', filename = 'cc_location'):
+        '''
+        ## Save the anndata or metadata file to the certain location
+        ### Input
+        data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
+        save_format: format to save the location of connected components; either 'h5ad' or 'csv'
+        file_name: file name to save (default: cc_location)
+
+        ### Output: None
+        '''
+        save_connected_loc_data_(data=self, save_format=save_format, path=self.save_path, filename=filename)
+
+    
+    def J_result_reset(self):
+        '''
+        ## Remove the results for jaccard similarity and connected component location and reset
+        '''
+        adata = self
+        # Move the raw .obs file
+        adata.obs = adata.uns['obs_raw']
+        # Remove the J_result data saved in .uns
+        import re
+        pattern = re.compile("^J_.*_[0-9]$")
+        adata_keys = list(adata.uns.keys())
+        for J_result_name in adata_keys:
+            if pattern.match(J_result_name): del adata.uns[J_result_name]
+        # Initialize the object
+        self.reinitalize(sp_adata=adata, lognorm=False, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=0)
+    
+
+    def jaccard_similarity(self, feat_name_x="", feat_name_y="", J_index=False):
+        '''
+        ## Calculate jaccard index for connected components
+        ### Input
+        feat_name_x, feat_name_y: name of the feature x and y
+        J_index: whether to calculate Jaccard index (Jmax, Jmean, Jmmx, Jmmy) between CCx and CCy pair 
+
+        ### Output
+        if J_index is True, then jaccard simliarity metrics calculated from jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
+            (Jmax, Jmean, Jmmx, Jmmy): maximum jaccard index, mean jaccard index and mean of maximum jaccard for CCx and CCy
+        if J_index is False, then return jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
+        '''
+        J_result = jaccard_and_connected_loc_(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y, J_index=J_index, 
+                                              return_mode='jaccard', return_sep_loc=False)
+        return J_result
+
+
+    def jaccard_top_n_connected_loc(self, feat_name_x='', feat_name_y='', top_n = 5):
+        '''
+        ## Calculate top n connected component locations for given feature pairs x and y
+        ### Input
+        feat_name_x, feat_name_y: name of the feature x and y
+        top_n: the number of the top connected components to be found
+
+        ### Output
+        AnnData with intersecting location of top n connected components between feature x and y saved in metadata(.obs)
+        -> top 1, 2, 3, ... intersecting connected component locations are separately saved
+        '''
+        adata = jaccard_top_n_connected_loc_(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y, top_n = top_n)
+        # Initialize the object
+        self.reinitalize(sp_adata=adata, lognorm=False, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count+1)
+
+
+    def vis_jaccard_top_n_pair(self, feat_name_x='', feat_name_y='',
+                               top_n = 5, spot_size=1, alpha_img=0.8, alpha = 0.8, 
+                               fig_size = (10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
+                               image_res = 'hires', adjust_image = True, border = 50, 
+                               title_fontsize = 30, legend_fontsize = None, title = 'J', return_axis=False,
+                               save = False, save_name_add = '', dpi=150):
+        '''
+        ## Visualizing top n connected component x and y showing maximum Jaccard index
+        ### Input
+        feat_name_x, feat_name_y: name of the feature x and y
+        top_n: the number of the top connected component pairs withthe  highest Jaccard similarity index
+        spot_size: size of the spot visualized on the tissue
+        alpha_img: transparency of the tissue, alpha: transparency of the colored spot
+
+        fig_size: size of the drawn figure
+        batch_colname: column name to categorize the batch in .obs
+        batch_name: the name of the batch slide to visualize (should be one of the elements of batch in .obs)
+        batch_library_dict: dictionary that matches batch name with library keys in adata.uns["spatial"]
+            -> can be utilized When the multiple Visium slides are merged.
+            -> if not provided, then categories for batch_colname in .obs will be matched with library keys in adata.uns["spatial"]
+
+        image_res: resolution of the tissue image to be used in visualization ('hires' or 'lowres')
+        adjust_image: whether to adjust the image to show the whole tissue image, if False then crop and show the location of connected component spots only
+        border: border of the spots around the spots; this information is used to adjust the image
+        title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure  
+        return_axis: whether to return the plot axis
+
+        save: whether to save of figure, path: saving path
+        save_name_add: additional name to be added in the end of the filename
+        dpi: dpi for image
+
+        ### Outut
+        axs: matplotlib axis for the plot
+        '''
+        axis = vis_jaccard_top_n_pair_visium(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
+                                             top_n=top_n, spot_size=spot_size, alpha_img=alpha_img, alpha=alpha, 
+                                             fig_size=fig_size, batch_colname=batch_colname, batch_name=batch_name, batch_library_dict=batch_library_dict,
+                                             image_res=image_res, adjust_image=adjust_image, border=border, 
+                                             title_fontsize=title_fontsize, legend_fontsize = legend_fontsize, title=title, return_axis=return_axis,
+                                             save = save, path = self.save_path, save_name_add = save_name_add, dpi=dpi)
+        return axis
+    
+
+    def vis_all_connected(self, feat_name_x='', feat_name_y='',
+                          spot_size=1, alpha_img=0.8, alpha = 0.8, 
+                          fig_size=(20,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
+                          image_res = 'hires', adjust_image = True, border = 50, 
+                          title_fontsize=30, legend_fontsize = None, title = 'Locations of', return_axis=False,
+                          save = False, save_name_add = '', dpi = 150):
+        '''
+        ## Visualizing all connected components x and y on tissue  
+        ### Input  
+        feat_name_x, feat_name_y: name of the feature x and y
+        spot_size: size of the spot visualized on the tissue
+        alpha_img: transparency of the tissue, alpha: transparency of the colored spot
+
+        fig_size: size of the drawn figure
+        batch_colname: column name to categorize the batch in .obs
+        batch_name: the name of the batch slide to visualize (should be one of the elements of batch in .obs)
+        batch_library_dict: dictionary that matches batch name with library keys in adata.uns["spatial"]
+            -> can be utilized When the multiple Visium slides are merged.
+            -> if not provided, then categories for batch_colname in .obs will be matched with library keys in adata.uns["spatial"]
+
+        image_res: resolution of the tissue image to be used in visualization ('hires' or 'lowres')
+        adjust_image: whether to adjust the image to show the whole tissue image, if False then crop and show the location of connected component spots only
+        border: border of the spots around the spots; this information is used to adjust the image
+        fontsize: size of the figure title, title: title of the figure
+        return_axis: whether to return the plot axis
+
+        save: whether to save of figure, path: saving path
+        save_name_add: additional name to be added in the end of the filename
+        dpi: dpi for image
+
+        ### Outut
+        axs: matplotlib axis for the plot
+        '''
+        axis = vis_all_connected_visium(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
+                                        spot_size=spot_size, alpha_img = alpha_img, alpha = alpha, 
+                                        fig_size = fig_size, batch_colname=batch_colname, batch_name = batch_name, batch_library_dict=batch_library_dict,
+                                        image_res = image_res, adjust_image = adjust_image, border = border, 
+                                        title_fontsize=title_fontsize, legend_fontsize = legend_fontsize, title = title, return_axis=return_axis,
+                                        save = save, path = self.save_path, save_name_add = save_name_add, dpi = dpi)
+        return axis
+
+
+
+class STopover_cosmx(STopover_visium):
+    '''
+    ## Class to calculate connected component location and jaccard similarity indices in CosMx dataset
+    
+    ### Input
+    sp_adata: Anndata object for CosMx SMI data with count matrix ('raw') in .X
+    sp_load_path: path to CosMx SMI data directory or .h5ad Anndata object
+
+    sc_adata: single-cell reference anndata for cell type annotation of CosMx SMI data
+    sc_celltype_colname: column name for cell type annotation information in metadata of single-cell (.obs)
+    sc_norm_total: scaling factor for the total count normalization per cell
+
+    tx_file_name, cell_exprmat_file_name, cell_metadata_file_name: CosMx file for transcript count, cell-level expression matrix, cell-level metadata
+    fov_colname, cell_id_colname: column name for barcodes corresponding to fov and cell ID
+    tx_xcoord_colname, tx_ycoord_colname, transcript_colname: column name for global x, y coordinates of the transcript and transcript name
+    meta_xcoord_colname, meta_ycoord_colname: column name for global x, y coordinates in cell-level metadata file
+    x_bins, y_bins: number of bins to divide the CosMx SMI data (for grid-based aggregation)
+
+    min_size: minimum size of a connected component
+    fwhm: full width half maximum value for the gaussian smoothing kernal
+    thres_per: lower percentile value threshold to remove the connected components
+    save_path: path to save the data files
+    J_count: number of jaccard similarity calculations after the first definition
+    '''
+    sp_adata: AnnData
+    load_path: str
+    min_size: int
+    fwhm: float
+    thres_per: float
+    save_path: str
+    J_count: int
+
+    def __init__(self, sp_adata=None, sp_load_path='.', sc_adata=None, sc_celltype_colname = 'celltype', sc_norm_total=1e3,
+                 tx_file_name = 'tx_file.csv', cell_exprmat_file_name='exprMat_file.csv', cell_metadata_file_name='metadata_file.csv', 
+                 fov_colname = 'fov', cell_id_colname='cell_ID', tx_xcoord_colname='x_global_px', tx_ycoord_colname='y_global_px', transcript_colname='target',
+                 meta_xcoord_colname='CenterX_global_px', meta_ycoord_colname='CenterY_global_px',
+                 x_bins=100, y_bins=100, 
+                 min_size=20, fwhm=2.5, thres_per=30, save_path='.', J_count=0):
+
+        assert (x_bins > 0) and (y_bins > 0)
+        assert min_size > 0
+        assert fwhm > 0
+        assert (thres_per >= 0) and (thres_per <= 100)
+
+        # Load the CosMx spatial transcriptomic data if no AnnData file was provided
+        if sp_adata is None:
+            print("Anndata object is not provided: searching for files in 'load_path'")
+            try: 
+                adata_mod = sc.read_h5ad(sp_load_path)
+                try: min_size, fwhm, thres_per = adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per']
+                except: pass
+            except: 
+                try: adata_mod = read_cosmx(sp_load_path, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, sc_norm_total=sc_norm_total,
+                                            tx_file_name = tx_file_name, cell_exprmat_file_name=cell_exprmat_file_name, cell_metadata_file_name=cell_metadata_file_name, 
+                                            fov_colname = fov_colname, cell_id_colname=cell_id_colname, 
+                                            tx_xcoord_colname=tx_xcoord_colname, tx_ycoord_colname=tx_ycoord_colname, transcript_colname=transcript_colname,
+                                            meta_xcoord_colname=meta_xcoord_colname, meta_ycoord_colname=meta_ycoord_colname,
+                                            x_bins=x_bins, y_bins=y_bins)
+                except: raise ValueError("'load_path': path to 10X-formatted Visium dataset directory or .h5ad Anndata object should be provided")
+        else:
+            adata_mod = sp_adata.copy()
+
+        # Preprocess the CosMx spatial transcriptomic data
+        super(STopover_visium, self).__init__(sp_adata=adata_mod, lognorm=False, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
+
+        self.x_bins = x_bins
+        self.y_bins = y_bins
+        self.min_size = min_size
+        self.fwhm = fwhm
+        self.thres_per = thres_per
+        self.save_path = save_path
+        self.J_count = J_count
+        self.sc_celltype_colname = sc_celltype_colname
+        self.transcript_colname = transcript_colname
+        self.sc_norm_total = sc_norm_total
+
+
+    def reinitalize(self, sp_adata, lognorm=None, sc_celltype_colname=None, sc_norm_total=None, x_bins=None, y_bins=None, 
+                    min_size=None, fwhm=None, thres_per=None, save_path=None, J_count=None):
+        '''
+        ## Reinitialize the class
+        '''
+        if (sc_celltype_colname is None) or (sc_norm_total is None) or (x_bins is None) or (y_bins is None):
+            sc_celltype_colname = self.sc_celltype_colname
+            sc_norm_total = self.sc_norm_total
+            x_bins = self.x_bins
+            y_bins = self.y_bins
+        self.__init__(sp_adata=sp_adata, sc_celltype_colname=sc_celltype_colname, sc_norm_total=sc_norm_total, 
+                      x_bins=x_bins, y_bins=y_bins, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
+
+
+    def celltype_specific_adata(self, cell_types=['']):
+        '''
+        ## Replace count matrix saved in .X with cell type specific transcript count matrix
+        ### Input
+        cell_types: the cell types to extract cell type-specific count information
+
+        ### Output
+        grid_tx_count_celltype: celltype specific grid-based count matrix as sparse.csr_matrix format
+        '''
+        grid_tx_count_celltype = celltype_specific_mat(sp_adata=self, tx_info_name='tx_by_cell_grid', celltype_colname=self.sc_celltype_colname, 
+                                                       cell_types=cell_types, transcript_colname=self.transcript_colname, sc_norm_total=self.sc_norm_total)
+        adata = self.copy()
+        adata.X = grid_tx_count_celltype
+        self.reinitalize(sp_adata=adata, sc_celltype_colname = self.sc_celltype_colname, sc_norm_total=self.sc_norm_total,                 
+                         x_bins=self.x_bins, y_bins=self.y_bins, 
+                         min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count)
+
+
+    def vis_spatial_cosmx(self, feat_name='', cmap = None, dot_size=None, alpha = 0.8, 
+                          fig_size = (10,10), title_fontsize = 30, legend_fontsize = None, title = None, 
+                          return_axis=False, save = False, save_name_add = '', dpi=150):
+        '''
+        ## Visualizing spatial distribution of features in CosMx dataset
+        ### Input
+        data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
+        feat_name_x, feat_name_y: name of the feature x and y
+        cmap: colormap for the visualization of CC identity
+        dot_size: size of the spot visualized on the tissue
+        alpha: transparency of the colored spot
+
+        fig_size: size of the drawn figure
+        title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
+        return_axis: whether to return the plot axis
+
+        save: whether to save of figure, path: saving path
+        save_name_add: additional name to be added in the end of the filename
+        dpi: dpi for image
+
+        ### Outut
+        axs: matplotlib axis for the plot
+        '''
+        axis = vis_spatial_cosmx_(data=self, feat_name=feat_name, cmap = cmap, dot_size=dot_size, alpha = alpha, 
+                                  fig_size = fig_size, title_fontsize = title_fontsize, legend_fontsize = legend_fontsize, title = title, 
+                                  return_axis=return_axis, save = save, path = self.save_path, save_name_add = save_name_add, dpi=dpi)
+        return axis
+
+
+    def vis_jaccard_top_n_pair(self, feat_name_x='', feat_name_y='',
+                               top_n = 5, dot_size=None, alpha = 0.8, 
+                               fig_size = (10,10), title_fontsize = 30, legend_fontsize = None,
+                               title = 'J', return_axis=False,
+                               save = False, save_name_add = '', dpi=150):
+        '''
+        ## Visualizing top n connected component x and y showing maximum Jaccard index in CosMx dataset
+        -> Overlapping conected component locations in green, exclusive locations for x and y in red and blue, respectively
+        ### Input
+        data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
+        feat_name_x, feat_name_y: name of the feature x and y
+        top_n: the number of the top connected component pairs withthe  highest Jaccard similarity index
+        dot_size: size of the spot visualized on the tissue
+        alpha: transparency of the colored spot
+
+        fig_size: size of the drawn figure
+        title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
+        return_axis: whether to return the plot axis
+
+        save: whether to save of figure, path: saving path
+        save_name_add: additional name to be added in the end of the filename
+        dpi: dpi for image
+
+        ### Outut
+        axs: matplotlib axis for the plot
+        '''
+        axis = vis_jaccard_top_n_pair_cosmx(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
+                                             top_n = top_n, dot_size= dot_size, alpha = alpha, 
+                                             fig_size = fig_size, title_fontsize = title_fontsize, legend_fontsize = legend_fontsize,
+                                             title = title, return_axis=return_axis,
+                                             save = save, path = self.save_path, save_name_add = save_name_add, dpi=dpi)
+        return axis
+    
+
+    def vis_all_connected(self, feat_name_x='', feat_name_y='',
+                          dot_size=None, alpha = 0.8, 
+                          fig_size=(10,10), title_fontsize = 30, legend_fontsize = None, 
+                          title = 'Locations of', return_axis=False,
+                          save = False, save_name_add = '', dpi = 150):
+        '''
+        ## Visualizing all connected components x and y on tissue in CosMx dataset
+        -> Overlapping conected component locations in green, exclusive locations for x and y in red and blue, respectively
+        ### Input  
+        data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
+        feat_name_x, feat_name_y: name of the feature x and y
+        dot_size: size of the spot visualized on the tissue
+        alpha: transparency of the colored spot
+
+        fig_size: size of the drawn figure
+        title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
+        return_axis: whether to return the plot axis
+
+        save: whether to save of figure, path: saving path
+        save_name_add: additional name to be added in the end of the filename
+        dpi: dpi for image
+
+        ### Outut
+        axs: matplotlib axis for the plot
+        '''
+        axis = vis_all_connected_cosmx(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
+                                       dot_size=dot_size, alpha = alpha, 
+                                       fig_size= fig_size, title_fontsize = title_fontsize, legend_fontsize = legend_fontsize, 
+                                       title = title, return_axis = return_axis,
+                                       save = save, path = self.save_path, save_name_add = save_name_add, dpi = dpi)
+        return axis

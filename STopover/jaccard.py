@@ -66,7 +66,7 @@ def jaccard_and_connected_loc_(data, CCx=None, CCy=None, feat_name_x="", feat_na
     data_mod = data.copy()
     if (CCx is None) or (CCy is None):
         if len([i for i in data_mod.obs.columns if str(i).startswith('CC_1')])<2:
-            data_mod, CCxy_loc_arr, num_ccx = split_connected_loc(data_mod, feat_name_x=feat_name_x, feat_name_y=feat_name_y, return_loc_arr=True)
+            CCxy_loc_arr, num_ccx = split_connected_loc(data_mod, feat_name_x=feat_name_x, feat_name_y=feat_name_y, return_loc_arr=True)
         else:
             column_names_x = [i for i in data_mod.obs.columns if ('CC_' in str(i)) and (feat_name_x in str(i))]
             column_names_y = [i for i in data_mod.obs.columns if ('CC_' in str(i)) and (feat_name_y in str(i))]
@@ -158,7 +158,7 @@ def jaccard_top_n_connected_loc_(data, CCx=None, CCy=None, feat_name_x='', feat_
 
         # Find intersecting location for the top n location and assign the number
         data_mod.obs['_'.join(('CCxy_top',str(num+1),feat_name_x,feat_name_y))] = \
-            (1 * ((locx == 0) & (locy != 0))) + (2 * ((locx != 0) & (locy == 0))) + (3 * ((locx != 0) & (locy != 0)))
+            ((1 * ((locx != 0) & (locy == 0))) + (2 * ((locx == 0) & (locy != 0))) + (3 * ((locx != 0) & (locy != 0)))).astype('category')
 
     return data_mod, J_top_n
 

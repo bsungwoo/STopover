@@ -14,39 +14,61 @@
 
 ### Dependency (python)  
 ```Plain Text
-python 3.7  
-scanpy 1.5.1  
-numpy 1.21.2  
-pandas 1.3.2  
-h5py 2.10.0  
-scikit-learn 0.24.2  
-scipy 1.7.1  
-graph-tool 2.45  
+python 3.8
+scanpy 1.9.1
+numpy 1.20.3
+pandas 1.4.3
+pyarrow 8.0.0
+scikit-learn 0.24.2
+scipy 1.7.3
+networkx 2.6.3
 ```
 
 ## Code Example  
-### 1. Create STopover object 
-load_path: path to file  
-save_path: path to save file  
-adata_type: type of spatial data ('visium' or 'cosmx')  
-lognorm: whether to lognormalize the count matrix saved in adata.X  
+### 1. Create STopover object  
+sp_adata: Anndata object for VisiumCosMx SMI data with count matrix ('raw') in .X  
+sp_load_path: path to Visium/CosMx directory or '*.h5ad' file  
+save_path: path to save file    
+#### Visium  
+lognorm: whether to lognormalize the count matrix saved in adata.X (Visium)  
+#### CosMx  
+x_bins, y_bins: number of bins to divide the CosMx SMI data (for grid-based aggregation)    
+sc_adata: single-cell reference anndata for cell type annotation of CosMx SMI data  
+sc_celltype_colname: column name for cell type annotation information in metadata of single-cell (.obs)  
+sc_norm_total: scaling factor for the total count normalization per cell  
+tx_file_name: CosMx file for transcript count  
+cell_exprmat_file_name: CosMx file for cell-level expression matrix  
+cell_metadata_file_name: CosMx file for cell-level metadata  
 
-#### 1-0. Optimal parameter choices  
+#### 1-0. Optimal parameter choices (Visium & CosMx)  
   minimum size of connected components (min_size) = 20  
   Full width half maximum of Gaussian smoothing kernel (fwhm) = 2.5  
   Lower percentile value threshold to remove the connected components (thres_per) = 30  
 
-#### 1-1 Create object with Anndata object (sp_adata)  
+#### 1-1-1. Create object for Visium dataset  
 ```Plain Text
-from STopover import STopover  
+from STopover import STopover_visium
 
-sp_adata = STopover(adata=sp_adata, adata_type='visium', lognorm=False, min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
+sp_adata = STopover_visium(sp_adata=sp_adata, lognorm=False, min_size=20, fwhm=2.5, thres_per=30, save_path='.')
+```
+#### 1-1-2. Create object for CosMx dataset  
+```Plain Text
+from STopover import STopover_cosmx
+
+sp_adata = STopover_cosmx(sp_adata=sp_adata, sc_adata=sc_adata, sc_celltype_colname = 'celltype', sc_norm_total=1e3,
+                          tx_file_name = 'tx_file.csv', cell_exprmat_file_name='exprMat_file.csv', 
+                          cell_metadata_file_name='metadata_file.csv', 
+                          x_bins=100, y_bins=100, min_size=20, fwhm=2.5, thres_per=30, save_path='.')
 ```
 
-#### 1-2 Create object with saved .h5ad file or 10X-formatted Visium directory  
+#### 1-2. Create object with saved .h5ad file or 10X-formatted Visium/CosMx directory  
 ```Plain Text
-sp_adata = STopover(load_path='~/*.h5ad', adata_type='visium', lognorm=False, min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
-sp_adata = STopover(load_path='~/Visium_dir', adata_type='visium', lognorm=True, min_size=20, fwhm=2.5, thres_per=30, save_path='.')  
+sp_adata = STopover_visium(sp_load_path='~/*.h5ad', adata_type='visium', lognorm=False, min_size=20, fwhm=2.5, thres_per=30, save_path='.')
+sp_adata = STopover_visium(sp_load_path='~/Visium_dir', adata_type='visium', lognorm=True, min_size=20, fwhm=2.5, thres_per=30, save_path='.')
+sp_adata = STopover_cosmx(sp_adata='~/CosMx dir', sc_adata=sc_adata, sc_celltype_colname = 'celltype', sc_norm_total=1e3,
+                          tx_file_name = 'tx_file.csv', cell_exprmat_file_name='exprMat_file.csv', 
+                          cell_metadata_file_name='metadata_file.csv', 
+                          x_bins=100, y_bins=100, min_size=20, fwhm=2.5, thres_per=30, save_path='.')
 ```
 
 ### 2. Calculate topological similarity between the two values (expression or metadata)  
@@ -78,38 +100,47 @@ sp_adata.topological_similarity(feat_pairs=[('Tumor','PDCD1')], group_name='batc
 sp_adata.save_connected_loc_data(save_format='h5ad', filename = 'adata_cc_loc')  
 ```
 
-### 4. Visualize the overlapping connected components between two values  
+### 4-1. Visium: visualize the overlapping connected components between two values  
 ```Plain Text  
-# All connected component location for each feature  
-sp_adata.vis_all_connected(vis_intersect_only=False, cmap='tab20', spot_size=1, 
-                           alpha_img=0.8, alpha=0.8,  
+# Visium: Visualization of connected component locations of feature x and y
+sp_adata.vis_all_connected(spot_size=1, alpha_img=0.8, alpha=0.8,  
                            feat_name_x='CD274', feat_name_y='PDCD1',  
                            fig_size=(5,5), 
                            batch_colname ='batch', batch_name='0', image_res='hires',  
                            adjust_image=True, border = 50,  
                            fontsize=20, title = 'Locations of', return_axis=False,  
-                           save=True, save_name_add='test', dpi=300)  
+                           save=False, save_name_add='test', dpi=150)  
 
-# Only the overlapping connected component location (color of connected components for feature x)  
-sp_adata.vis_all_connected(vis_intersect_only=True, cmap='tab20', spot_size=1, 
-                           alpha_img=0.8, alpha=0.8,  
-                           feat_name_x='CD274', feat_name_y='PDCD1',  
-                           fig_size=(5,5),  
-                           batch_colname='batch', batch_name='0', image_res='hires',  
-                           adjust_image=True, border=50,  
-                           fontsize=20, title='Locations of', return_axis=False,  
-                           save=True, save_name_add='test', dpi=300)  
-
-# Visualize top 2 connected components  
-sp_adata.vis_jaccard_top_n_pair(top_n=2, cmap='tab20', spot_size=1,  
-                                alpha_img=0.8, alpha=0.8, 
+# Visium: Visualize location of top 2 connected components
+sp_adata.vis_jaccard_top_n_pair(top_n=2, spot_size=1, alpha_img=0.8, alpha=0.8, 
                                 feat_name_x='CD274', feat_name_y='PDCD1',  
                                 fig_size=(5,5), 
                                 batch_colname='batch', batch_name='0', image_res='hires', 
                                 adjust_image=True, border=50,  
                                 fontsize=20, title = 'J', return_axis=False,  
-                                save=False, save_name_add='test', dpi=300)  
+                                save=False, save_name_add='test', dpi=150)  
 ```
+### 4-2. CosMx: visualize the overlapping connected components between two values  
+```Plain Text  
+# CosMx: Spatial mapping of feature in grid-based data
+sp_adata.vis_spatial_cosmx(feat_name='', alpha = 0.8, 
+                           fig_size = (10,10), title_fontsize = 30, legend_fontsize = None, 
+                           title = 'Spatial mapping', return_axis=False, 
+                           save = False, save_name_add = 'test', dpi=150)
+
+# CosMx: Visualization of connected component locations of feature x and y
+sp_adata.vis_all_connected(feat_name_x='', feat_name_y='', alpha = 0.8, 
+                           fig_size=(10,10), title_fontsize = 30, legend_fontsize = None, 
+                           title = 'Locations of', return_axis=False,
+                           save = False, save_name_add = 'test', dpi = 150)
+
+# CosMx: Visualize top 2 connected component locations  
+sp_adata.vis_jaccard_top_n_pair(feat_name_x='', feat_name_y='', top_n = 5, alpha = 0.8, 
+                                fig_size = (10,10), title_fontsize = 30, legend_fontsize = None,
+                                title = 'J', return_axis=False,
+                                save = False, save_name_add = 'test', dpi=150)
+```
+
 ### 5. Initialize the STopover object for recalculation  
 ```Plain Text 
 sp_adata.J_result_reset()

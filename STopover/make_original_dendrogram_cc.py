@@ -9,14 +9,22 @@ Translation to python and addition of visualization code: Sungwoo Bae with the h
 """
 import numpy as np
 from scipy import sparse
-import graph_tool.all as gt
+import networkx as nx
 
 def make_original_dendrogram_cc(U, A, threshold): 
-# CC: connected components, ncc-list, each element is a set of voxels
-# E: ncc-by-ncc sparse matrix connectivity matrix between CCs
-# duration: ncc-by-2 array, the birth and death of CCs
-# history: ncc-list, each element has the index from which the CC come
+    '''
+    ## Compute original dendrogram with connected components
+    ### Input
+    U: gene expression profiles of a feature across p spots (p * 1 array)
+    A: sparse matrix for spatial adjacency matrix across spots (0 and 1)
+    threshold: threshold value for U
     
+    ### Output
+    CC: connected components, ncc-list, each element is a set of voxels
+    E: ncc-by-ncc sparse matrix connectivity matrix between CCs
+    duration: ncc-by-2 array, the birth and death of CCs
+    history: ncc-list, each element has the index from which the CC come
+    '''
     p = len(U)
     CC = [[]]*p
     E = sparse.dok_matrix((p,p))
@@ -35,18 +43,15 @@ def make_original_dendrogram_cc(U, A, threshold):
         index_x, index_y = np.meshgrid(cvoxels, cvoxels, indexing='ij')
 
         # Create directed graph and extract strongly connected components
-        G = gt.Graph(directed=True)
-        G.add_vertex(len(cvoxels))
-        G.add_edge_list(np.transpose(A[index_x,index_y].nonzero()))
-        comp, hist = gt.label_components(G, directed=True)
-        CC_profiles = comp.a
-        S = max(CC_profiles) + 1
+        G = nx.from_scipy_sparse_matrix(A[index_x,index_y], create_using=nx.DiGraph())
+        CC_profiles = [G.subgraph(c).copy().nodes() for c in nx.strongly_connected_components(G)]
+        S = len(CC_profiles)
         
         nCC = [[]]*S
         nA = sparse.dok_matrix((p,S))
         neighbor_cc = np.array([])
         for j in range(S):
-            nCC[j] = cvoxels[np.where(CC_profiles==j)[0]]
+            nCC[j] = cvoxels[list(CC_profiles[j])]
             # neighbors of current voxels 
             neighbor_voxels = np.where(np.sum(A[nCC[j],:].toarray(), axis=0) > 0)[0]
             # CC index to which neighbors belong (to differentiate null value with )
@@ -71,15 +76,12 @@ def make_original_dendrogram_cc(U, A, threshold):
             nA = nA_tmp.copy()
 
             # Estimate connected components of clusters
-            G = gt.Graph(directed=True)
-            G.add_vertex(S+len(neighbor_cc))
-            G.add_edge_list(np.transpose(nA.nonzero()))
-            comp, hist = gt.label_components(G, directed=True)
-            CC_profiles = comp.a
-            S = max(CC_profiles) + 1
+            G = nx.from_scipy_sparse_matrix(nA, create_using=nx.DiGraph())
+            CC_profiles = [G.subgraph(c).copy().nodes() for c in nx.strongly_connected_components(G)]
+            S = len(CC_profiles)
             
             for j in range(S):
-                tind = np.where(CC_profiles==j)[0]
+                tind = np.array(list(CC_profiles[j]))
                 tind1 = neighbor_cc[tind[np.where(tind < len(neighbor_cc))]]
                 tind2 = tind[np.where(tind >= len(neighbor_cc))] - len(neighbor_cc)
                 
