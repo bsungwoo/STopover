@@ -3,15 +3,14 @@
 ## Python environment for implementation     
 ### Install conda environment and add jupyter kernel  
 ```Plain Text  
-  conda create -n STopover -c conda-forge graph-tool=2.45 python=3.7  
-  conda activate STopover  
-  ## For the private code (using token)    
-  pip install git+https://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@github.com/bsungwoo/STopover.git  
-  ## For the public code  
-  (pip install git+https://github.com/bsungwoo/STopover.git)  
-  python -m ipykernel install --user --name STopover --display-name STopover  
+  conda create -n STopover python=3.8
+  conda activate STopover
+  ## For the private code (using token)
+  pip install git+https://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@github.com/bsungwoo/STopover.git
+  ## For the public code
+  (pip install git+https://github.com/bsungwoo/STopover.git)
+  python -m ipykernel install --user --name STopover --display-name STopover
 ```
-
 ### Dependency (python)  
 ```Plain Text
 python 3.8
@@ -82,7 +81,7 @@ J_result_name: name to save the jaccard similarity index results in adata.uns
 Jaccard indexes bewteen all feature pairs are saved in adata.uns under the name 'J_'  
 Connected component locations are saved in adata.obs  
 ```Plain Text
-## Analysis for the dataset having 1 Visium slide
+## Analysis for the dataset having 1 Visium slide or 1 CosMx dataset
 # Between two gene expression patterns (CD274 & PDCD1)  
 sp_adata.topological_similarity(feat_pairs=[('CD274','PDCD1')], J_result_name='result')   
 # Between cell fraction metadata and gene (Tumor & PDCD1)  
