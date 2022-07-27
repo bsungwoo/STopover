@@ -37,12 +37,12 @@ def annotate_cosmx(sp_adata, sc_adata, sc_norm_total=1e3,
     sc.pp.normalize_total(sp_adata, target_sum=sc_norm_total, inplace=True)
 
     # Log transform and scale single-cell data
-    sc_adata.raw = sc_adata
     sc.pp.log1p(sc_adata)
+    sc_adata.raw = sc_adata
     sc.pp.scale(sc_adata, max_value=10)
     # Log transform and scale spatial (CosMx data)
-    sp_adata.raw = sp_adata
     sc.pp.log1p(sp_adata)
+    sp_adata.raw = sp_adata
     sc.pp.scale(sp_adata, max_value=10)
     # Find intersecting genes
     inter_var_names = sc_adata.var_names.intersection(sp_adata.var_names)
@@ -60,7 +60,7 @@ def annotate_cosmx(sp_adata, sc_adata, sc_norm_total=1e3,
     sc.tl.ingest(sp_adata, sc_adata, obs=sc_celltype_colname, embedding_method='umap')
 
     if return_format=='adata': 
-        return sp_adata
+        return sp_adata.raw.to_adata()
     else:
         # Data frame containing annotated cell types in CosMx SMI data
         df_celltype = sp_adata.obs.loc[:,[sc_celltype_colname,
@@ -88,7 +88,8 @@ def read_cosmx(load_path, sc_adata, sc_celltype_colname = 'celltype', sc_norm_to
     x_bins, y_bins: number of bins to divide the CosMx SMI data (for grid-based aggregation)
 
     ### Output
-    sp_adata_grid: grid-based count anndata with cell abundance information saved in .obs
+    sp_adata_grid: grid-based log-normalized count anndata with cell abundance information saved in .obs
+    sp_adata_cell: cell-based log-normalized count anndata
     '''
     # Check data feasibility
     if sc_celltype_colname not in sc_adata.obs.columns:
@@ -138,7 +139,7 @@ def read_cosmx(load_path, sc_adata, sc_celltype_colname = 'celltype', sc_norm_to
     cell_meta = csv.read_csv(os.path.join(load_path, cell_metadata_file_name)).to_pandas().loc[:,[meta_xcoord_colname, meta_ycoord_colname]]
     cell_meta = pd.concat([cell_meta, exp_mat.index.to_frame().reset_index(drop=True)], axis=1)
     # Generate CosMx SMI spatial anndata file
-    sp_adata_cell = an(X = sparse.csr_matrix(exp_mat, dtype=np.float32), obs=cell_meta)
+    sp_adata_cell = an(X = sparse.csr_matrix(exp_mat.reset_index(drop=True,inplace=True), dtype=np.float32), obs=cell_meta)
     sp_adata_cell.var_names = var_names
     sp_adata_cell.obs_names = cell_names_expmat
     # Remove cells with total transcript count of 0
@@ -170,11 +171,12 @@ def read_cosmx(load_path, sc_adata, sc_celltype_colname = 'celltype', sc_norm_to
     sp_adata_grid.uns['tx_by_cell_grid'] = tx_by_cell_grid.reset_index()
     print("End of generating grid-based CosMx spatial anndata: %.2f seconds" % (time.time()-start_time))
 
-    return sp_adata_grid
+    return sp_adata_grid, sp_adata_cell
 
 
 
-def celltype_specific_mat(sp_adata, tx_info_name='tx_by_cell_grid', celltype_colname=None, cell_types=[''], transcript_colname='target', sc_norm_total=1e3):
+def celltype_specific_mat(sp_adata, tx_info_name='tx_by_cell_grid', celltype_colname=None, cell_types=[''], 
+                          transcript_colname='target', sc_norm_total=1e3):
     '''
     ## Return cell type specific transcript count matrix
     ### Input
@@ -197,18 +199,19 @@ def celltype_specific_mat(sp_adata, tx_info_name='tx_by_cell_grid', celltype_col
     # Boolean pandas series for the celltype inclusion
     if not (set(cell_types) <= set(tx_by_cell_grid[celltype_colname].cat.categories)): 
         raise ValueError("Some of the cell types in 'cell_types' are not found in the sp_data")
-    celltype_bool = tx_by_cell_grid[celltype_colname].isin(cell_types)
     
     # Subset the transcript information by cell type
-    tx_by_cell_grid = tx_by_cell_grid[celltype_bool]
+    grid_tx_count_celltype_list = []
+    for celltype in cell_types:
+        # Find transcript count information for a specific cell type
+        tx_by_cell_grid = tx_by_cell_grid[tx_by_cell_grid[celltype_colname]==celltype]
+        # Generate normalization count matrix by grid
+        grid_tx_count_celltype = tx_by_cell_grid.pivot_table(index=['array_col','array_row'], columns=transcript_colname, values='tx_fx_by_grid', aggfunc=['sum']).fillna(0)
+        # Reindex the grid_tx_count_celltype to match with the original grid index
+        grid_index = grid_tx_count_celltype.index.to_frame()
+        grid_tx_count_celltype.index = grid_index['array_col'].astype(str) + '_' + grid_index['array_row'].astype(str)
+        grid_tx_count_celltype = grid_tx_count_celltype.reindex(sp_adata.obs_names, fill_value=0)
+        # Log transformation of grid based count
+        grid_tx_count_celltype_list.append((sc_norm_total*sparse.csr_matrix(grid_tx_count_celltype, dtype=np.float32)).log1p())
 
-    # Generate normalization count matrix by grid
-    grid_tx_count_celltype = tx_by_cell_grid.pivot_table(index=['array_col','array_row'], columns=transcript_colname, values='tx_fx_by_grid', aggfunc=['sum']).fillna(0)
-    # Reindex the grid_tx_count_celltype to match with the original grid index
-    grid_index = grid_tx_count_celltype.index.to_frame()
-    grid_tx_count_celltype.index = grid_index['array_col'].astype(str) + '_' + grid_index['array_row'].astype(str)
-    grid_tx_count_celltype = grid_tx_count_celltype.reindex(sp_adata.obs_names, fill_value=0)
-    # Log transformation of grid based count
-    grid_tx_count_celltype = (sc_norm_total*sparse.csr_matrix(grid_tx_count_celltype, dtype=np.float32)).log1p()
-
-    return grid_tx_count_celltype
+    return grid_tx_count_celltype_list

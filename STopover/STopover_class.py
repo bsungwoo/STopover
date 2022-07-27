@@ -8,7 +8,7 @@ from .jaccard import jaccard_and_connected_loc_
 from .jaccard import jaccard_top_n_connected_loc_
 from .topological_vis import *
 
-
+import pkg_resources
 
 class STopover_visium(AnnData):
     '''
@@ -49,7 +49,7 @@ class STopover_visium(AnnData):
                 try:
                     adata_mod = sc.read_visium(sp_load_path)
                     adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'] = min_size, fwhm, thres_per
-                except: raise ValueError("'load_path': path to 10X-formatted Visium dataset directory or .h5ad Anndata object should be provided")
+                except: raise ValueError("'sp_load_path': path to 10X-formatted Visium dataset directory or .h5ad Anndata object should be provided")
         else:
             adata_mod = sp_adata.copy()
             # Add the key parameters in the .uns
@@ -78,9 +78,10 @@ class STopover_visium(AnnData):
         self.__init__(sp_adata=sp_adata, lognorm=lognorm, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
 
 
-    def topological_similarity(self, feat_pairs, group_name='batch', group_list=None, J_result_name='result'):
+    def topological_similarity(self, feat_pairs=None, use_lr_db=False, lr_db_species='human',
+                                     group_name='batch', group_list=None, J_result_name='result'):
         '''
-        ## Calculate Jaccard index for given feature pairs and return dataframe
+        ## Calculate Jaccard index between topological connected components of feature pairs and return dataframe
             : if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
 
         ### Input
@@ -91,6 +92,8 @@ class STopover_visium(AnnData):
             -> (C and D) should be same data format: all in metadata (.obs.columns) or all in gene names(.var.index)
             -> If the data format is not same the majority of the data format will be automatically searched
             -> and the rest of the features with different format will be removed from the pairs
+        use_lr_db: whether to use list of features in CellTalkDB L-R database
+        lr_db_species: select species to utilize in CellTalkDB database
 
         group_name: 
             the column name for the groups saved in metadata(.obs)
@@ -104,6 +107,11 @@ class STopover_visium(AnnData):
         and average value for the feature across the spatial spots (if group is provided, then calculate average for the spots in each group)
         data_mod: AnnData with summed location of all connected components in metadata(.obs) across all feature pairs
         '''
+        assert lr_db_species in ['human', 'mouse'], "'lr_db_species' should be either 'human' or 'mouse'"
+        if use_lr_db:
+            lr_db = pkg_resources.resource_stream(__name__, 'data/'+lr_db_species+'_lr_pair.txt')
+            feat_pairs = pd.read_csv(lr_db, delimiter='\t')[['ligand_gene_symbol','receptor_gene_symbol']]
+        
         df, adata = topological_sim_pairs_(data=self, feat_pairs=feat_pairs, group_list=group_list, group_name=group_name,
                                             fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per)
         # save jaccard index result in .uns of anndata
@@ -142,9 +150,9 @@ class STopover_visium(AnnData):
         self.reinitalize(sp_adata=adata, lognorm=False, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=0)
     
 
-    def jaccard_similarity(self, feat_name_x="", feat_name_y="", J_index=False):
+    def jaccard_similarity_arr(self, feat_name_x="", feat_name_y="", J_index=False):
         '''
-        ## Calculate jaccard index for connected components
+        ## Calculate jaccard index for connected components of feature x and y
         ### Input
         feat_name_x, feat_name_y: name of the feature x and y
         J_index: whether to calculate Jaccard index (Jmax, Jmean, Jmmx, Jmmy) between CCx and CCy pair 
@@ -286,7 +294,9 @@ class STopover_cosmx(STopover_visium):
     J_count: number of jaccard similarity calculations after the first definition
     '''
     sp_adata: AnnData
-    load_path: str
+    sp_load_path: str
+    x_bins: int
+    y_bins: int
     min_size: int
     fwhm: float
     thres_per: float
@@ -307,7 +317,7 @@ class STopover_cosmx(STopover_visium):
 
         # Load the CosMx spatial transcriptomic data if no AnnData file was provided
         if sp_adata is None:
-            print("Anndata object is not provided: searching for files in 'load_path'")
+            print("Anndata object is not provided: searching for files in 'sp_load_path'")
             try: 
                 adata_mod = sc.read_h5ad(sp_load_path)
                 try: min_size, fwhm, thres_per = adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per']
@@ -337,8 +347,8 @@ class STopover_cosmx(STopover_visium):
         self.sc_norm_total = sc_norm_total
 
 
-    def reinitalize(self, sp_adata, lognorm=None, sc_celltype_colname=None, sc_norm_total=None, x_bins=None, y_bins=None, 
-                    min_size=None, fwhm=None, thres_per=None, save_path=None, J_count=None):
+    def reinitalize(self, sp_adata, sc_celltype_colname=None, sc_norm_total=None, x_bins=None, y_bins=None, 
+                    min_size=None, fwhm=None, thres_per=None, save_path=None, J_count=None, inplace=True):
         '''
         ## Reinitialize the class
         '''
@@ -347,8 +357,14 @@ class STopover_cosmx(STopover_visium):
             sc_norm_total = self.sc_norm_total
             x_bins = self.x_bins
             y_bins = self.y_bins
-        self.__init__(sp_adata=sp_adata, sc_celltype_colname=sc_celltype_colname, sc_norm_total=sc_norm_total, 
-                      x_bins=x_bins, y_bins=y_bins, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
+        if inplace:
+            self.__init__(sp_adata=sp_adata, sc_celltype_colname=sc_celltype_colname, sc_norm_total=sc_norm_total, 
+                          x_bins=x_bins, y_bins=y_bins, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
+        else:
+            sp_adata_mod = STopover_cosmx(sp_adata, sc_celltype_colname=sc_celltype_colname, sc_norm_total=sc_norm_total, 
+                                          x_bins=x_bins, y_bins=y_bins, min_size=min_size, fwhm=fwhm, thres_per=thres_per, 
+                                          save_path=save_path, J_count=J_count)
+            return sp_adata_mod
 
 
     def celltype_specific_adata(self, cell_types=['']):
@@ -358,15 +374,48 @@ class STopover_cosmx(STopover_visium):
         cell_types: the cell types to extract cell type-specific count information
 
         ### Output
-        grid_tx_count_celltype: celltype specific grid-based count matrix as sparse.csr_matrix format
+        grid_tx_count_celltype: list of celltype specific grid-based count matrix as sparse.csr_matrix format
         '''
-        grid_tx_count_celltype = celltype_specific_mat(sp_adata=self, tx_info_name='tx_by_cell_grid', celltype_colname=self.sc_celltype_colname, 
-                                                       cell_types=cell_types, transcript_colname=self.transcript_colname, sc_norm_total=self.sc_norm_total)
-        adata = self.copy()
-        adata.X = grid_tx_count_celltype
-        self.reinitalize(sp_adata=adata, sc_celltype_colname = self.sc_celltype_colname, sc_norm_total=self.sc_norm_total,                 
-                         x_bins=self.x_bins, y_bins=self.y_bins, 
-                         min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count)
+        grid_count_celltype_list = celltype_specific_mat(sp_adata=self, tx_info_name='tx_by_cell_grid', celltype_colname=self.sc_celltype_colname, 
+                                                            cell_types=cell_types, transcript_colname=self.transcript_colname, sc_norm_total=self.sc_norm_total)
+
+        return grid_count_celltype_list
+
+
+    def topological_similarity_celltype_pair(self, celltype_x='', celltype_y='', feat_pairs=None, use_lr_db=False, lr_db_species='human',
+                                             group_name='batch', group_list=None, J_result_name='result'):
+        '''
+        ## Calculate Jaccard index between the two cell type-specific expression anndata of CosMx data
+        ### Input
+        celltype_x: name of the cell type x (should be among the column names of .obs)
+        celltype_y: name of the cell type y (should be among the column names of .obs)
+            when use_lr_db=True, then the ligand expression in celltype x and receptor expression in celltype y will be searched
+        other parameters: refer to the topological_similarity method
+        '''
+        adata_x, adata_y = self.celltype_specific_adata(cell_types=[celltype_x, celltype_y])
+        comb_var_names = (celltype_x+'_'+adata_x.var_names).tolist() + (celltype_y+'_'+adata_y.var_names).tolist()
+        if isinstance(adata_x, np.ndarray): 
+            adata_xy = AnnData(X=sparse.hstack([adata_x.X, adata_y.X]), obs=adata_x.obs)
+        elif isinstance(adata_y, sparse.spmatrix):
+            adata_xy = AnnData(X=sparse.hstack([adata_x.X, adata_y.X]), obs=adata_x.obs)
+        adata_xy.var_names = comb_var_names
+        adata_xy = STopover_cosmx(adata_xy, sc_celltype_colname=self.sc_celltype_colname, sc_norm_total=self.sc_norm_total, 
+                                  x_bins=self.x_bins, y_bins=self.y_bins, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, 
+                                  save_path=self.save_path, J_count=self.J_count)
+        if use_lr_db:
+            lr_db = pkg_resources.resource_stream(__name__, 'data/'+lr_db_species+'_lr_pair.txt')
+            feat_pairs = pd.read_csv(lr_db, delimiter='\t')[['ligand_gene_symbol','receptor_gene_symbol']]
+        else: 
+            if isinstance(feat_pairs, list): feat_pairs = pd.DataFrame(feat_pairs)
+        # Modify the column name of the feature pair dataframe
+        celltype_list = [celltype_x, celltype_y]
+        for index, colname in enumerate(feat_pairs.columns):
+            feat_pairs[colname] = '_'.join((celltype_list[index], feat_pairs[colname]))
+        
+        # Calculate topological similarites between the pairs from the two cell types
+        adata_xy.topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species,
+                                        group_name=group_name, group_list=group_list, J_result_name=J_result_name)
+        return adata_xy
 
 
     def vis_spatial_cosmx(self, feat_name='', cmap = None, dot_size=None, alpha = 0.8, 

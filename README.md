@@ -29,9 +29,9 @@ sp_adata: Anndata object for VisiumCosMx SMI data with count matrix ('raw') in .
 sp_load_path: path to Visium/CosMx directory or '*.h5ad' file  
 save_path: path to save file    
 #### Visium  
-lognorm: whether to lognormalize the count matrix saved in adata.X (Visium)  
+lognorm: whether to lognormalize the count matrix saved in adata.X  
 #### CosMx  
-x_bins, y_bins: number of bins to divide the CosMx SMI data (for grid-based aggregation)    
+x_bins, y_bins: number of bins to divide the CosMx SMI data (for grid-based aggregation)   
 sc_adata: single-cell reference anndata for cell type annotation of CosMx SMI data  
 sc_celltype_colname: column name for cell type annotation information in metadata of single-cell (.obs)  
 sc_norm_total: scaling factor for the total count normalization per cell  
@@ -59,7 +59,6 @@ sp_adata = STopover_cosmx(sp_adata=sp_adata, sc_adata=sc_adata, sc_celltype_coln
                           cell_metadata_file_name='metadata_file.csv', 
                           x_bins=100, y_bins=100, min_size=20, fwhm=2.5, thres_per=30, save_path='.')
 ```
-
 #### 1-2. Create object with saved .h5ad file or 10X-formatted Visium/CosMx directory  
 ```Plain Text
 sp_adata = STopover_visium(sp_load_path='~/*.h5ad', adata_type='visium', lognorm=False, min_size=20, fwhm=2.5, thres_per=30, save_path='.')
@@ -69,9 +68,15 @@ sp_adata = STopover_cosmx(sp_load_path='~/CosMx dir', sc_adata=sc_adata, sc_cell
                           cell_metadata_file_name='metadata_file.csv', 
                           x_bins=100, y_bins=100, min_size=20, fwhm=2.5, thres_per=30, save_path='.')
 ```
+### 1-3. Calculate cell type-specific gene expression in CosMx dataset  
+```Plain Text
+sp_adata_Tumor, sp_adata_cd8 = sp_adata.celltype_specific_adata(cell_types=['Tumor','Cytotoxic CD8+ T'])
+```
 
 ### 2. Calculate topological similarity between the two values (expression or metadata)  
 feat_pairs: list of features (genes or metadata) with the format [('A','B'),('C','D')] or the pandas dataframe equivalent  
+use_lr_db: whether to use list of features in CellTalkDB L-R database  
+lr_db_species: select species to utilize in CellTalkDB database  
 group_name: name of the group to seprately evaluate the topological similarity  
   -> when there is only one slide, then group_name = None  
   -> when there are multiple slides, then group_name = (group name to identify slides; e.g. 'batch')  
@@ -86,6 +91,14 @@ Connected component locations are saved in adata.obs
 sp_adata.topological_similarity(feat_pairs=[('CD274','PDCD1')], J_result_name='result')   
 # Between cell fraction metadata and gene (Tumor & PDCD1)  
 sp_adata.topological_similarity(feat_pairs=[('Tumor','PDCD1')], J_result_name='result')  
+
+## L-R interaction analysis in Visium dataset
+sp_adata.topological_similarity(use_lr_db=True, lr_db_species='human', J_result_name='result')
+
+## L-R interaction analysis using cell type-specific expression data in CosMx
+# Between ligand expression in celltype x and receptor expression in celltype y
+sp_adata_lr_celltype = sp_adata.topological_similarity_celltype_pair(celltype_x='Tumor', celltype_y='Cytotoxic CD8+ T', 
+                                                                     use_lr_db=True, lr_db_species='human', J_result_name='result')
 
 ## Analysis for the dataset containing 4 Visium slides with batch number 0 ~ 3  
 # Between two gene expression patterns (CD274 & PDCD1)  
