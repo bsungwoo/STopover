@@ -62,7 +62,7 @@ class STopover_visium(AnnData):
             if 'log1p' in adata_mod.uns.keys(): print("'adata' seems to be already log-transformed")
             sc.pp.normalize_total(adata_mod, target_sum=1e4, inplace=True)
             sc.pp.log1p(adata_mod)
-        super(STopover_visium, self).__init__(X=adata_mod.X, obs=adata_mod.obs, var=adata_mod.var, uns=adata_mod.uns, obsm=adata_mod.obsm)
+        super(STopover_visium, self).__init__(X=adata_mod.X, obs=adata_mod.obs, var=adata_mod.var, uns=adata_mod.uns, obsm=adata_mod.obsm, raw=adata_mod.raw)
 
         self.min_size = min_size
         self.fwhm = fwhm
@@ -320,20 +320,24 @@ class STopover_cosmx(STopover_visium):
             print("Anndata object is not provided: searching for files in 'sp_load_path'")
             try: 
                 adata_mod = sc.read_h5ad(sp_load_path)
-                try: min_size, fwhm, thres_per = adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per']
+                try: min_size, fwhm, thres_per, x_bins, y_bins, sc_norm_total = \
+                    adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'], adata_mod.uns['x_bins'], adata_mod.uns['y_bins'], adata_mod.uns['sc_norm_total']
                 except: pass
             except: 
-                adata_mod = read_cosmx(sp_load_path, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, sc_norm_total=sc_norm_total,
-                                       tx_file_name = tx_file_name, cell_exprmat_file_name=cell_exprmat_file_name, cell_metadata_file_name=cell_metadata_file_name, 
-                                       fov_colname = fov_colname, cell_id_colname=cell_id_colname, 
-                                       tx_xcoord_colname=tx_xcoord_colname, tx_ycoord_colname=tx_ycoord_colname, transcript_colname=transcript_colname,
-                                       meta_xcoord_colname=meta_xcoord_colname, meta_ycoord_colname=meta_ycoord_colname,
-                                       x_bins=x_bins, y_bins=y_bins)
+                adata_mod, adata_cell = read_cosmx(sp_load_path, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, sc_norm_total=sc_norm_total,
+                                                   tx_file_name = tx_file_name, cell_exprmat_file_name=cell_exprmat_file_name, cell_metadata_file_name=cell_metadata_file_name, 
+                                                   fov_colname = fov_colname, cell_id_colname=cell_id_colname, 
+                                                   tx_xcoord_colname=tx_xcoord_colname, tx_ycoord_colname=tx_ycoord_colname, transcript_colname=transcript_colname,
+                                                   meta_xcoord_colname=meta_xcoord_colname, meta_ycoord_colname=meta_ycoord_colname,
+                                                   x_bins=x_bins, y_bins=y_bins)
         else:
             adata_mod = sp_adata.copy()
 
         # Preprocess the CosMx spatial transcriptomic data
         super(STopover_cosmx, self).__init__(sp_adata=adata_mod, lognorm=False, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
+        adata_mod.uns['x_bins'] = x_bins
+        adata_mod.uns['y_bins'] = y_bins
+        adata_mod.uns['sc_norm_total'] = sc_norm_total
 
         self.x_bins = x_bins
         self.y_bins = y_bins
@@ -345,6 +349,7 @@ class STopover_cosmx(STopover_visium):
         self.sc_celltype_colname = sc_celltype_colname
         self.transcript_colname = transcript_colname
         self.sc_norm_total = sc_norm_total
+        self.raw = adata_cell
 
 
     def reinitalize(self, sp_adata, sc_celltype_colname=None, sc_norm_total=None, x_bins=None, y_bins=None, 
