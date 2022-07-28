@@ -12,6 +12,7 @@ import numpy.matlib
 import pandas as pd
 from scipy import sparse
 from math import pi
+from anndata import AnnData
 
 import os
             
@@ -293,9 +294,16 @@ def save_connected_loc_data_(data, save_format='h5ad', path = os.getcwd(), filen
     '''
     if len([i for i in data.obs.columns if str(i).startswith('Comb_CC')])<2:
         raise ValueError("'data' does not contain location of connected components")
-    
+
     if save_format=="h5ad":
-        data.write_h5ad(os.path.join(path,'_'.join((filename,'adata.h5ad'))), compression='gzip')
+        data_mod = data.copy()
+        # Save the anndata after removing all anndata saved in .uns
+        for key in data.uns.keys():
+            if isinstance(data_mod.uns[key], AnnData):
+                print("Saving anndata in .uns separately as .h5ad:", key)
+                data_mod.uns[key].write_h5ad(os.path.join(path,'_'.join((filename,key,'adata_uns.h5ad'))), compression='gzip')
+                del data_mod.uns[key]
+        data_mod.write_h5ad(os.path.join(path,'_'.join((filename,'adata.h5ad'))), compression='gzip')
     elif save_format=="csv":
         df_adata = data.obs[[i for i in data.obs.columns if str(i).startswith('Comb_CC')]]
         df_adata.to_csv(os.path.join(path,'_'.join((filename,'df.csv'))),

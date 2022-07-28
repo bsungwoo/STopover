@@ -40,7 +40,7 @@ class STopover_visium(AnnData):
 
         # Load the Visium spatial transcriptomic data if no AnnData file was provided
         if sp_adata is None:
-            print("Anndata object is not provided: searching for files in 'load_path'")
+            print("Anndata object is not provided: searching for files in 'sp_load_path'")
             try: 
                 adata_mod = sc.read_h5ad(sp_load_path)
                 try: min_size, fwhm, thres_per = adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per']
@@ -109,8 +109,9 @@ class STopover_visium(AnnData):
         '''
         assert lr_db_species in ['human', 'mouse'], "'lr_db_species' should be either 'human' or 'mouse'"
         if use_lr_db:
-            lr_db = pkg_resources.resource_stream(__name__, 'data/'+lr_db_species+'_lr_pair.txt')
+            lr_db = pkg_resources.resource_stream(__name__, 'data/CellTalkDB_'+lr_db_species+'_lr_pair.txt')
             feat_pairs = pd.read_csv(lr_db, delimiter='\t')[['ligand_gene_symbol','receptor_gene_symbol']]
+            print("Using CellTalkDB ligand-receptor dataset")
         
         df, adata = topological_sim_pairs_(data=self, feat_pairs=feat_pairs, group_list=group_list, group_name=group_name,
                                             fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per)
@@ -320,8 +321,9 @@ class STopover_cosmx(STopover_visium):
             print("Anndata object is not provided: searching for files in 'sp_load_path'")
             try: 
                 adata_mod = sc.read_h5ad(sp_load_path)
-                try: min_size, fwhm, thres_per, x_bins, y_bins, sc_norm_total = \
-                    adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'], adata_mod.uns['x_bins'], adata_mod.uns['y_bins'], adata_mod.uns['sc_norm_total']
+                try: min_size, fwhm, thres_per, x_bins, y_bins, sc_norm_total, sc_celltype_colname, transcript_colname = \
+                    adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'], adata_mod.uns['x_bins'], \
+                        adata_mod.uns['y_bins'], adata_mod.uns['sc_norm_total'], adata_mod.uns['sc_celltype_colname'], adata_mod.uns['transcript_colname']
                 except: pass
             except: 
                 adata_mod, adata_cell = read_cosmx(sp_load_path, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, sc_norm_total=sc_norm_total,
@@ -330,11 +332,15 @@ class STopover_cosmx(STopover_visium):
                                                    tx_xcoord_colname=tx_xcoord_colname, tx_ycoord_colname=tx_ycoord_colname, transcript_colname=transcript_colname,
                                                    meta_xcoord_colname=meta_xcoord_colname, meta_ycoord_colname=meta_ycoord_colname,
                                                    x_bins=x_bins, y_bins=y_bins)
+                adata_mod.uns['adata_cell'] = adata_cell
         else:
             adata_mod = sp_adata.copy()
         adata_mod.uns['x_bins'] = x_bins
         adata_mod.uns['y_bins'] = y_bins
         adata_mod.uns['sc_norm_total'] = sc_norm_total
+        adata_mod.uns['sc_celltype_colname'] = sc_celltype_colname
+        adata_mod.uns['transcript_colname'] = transcript_colname
+    
         # Generate object with the help of STopover_visium
         super(STopover_cosmx, self).__init__(sp_adata=adata_mod, lognorm=False, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
 
@@ -348,10 +354,9 @@ class STopover_cosmx(STopover_visium):
         self.sc_celltype_colname = sc_celltype_colname
         self.transcript_colname = transcript_colname
         self.sc_norm_total = sc_norm_total
-        self.raw = adata_cell
 
 
-    def reinitalize(self, sp_adata, sc_celltype_colname=None, sc_norm_total=None, x_bins=None, y_bins=None, 
+    def reinitalize(self,sp_adata, lognorm=False, sc_celltype_colname=None, sc_norm_total=None, x_bins=None, y_bins=None, 
                     min_size=None, fwhm=None, thres_per=None, save_path=None, J_count=None, inplace=True):
         '''
         ## Reinitialize the class
@@ -397,26 +402,28 @@ class STopover_cosmx(STopover_visium):
         other parameters: refer to the topological_similarity method
         '''
         adata_x, adata_y = self.celltype_specific_adata(cell_types=[celltype_x, celltype_y])
-        comb_var_names = (celltype_x+'_'+adata_x.var_names).tolist() + (celltype_y+'_'+adata_y.var_names).tolist()
-        if isinstance(adata_x, np.ndarray): 
-            adata_xy = AnnData(X=sparse.hstack([adata_x.X, adata_y.X]), obs=adata_x.obs)
-        elif isinstance(adata_y, sparse.spmatrix):
-            adata_xy = AnnData(X=sparse.hstack([adata_x.X, adata_y.X]), obs=adata_x.obs)
+        # Create combined anndata for two cell type specific count matrices
+        comb_var_names = (celltype_x+': '+adata_x.var_names).tolist() + (celltype_y+': '+adata_y.var_names).tolist()
+        adata_xy = AnnData(X=sparse.hstack([adata_x.X, adata_y.X]).tocsr(), obs=adata_x.obs)
         adata_xy.var_names = comb_var_names
         adata_xy = STopover_cosmx(adata_xy, sc_celltype_colname=self.sc_celltype_colname, sc_norm_total=self.sc_norm_total, 
                                   x_bins=self.x_bins, y_bins=self.y_bins, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, 
                                   save_path=self.save_path, J_count=self.J_count)
         if use_lr_db:
-            lr_db = pkg_resources.resource_stream(__name__, 'data/'+lr_db_species+'_lr_pair.txt')
+            lr_db = pkg_resources.resource_stream(__name__, 'data/CellTalkDB_'+lr_db_species+'_lr_pair.txt')
             feat_pairs = pd.read_csv(lr_db, delimiter='\t')[['ligand_gene_symbol','receptor_gene_symbol']]
+            use_lr_db = False
+            print("Calculating topological similarity between genes in '%s' and '%s'" % (celltype_x, celltype_y))
+            print("Using CellTalkDB ligand-receptor dataset")
         else: 
             if isinstance(feat_pairs, list): feat_pairs = pd.DataFrame(feat_pairs)
+
         # Modify the column name of the feature pair dataframe
         celltype_list = [celltype_x, celltype_y]
         for index, colname in enumerate(feat_pairs.columns):
-            feat_pairs[colname] = '_'.join((celltype_list[index], feat_pairs[colname]))
+            feat_pairs[colname] = celltype_list[index]+': '+feat_pairs[colname]
         
-        # Calculate topological similarites between the pairs from the two cell types
+        # Calculate topological similarites between the pairs from the two cell types  
         adata_xy.topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species,
                                         group_name=group_name, group_list=group_list, J_result_name=J_result_name)
         return adata_xy
