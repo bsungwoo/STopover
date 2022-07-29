@@ -1,5 +1,4 @@
 import os
-from unicodedata import category
 import scanpy as sc
 import pandas as pd
 import numpy as np
@@ -19,7 +18,7 @@ simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
                                   top_n = 5, spot_size=1, alpha_img=0.8, alpha = 0.8, 
                                   fig_size = (10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
-                                  image_res = 'hires', adjust_image = True, border = 50, 
+                                  image_res = 'hires', adjust_image = True, border = 500, 
                                   title_fontsize=30, legend_fontsize=None, title = 'J', return_axis=False,
                                   save = False, path = os.getcwd(), save_name_add = '', dpi=150):
     '''
@@ -58,20 +57,20 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
     sc.set_figure_params(figsize=(fig_size[0]*ysize, fig_size[1]*xsize), facecolor='white', frameon=False)
     fig, axs = plt.subplots(xsize, ysize, sharey=True, tight_layout=True, squeeze=False)
 
-    # Check the feasibility of the dataset
-    if batch_name not in data.obs[batch_colname].values:
-        raise ValueError("'batch_name' not among the elements of 'batch_colname' in .obs")
+    library_keys = list(data.uns['spatial'].keys())
+    if len(library_keys) > 1:
+        # Check the feasibility of the dataset
+        if batch_name not in data.obs[batch_colname].values:
+            raise ValueError("'batch_name' not among the elements of 'batch_colname' in .obs")
 
-    batch_keys = pd.unique(data.obs[batch_colname]).tolist()
-    # Generate dictionary between batch keys and library keys if not given
-    if batch_library_dict is None:
-        library_keys = list(data.uns['spatial'].keys())   
-        if len(library_keys) == len(batch_keys): batch_library_dict = dict(zip(batch_keys, library_keys))
-        else: raise ValueError("Number of library keys and batches are different")
-    # Subset the spatial data to contain only the batch_name slide
-    if len(batch_keys) > 1:
+        batch_keys = pd.unique(data.obs[batch_colname]).tolist()
+        # Generate dictionary between batch keys and library keys if not given
+        if batch_library_dict is None:     
+            if len(library_keys) == len(batch_keys): batch_library_dict = dict(zip(batch_keys, library_keys))
+            else: raise ValueError("Number of library keys and batches are different")
         # Subset the dataset to contain only the batch_name slide
         data_mod = data[data.obs[batch_colname]==batch_name].copy()
+    else: batch_library_dict = dict({'0': library_keys[0]})
 
     # Calculate top n connected component location
     data_mod, J_top_n = jaccard_top_n_connected_loc_(data_mod, CCx=None, CCy=None, 
@@ -80,17 +79,15 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
     # Adjust the image to contain the whole slide image
     if adjust_image:
         # Crop the image with certain borders
-        height = data.uns['spatial'][batch_library_dict[batch_name]]['images'][image_res].shape[1]
-        spot_coord_arr = data.obsm['spatial'] * data.uns['spatial'][batch_library_dict[batch_name]]['scalefactors']['tissue_'+image_res+'_scalef']
+        spot_coord_arr = data.obsm['spatial']
         crop_max = np.max(spot_coord_arr, axis=0)
         crop_min = np.min(spot_coord_arr, axis=0)
-        crop_coord_list = [crop_min[0]-border, crop_max[0]+border, height-crop_min[1]+border, height-crop_max[1]-border]
+        crop_coord_list = [crop_min[0]-border, crop_max[0]+border, crop_min[1]-border, crop_max[1]+border]
     else:
         crop_coord_list = None
 
     # Define the colormap with three different colors: for CC locations of feature x, feature_y and intersecting regions
     colormap = ["#FBBC05","#4285F4","#34A853"]
-    cmap = colors.ListedColormap(colormap)
 
     for i in range(top_n):
         # Remove the spots not included in the top connected components
@@ -103,7 +100,7 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
         sc.pl.spatial(data_mod_xy, img_key=image_res,
                       color='_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y)),
                       library_id=batch_library_dict[batch_name],
-                      cmap = cmap, size=spot_size, alpha = alpha,
+                      palette = colormap, size=spot_size, alpha = alpha,
                       alpha_img = alpha_img,
                       legend_loc = None, ax = axs[i//4][i%4], show = False, crop_coord = crop_coord_list)
         axs[i//4][i%4].set_title(feat_name_x+' & '+feat_name_y+'\n'+title+" top "+str(i+1)+" CCxy", fontsize = title_fontsize)
@@ -127,7 +124,7 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
 def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
                              spot_size=1, alpha_img=0.8, alpha = 0.8, 
                              fig_size=(10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
-                             image_res = 'hires', adjust_image = True, border = 50, 
+                             image_res = 'hires', adjust_image = True, border = 500, 
                              title_fontsize=30, legend_fontsize=None, title = 'Locations of', return_axis=False,
                              save = False, path = os.getcwd(), save_name_add = '', dpi = 150):
     '''
@@ -169,20 +166,20 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
     else:
         raise ValueError("No CC location data for the given 'feat_x' and 'feat_y'")
 
-    # Check the feasibility of the dataset
-    if batch_name not in data.obs[batch_colname].values:
-        raise ValueError("'batch_name' not among the elements of 'batch_colname' in .obs")
+    library_keys = list(data.uns['spatial'].keys())
+    if len(library_keys) > 1:
+        # Check the feasibility of the dataset
+        if batch_name not in data.obs[batch_colname].values:
+            raise ValueError("'batch_name' not among the elements of 'batch_colname' in .obs")
 
-    batch_keys = pd.unique(data.obs[batch_colname]).tolist()
-    # Generate dictionary between batch keys and library keys if not given
-    if batch_library_dict is None:
-        library_keys = list(data.uns['spatial'].keys())
-        if len(library_keys) == len(batch_keys): batch_library_dict = dict(zip(batch_keys, library_keys))
-        else: raise ValueError("Number of library keys and batches are different")
-    # Subset the spatial data to contain only the batch_name slide
-    if len(batch_keys) > 1:
+        batch_keys = pd.unique(data.obs[batch_colname]).tolist()
+        # Generate dictionary between batch keys and library keys if not given
+        if batch_library_dict is None:
+            if len(library_keys) == len(batch_keys): batch_library_dict = dict(zip(batch_keys, library_keys))
+            else: raise ValueError("Number of library keys and batches are different")
         # Subset the dataset to contain only the batch_name slide
         data_mod_x = data_mod_x[data_mod_x.obs[batch_colname]==batch_name].copy()
+    else: batch_library_dict = dict({'0': library_keys[0]})
 
     # Calculate intersecting spots between connected component x and y to be visualized
     cc_loc_x_df = data_mod_x.obs['Comb_CC_'+feat_name_x].astype(int)
@@ -202,21 +199,19 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
     # Adjust the image to contain the whole slide image
     if adjust_image:
         # Crop the image with certain borders
-        height = data.uns['spatial'][batch_library_dict[batch_name]]['images'][image_res].shape[1]
-        spot_coord_arr = data.obsm['spatial'] * data.uns['spatial'][batch_library_dict[batch_name]]['scalefactors']['tissue_'+image_res+'_scalef']
+        spot_coord_arr = data.obsm['spatial']
         crop_max = np.max(spot_coord_arr, axis=0)
         crop_min = np.min(spot_coord_arr, axis=0)
-        crop_coord_list = [crop_min[0]-border, crop_max[0]+border, height-crop_min[1]+border, height-crop_max[1]-border]
+        crop_coord_list = [crop_min[0]-border, crop_max[0]+border, crop_min[1]-border, crop_max[1]+border]
     else:
         crop_coord_list = None
     
     # Define the colormap with three different colors: for CC locations of feature x, feature_y and intersecting regions
     colormap = ["#FBBC05","#4285F4","#34A853"]
-    cmap = colors.ListedColormap(colormap)
 
     sc.pl.spatial(data_mod_x, img_key=image_res, color='_'.join(('Comb_CCxy_int',feat_name_x,feat_name_y)),
                   library_id=batch_library_dict[batch_name],
-                  cmap = cmap, size=spot_size, alpha_img = alpha_img,
+                  palette = colormap, size=spot_size, alpha_img = alpha_img,
                   alpha = alpha, legend_loc = None, ax = axs, show = False, crop_coord = crop_coord_list)
     axs.set_title(feat_name_x+' & '+feat_name_y+'\n'+title+" CC", fontsize = title_fontsize)
     

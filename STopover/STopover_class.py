@@ -187,7 +187,7 @@ class STopover_visium(AnnData):
     def vis_jaccard_top_n_pair(self, feat_name_x='', feat_name_y='',
                                top_n = 5, spot_size=1, alpha_img=0.8, alpha = 0.8, 
                                fig_size = (10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
-                               image_res = 'hires', adjust_image = True, border = 50, 
+                               image_res = 'hires', adjust_image = True, border = 500, 
                                title_fontsize = 30, legend_fontsize = None, title = 'J', return_axis=False,
                                save = False, save_name_add = '', dpi=150):
         '''
@@ -230,7 +230,7 @@ class STopover_visium(AnnData):
     def vis_all_connected(self, feat_name_x='', feat_name_y='',
                           spot_size=1, alpha_img=0.8, alpha = 0.8, 
                           fig_size=(20,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
-                          image_res = 'hires', adjust_image = True, border = 50, 
+                          image_res = 'hires', adjust_image = True, border = 500, 
                           title_fontsize=30, legend_fontsize = None, title = 'Locations of', return_axis=False,
                           save = False, save_name_add = '', dpi = 150):
         '''

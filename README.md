@@ -119,7 +119,7 @@ sp_adata.vis_all_connected(spot_size=1, alpha_img=0.8, alpha=0.8,
                            feat_name_x='CD274', feat_name_y='PDCD1',  
                            fig_size=(5,5), 
                            batch_colname ='batch', batch_name='0', image_res='hires',  
-                           adjust_image=True, border = 50,  
+                           adjust_image=True, border = 500,  
                            fontsize=20, title = 'Locations of', return_axis=False,  
                            save=False, save_name_add='test', dpi=150)  
 
@@ -128,7 +128,7 @@ sp_adata.vis_jaccard_top_n_pair(top_n=2, spot_size=1, alpha_img=0.8, alpha=0.8,
                                 feat_name_x='CD274', feat_name_y='PDCD1',  
                                 fig_size=(5,5), 
                                 batch_colname='batch', batch_name='0', image_res='hires', 
-                                adjust_image=True, border=50,  
+                                adjust_image=True, border=500,  
                                 fontsize=20, title = 'J', return_axis=False,  
                                 save=False, save_name_add='test', dpi=150)  
 ```
