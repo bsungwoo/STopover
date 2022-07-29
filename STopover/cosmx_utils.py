@@ -54,7 +54,7 @@ def annotate_cosmx(sp_adata, sc_adata, sc_norm_total=1e3,
     sc.pp.neighbors(sc_adata)
     sc.tl.umap(sc_adata)
     # Fill nan values and designate as categorical variable
-    sc_adata.obs[sc_celltype_colname] = sc_adata.obs[sc_celltype_colname].fillna('nan')
+    sc_adata.obs[sc_celltype_colname] = sc_adata.obs[sc_celltype_colname].astype(object).fillna('nan')
     sc_adata.obs[sc_celltype_colname] = sc_adata.obs[sc_celltype_colname].astype('category')
     # Perform cell label transfer from single-cell to CosMx data
     sc.tl.ingest(sp_adata, sc_adata, obs=sc_celltype_colname, embedding_method='umap')
