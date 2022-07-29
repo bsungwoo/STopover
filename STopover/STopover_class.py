@@ -78,6 +78,22 @@ class STopover_visium(AnnData):
         self.__init__(sp_adata=sp_adata, lognorm=lognorm, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
 
 
+    def return_celltalkdb(self, lr_db_species='human'):
+        '''
+        ## Return CellTalkDB database as pandas dataframe
+
+        ### Input
+        lr_db_species: select species to utilize in CellTalkDB database
+
+        ### Output
+        CellTalkDB database as pandas dataframe
+        '''
+        assert lr_db_species in ['human', 'mouse'], "'lr_db_species' should be either 'human' or 'mouse'"
+        lr_db = pkg_resources.resource_stream(__name__, 'data/CellTalkDB_'+lr_db_species+'_lr_pair.txt')
+        feat_pairs = pd.read_csv(lr_db, delimiter='\t')
+        return feat_pairs
+
+
     def topological_similarity(self, feat_pairs=None, use_lr_db=False, lr_db_species='human',
                                      group_name='batch', group_list=None, J_result_name='result'):
         '''
@@ -107,10 +123,9 @@ class STopover_visium(AnnData):
         and average value for the feature across the spatial spots (if group is provided, then calculate average for the spots in each group)
         data_mod: AnnData with summed location of all connected components in metadata(.obs) across all feature pairs
         '''
-        assert lr_db_species in ['human', 'mouse'], "'lr_db_species' should be either 'human' or 'mouse'"
         if use_lr_db:
-            lr_db = pkg_resources.resource_stream(__name__, 'data/CellTalkDB_'+lr_db_species+'_lr_pair.txt')
-            feat_pairs = pd.read_csv(lr_db, delimiter='\t')[['ligand_gene_symbol','receptor_gene_symbol']]
+            feat_pairs = self.return_celltalkdb(lr_db_species)
+            feat_pairs = feat_pairs[['ligand_gene_symbol','receptor_gene_symbol']]
             print("Using CellTalkDB ligand-receptor dataset")
         
         df, adata = topological_sim_pairs_(data=self, feat_pairs=feat_pairs, group_list=group_list, group_name=group_name,
@@ -410,8 +425,8 @@ class STopover_cosmx(STopover_visium):
                                   x_bins=self.x_bins, y_bins=self.y_bins, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, 
                                   save_path=self.save_path, J_count=self.J_count)
         if use_lr_db:
-            lr_db = pkg_resources.resource_stream(__name__, 'data/CellTalkDB_'+lr_db_species+'_lr_pair.txt')
-            feat_pairs = pd.read_csv(lr_db, delimiter='\t')[['ligand_gene_symbol','receptor_gene_symbol']]
+            feat_pairs = self.return_celltalkdb(lr_db_species)
+            feat_pairs = feat_pairs[['ligand_gene_symbol','receptor_gene_symbol']]
             use_lr_db = False
             print("Calculating topological similarity between genes in '%s' and '%s'" % (celltype_x, celltype_y))
             print("Using CellTalkDB ligand-receptor dataset")
