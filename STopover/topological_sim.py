@@ -126,11 +126,13 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
                 df_tmp['Avg_2'] = np.asarray(np.log1p(data_sub[:,df_tmp.iloc[:,2].tolist()].X.expm1().mean(axis = 0))).reshape(-1)
 
         # Remove the features which have zero values only
-        df_tmp = df_tmp[(df_tmp['Avg_1']!=0) & (df_tmp['Avg_2']!=0)].reset_index(drop=True)
+        df_tmp = df_tmp[(df_tmp['Avg_1']!=0) & (df_tmp['Avg_2']!=0)]
 
         # Replace the absolute average values to the real average
         if data_x is not None: df_tmp['Avg_1'] = np.mean(data_x, axis=0)[df_tmp.index]
         if data_y is not None: df_tmp['Avg_2'] = np.mean(data_y, axis=0)[df_tmp.index]
+        # Reset the index
+        df_tmp = df_tmp.reset_index(drop=True)
 
         # Extract the non-overlapping feat list from group i and save index number corresponding to feature pairs
         if obs_tf_x != obs_tf_y:

@@ -55,7 +55,7 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
     if xsize > 1: ysize = 4
     else: ysize = ((top_n-1)%4)+1
     sc.set_figure_params(figsize=(fig_size[0]*ysize, fig_size[1]*xsize), facecolor='white', frameon=False)
-    fig, axs = plt.subplots(xsize, ysize, sharey=True, tight_layout=True, squeeze=False)
+    fig, axs = plt.subplots(xsize, ysize, tight_layout=True, squeeze=False)
 
     library_keys = list(data.uns['spatial'].keys())
     if len(library_keys) > 1:
@@ -184,17 +184,17 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
     # Calculate intersecting spots between connected component x and y to be visualized
     cc_loc_x_df = data_mod_x.obs['Comb_CC_'+feat_name_x].astype(int)
     cc_loc_y_df = data_mod_y.obs['Comb_CC_'+feat_name_y].astype(int)
-    data_mod_x.obs['_'.join(('Comb_CCxy_int',feat_name_x,feat_name_y))] = \
+    data_mod_x.obs['Over'] = \
             ((1 * ((cc_loc_x_df != 0) & (cc_loc_y_df == 0))) + \
             (2 * ((cc_loc_x_df == 0) & (cc_loc_y_df != 0))) + \
             (3 * ((cc_loc_x_df != 0) & (cc_loc_y_df != 0)))).astype('category')
         
     # Remove the spots not included in the top connected components
-    data_mod_x = data_mod_x[data_mod_x.obs['_'.join(('Comb_CCxy_int',feat_name_x,feat_name_y))] != 0, :].copy()
+    data_mod_x = data_mod_x[data_mod_x.obs['Over'] != 0, :].copy()
             
     # Set figure parameters
     sc.set_figure_params(figsize=fig_size, facecolor='white', frameon=False)
-    fig, axs = plt.subplots(1, 1, sharey=True, tight_layout=True)
+    fig, axs = plt.subplots(1, 1, tight_layout=True)
     
     # Adjust the image to contain the whole slide image
     if adjust_image:
@@ -207,16 +207,16 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
         crop_coord_list = None
     
     # Define the colormap with three different colors: for CC locations of feature x, feature_y and intersecting regions
-    colormap = ["#FBBC05","#4285F4","#34A853"]
+    colormap = [["#A2E1CA","#FBBC05","#4285F4","#34A853"][index] for index in data_mod_x.obs['Over'].cat.categories]
+    category_label = [["Others",feat_name_x,feat_name_y,"Overlap"][index] for index in data_mod_x.obs['Over'].cat.categories]
 
-    sc.pl.spatial(data_mod_x, img_key=image_res, color='_'.join(('Comb_CCxy_int',feat_name_x,feat_name_y)),
+    sc.pl.spatial(data_mod_x, img_key=image_res, color='Over',
                   library_id=batch_library_dict[batch_name],
                   palette = colormap, size=spot_size, alpha_img = alpha_img,
                   alpha = alpha, legend_loc = None, ax = axs, show = False, crop_coord = crop_coord_list)
     axs.set_title(feat_name_x+' & '+feat_name_y+'\n'+title+" CC", fontsize = title_fontsize)
     
     # Add legend to the figure
-    category_label = [feat_name_x,feat_name_y,"Overlap"]
     for index, label in enumerate(category_label):
         axs.scatter([], [], c=colormap[index], label=label)
     if legend_fontsize is None: legend_fontsize=fig_size[1]
@@ -230,7 +230,7 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
 
 
 
-def vis_spatial_cosmx_(data, feat_name='', cmap = None, dot_size=None, alpha = 0.8, 
+def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alpha = 0.8, 
                        fig_size = (10,10), title_fontsize = 30, legend_fontsize = None, title = None, 
                        return_axis=False, save = False, path = os.getcwd(), save_name_add = '', dpi=150):
     '''
@@ -238,7 +238,7 @@ def vis_spatial_cosmx_(data, feat_name='', cmap = None, dot_size=None, alpha = 0
     ### Input
     data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
     feat_name_x, feat_name_y: name of the feature x and y
-    cmap: colormap for the visualization of CC identity
+    colorlist: color list for the visualization of CC identity
     dot_size: size of the spot visualized on the tissue
     alpha: transparency of the colored spot
 
@@ -259,8 +259,8 @@ def vis_spatial_cosmx_(data, feat_name='', cmap = None, dot_size=None, alpha = 0
     tsimg_col = tsimg[:,0]
 
     # Set figure parameters
-    plt.rcParams.update(plt.rcParamsDefault)
-    fig, axs = plt.subplots(1,1, sharey=True, tight_layout=True, figsize=fig_size)
+    sc.set_figure_params(figsize=fig_size, facecolor='white', frameon=False)
+    fig, axs = plt.subplots(1,1, tight_layout=True)
     if dot_size is None: dot_size = fig_size[1]/1.5
 
     if feat_name in data.var_names:
@@ -288,19 +288,19 @@ def vis_spatial_cosmx_(data, feat_name='', cmap = None, dot_size=None, alpha = 0
         # Factorize the data and draw sccater plot
         factorize_data = pd.factorize(feat_data, sort=True)
         cats = factorize_data[1].tolist()
-        if cmap is None:
-            colormap = ["#a2e1ca", "#110f1f", "#f09bf1", "#02531d", "#3ba7e5", 
+        if colorlist is None:
+            colorlist = ["#a2e1ca", "#110f1f", "#f09bf1", "#02531d", "#3ba7e5", 
                         "#730f44", "#15974d", "#f75ef0", "#1357ca", "#c0e15c", "#fb2076", "#859947", 
                         "#214a65", "#e7ad79", "#5a3100", "#fd8992", "#900e08", "#fbd127", "#270fe2", 
                         "#fb7810", "#922eb1", "#9f6c3b", "#fe2b27","#8adc30", "#2e0d93", "#8de6c0", 
                         "#370e01", "#e8ced5", "#113630", "#1cf1a3", "#1e1e58", "#f09ede", "#48950f", 
                         "#a93aae", "#20f53d", "#8c1132", "#38b5fc", "#805f84", "#577cf5", "#e2d923", "#69ef7b","#1e0e76"]
-            cmap = colors.ListedColormap(colormap)
+            cmap = colors.ListedColormap(colorlist)
         axs.scatter(tsimg_col, tsimg_row, s = dot_size**2, 
                     c = factorize_data[0], cmap = cmap, linewidth = 0, alpha=alpha, marker="s")
 
         for index, label in enumerate(cats):
-            axs.scatter([], [], c=colormap[index], label=label)
+            axs.scatter([], [], c=colorlist[index], label=label)
         if legend_fontsize is None: legend_fontsize=fig_size[1]
         axs.legend(frameon=False, loc='center left', bbox_to_anchor=(1, 0.5), ncol=((len(cats)-1)//20)+1, fontsize=legend_fontsize)
 
@@ -351,7 +351,7 @@ def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
     if xsize > 1: ysize = 4
     else: ysize = ((top_n-1)%4)+1
     sc.set_figure_params(figsize=(fig_size[0]*ysize, fig_size[1]*xsize), facecolor='white', frameon=False)
-    fig, axs = plt.subplots(xsize, ysize, sharey=True, tight_layout=True, squeeze=False)
+    fig, axs = plt.subplots(xsize, ysize, tight_layout=True, squeeze=False)
 
     # Calculate top n connected component location
     data_mod, J_top_n = jaccard_top_n_connected_loc_(data, CCx=None, CCy=None, 
@@ -421,28 +421,35 @@ def vis_all_connected_cosmx(data, feat_name_x='', feat_name_y='',
     tsimg_row = tsimg[:,1]
     tsimg_col = tsimg[:,0]
 
-    plt.rcParams.update(plt.rcParamsDefault)
-    fig, axs = plt.subplots(1,1, sharey=True, tight_layout=True, figsize=fig_size)
+    # Check the feasibility of the dataset
+    if set(['Comb_CC_'+feat_name_x,'Comb_CC_'+feat_name_y]) <= set(data.obs.columns):
+        cc_loc_x_df = data.obs['Comb_CC_'+feat_name_x].astype(int)
+        cc_loc_y_df = data.obs['Comb_CC_'+feat_name_y].astype(int)
+    else:
+        raise ValueError("No CC location data for the given 'feat_x' and 'feat_y'")
+
+    sc.set_figure_params(figsize=fig_size, facecolor='white', frameon=False)
+    fig, axs = plt.subplots(1,1, tight_layout=True, figsize=fig_size)
 
     # Calculate overlapping locations
-    cc_loc_x_df = data.obs['Comb_CC_'+feat_name_x].astype(int)
-    cc_loc_y_df = data.obs['Comb_CC_'+feat_name_y].astype(int)
     data_mod = data.copy()
     data_mod.obs['Over'] = ((1 * ((cc_loc_x_df != 0) & (cc_loc_y_df == 0))) + \
                             (2 * ((cc_loc_x_df == 0) & (cc_loc_y_df != 0))) + \
                             (3 * ((cc_loc_x_df != 0) & (cc_loc_y_df != 0)))).astype('category')
 
-    # Define the colormap with three different colors: for CC locations of feature x, feature_y and intersecting regions
-    colormap = ["#A2E1CA","#FBBC05","#4285F4","#34A853"]
-    cmap = colors.ListedColormap(colormap)
-    if dot_size is None: dot_size = fig_size[0]/1.5
-    
     # Factorize the data and draw sccater plot
     factorize_data = pd.factorize(data_mod.obs['Over'], sort=True)
+    
+    # Define the colormap with three different colors: for CC locations of feature x, feature_y and intersecting regions
+    colormap = [["#A2E1CA","#FBBC05","#4285F4","#34A853"][index] for index in factorize_data[1]]
+    cmap = colors.ListedColormap(colormap)
+    category_label = [["Others",feat_name_x,feat_name_y,"Overlap"][index] for index in factorize_data[1]]
+    
+    # Draw scatter plot
+    if dot_size is None: dot_size = fig_size[0]/1.5
     axs.scatter(tsimg_col, tsimg_row, s = dot_size**2, c = factorize_data[0], 
                 cmap = cmap, linewidth = 0, alpha=alpha, marker="s")
 
-    category_label = ["Others",feat_name_x,feat_name_y,"Overlap"]
     for index, label in enumerate(category_label):
         axs.scatter([], [], c=colormap[index], label=label)        
     if legend_fontsize is None: legend_fontsize=fig_size[1]
