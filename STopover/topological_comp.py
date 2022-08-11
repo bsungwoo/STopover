@@ -301,7 +301,7 @@ def save_connected_loc_data_(data, save_format='h5ad', path = os.getcwd(), filen
         for key in data.uns.keys():
             if isinstance(data_mod.uns[key], AnnData):
                 print("Saving anndata in .uns separately as .h5ad:", key)
-                data_mod.uns[key].write_h5ad(os.path.join(path,'_'.join((filename,key,'_uns.h5ad'))), compression='gzip')
+                data_mod.uns[key].write_h5ad(os.path.join(path,'_'.join((filename,key,'uns.h5ad'))), compression='gzip')
                 del data_mod.uns[key]
         data_mod.write_h5ad(os.path.join(path,'_'.join((filename,'adata.h5ad'))), compression='gzip')
     elif save_format=="csv":
