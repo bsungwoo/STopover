@@ -9,7 +9,7 @@ setup(
     packages = find_packages(include=['STopover', 'STopover.*']),
     include_package_data = True,
     package_data = {'': ['data/*.txt']},
-    install_requires = ["scanpy~=1.9.1","pandas~=1.4.3","numpy~=1.20.3",
+    install_requires = ["scanpy~=1.9.0","pandas~=1.4.3","numpy~=1.20.3","matplotlib~=3.4.3",
                         "scikit-learn~=0.24.2","scipy~=1.7.3","networkx~=2.6.3",
                         "pyarrow", "jupyter", "ply", "pytest"]
 )

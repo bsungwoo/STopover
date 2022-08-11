@@ -17,6 +17,7 @@ python 3.8
 scanpy 1.9.1
 numpy 1.20.3
 pandas 1.4.3
+matplotlib 3.4.3
 pyarrow 8.0.0
 scikit-learn 0.24.2
 scipy 1.7.3
