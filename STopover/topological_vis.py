@@ -276,7 +276,7 @@ def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alph
         raise ValueError("'feat_name' not found in .var_names and .obs.columns")
 
     if data_type == 'others':
-        if cmap is None: cmap = 'viridis'
+        if colorlist is None: cmap = 'viridis'
         im = axs.scatter(tsimg_col, tsimg_row, s = dot_size**2, 
                         c = feat_data, cmap = cmap, linewidth = 0, alpha=alpha, marker="s")
         divider = make_axes_locatable(axs)
