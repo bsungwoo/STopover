@@ -358,8 +358,8 @@ def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
                                                      feat_name_x=feat_name_x, feat_name_y=feat_name_y, top_n = top_n)
 
     # Define the colormap with three different colors: for CC locations of feature x, feature_y and intersecting regions
-    colormap = ["#A2E1CA","#FBBC05","#4285F4","#34A853"]
-    cmap = colors.ListedColormap(colormap)
+    colorlist = ["#A2E1CA","#FBBC05","#4285F4","#34A853"]
+    cmap = colors.ListedColormap(colorlist)
     if dot_size is None: dot_size = fig_size[0]/1.5
 
     for i in range(top_n):
@@ -379,7 +379,7 @@ def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
     # Add legend to the figure
     category_label = ["Others",feat_name_x,feat_name_y,"Overlap"]
     for index, label in enumerate(category_label):
-        plt.scatter([], [], c=colormap[index], label=label)        
+        plt.scatter([], [], c=colorlist[index], label=label)        
     if legend_fontsize is None: legend_fontsize=fig_size[1]*xsize*2
     plt.legend(frameon=False, loc='center left',  bbox_to_anchor=(1, 0.5), ncol=1, fontsize=legend_fontsize)
 
@@ -441,8 +441,8 @@ def vis_all_connected_cosmx(data, feat_name_x='', feat_name_y='',
     factorize_data = pd.factorize(data_mod.obs['Over'], sort=True)
     
     # Define the colormap with three different colors: for CC locations of feature x, feature_y and intersecting regions
-    colormap = [["#A2E1CA","#FBBC05","#4285F4","#34A853"][index] for index in factorize_data[1]]
-    cmap = colors.ListedColormap(colormap)
+    colorlist = [["#A2E1CA","#FBBC05","#4285F4","#34A853"][index] for index in factorize_data[1]]
+    cmap = colors.ListedColormap(colorlist)
     category_label = [["Others",feat_name_x,feat_name_y,"Overlap"][index] for index in factorize_data[1]]
     
     # Draw scatter plot
@@ -451,7 +451,7 @@ def vis_all_connected_cosmx(data, feat_name_x='', feat_name_y='',
                 cmap = cmap, linewidth = 0, alpha=alpha, marker="s")
 
     for index, label in enumerate(category_label):
-        axs.scatter([], [], c=colormap[index], label=label)        
+        axs.scatter([], [], c=colorlist[index], label=label)        
     if legend_fontsize is None: legend_fontsize=fig_size[1]
     axs.legend(frameon=False, loc='center left', bbox_to_anchor=(1, 0.5), ncol=1, fontsize=legend_fontsize)
 

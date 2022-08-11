@@ -444,7 +444,7 @@ class STopover_cosmx(STopover_visium):
         return adata_xy
 
 
-    def vis_spatial_cosmx(self, feat_name='', cmap = None, dot_size=None, alpha = 0.8, 
+    def vis_spatial_cosmx(self, feat_name='', colorlist = None, dot_size=None, alpha = 0.8, 
                           fig_size = (10,10), title_fontsize = 30, legend_fontsize = None, title = None, 
                           return_axis=False, save = False, save_name_add = '', dpi=150):
         '''
@@ -452,7 +452,7 @@ class STopover_cosmx(STopover_visium):
         ### Input
         data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
         feat_name_x, feat_name_y: name of the feature x and y
-        cmap: colormap for the visualization of CC identity
+        colorlist: color list for the visualization of CC identity
         dot_size: size of the spot visualized on the tissue
         alpha: transparency of the colored spot
 
@@ -467,7 +467,7 @@ class STopover_cosmx(STopover_visium):
         ### Outut
         axs: matplotlib axis for the plot
         '''
-        axis = vis_spatial_cosmx_(data=self, feat_name=feat_name, cmap = cmap, dot_size=dot_size, alpha = alpha, 
+        axis = vis_spatial_cosmx_(data=self, feat_name=feat_name, colorlist = colorlist, dot_size=dot_size, alpha = alpha, 
                                   fig_size = fig_size, title_fontsize = title_fontsize, legend_fontsize = legend_fontsize, title = title, 
                                   return_axis=return_axis, save = save, path = self.save_path, save_name_add = save_name_add, dpi=dpi)
         return axis

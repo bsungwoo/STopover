@@ -109,7 +109,7 @@ sp_adata.topological_similarity(feat_pairs=[('Tumor','PDCD1')], group_name='batc
 
 ### 3. Save the data file  
 ```Plain Text
-sp_adata.save_connected_loc_data(save_format='h5ad', filename = 'adata_cc_loc')  
+sp_adata.save_connected_loc_data(save_format='h5ad', filename = 'cc_loc')  
 ```
 
 ### 4-1. Visium: visualize the overlapping connected components between two values  
@@ -118,8 +118,9 @@ sp_adata.save_connected_loc_data(save_format='h5ad', filename = 'adata_cc_loc')
 sp_adata.vis_all_connected(spot_size=1, alpha_img=0.8, alpha=0.8,  
                            feat_name_x='CD274', feat_name_y='PDCD1',  
                            fig_size=(5,5), 
-                           batch_colname ='batch', batch_name='0', image_res='hires',  
-                           adjust_image=True, border = 500,  
+                           # batch_colname ='batch', batch_name='0', # For multiple slides
+                           image_res='hires',  
+                           adjust_image=True, border = 50,
                            fontsize=20, title = 'Locations of', return_axis=False,  
                            save=False, save_name_add='test', dpi=150)  
 
@@ -127,28 +128,32 @@ sp_adata.vis_all_connected(spot_size=1, alpha_img=0.8, alpha=0.8,
 sp_adata.vis_jaccard_top_n_pair(top_n=2, spot_size=1, alpha_img=0.8, alpha=0.8, 
                                 feat_name_x='CD274', feat_name_y='PDCD1',  
                                 fig_size=(5,5), 
-                                batch_colname='batch', batch_name='0', image_res='hires', 
-                                adjust_image=True, border=500,  
+                                # batch_colname='batch', batch_name='0', # For multiple slides
+                                image_res='hires', 
+                                adjust_image=True, border=50,
                                 fontsize=20, title = 'J', return_axis=False,  
                                 save=False, save_name_add='test', dpi=150)  
 ```
 ### 4-2. CosMx: visualize the overlapping connected components between two values  
 ```Plain Text  
 # CosMx: Spatial mapping of feature in grid-based data
-sp_adata.vis_spatial_cosmx(feat_name='', alpha = 0.8, 
-                           fig_size = (10,10), title_fontsize = 30, legend_fontsize = None, 
+sp_adata.vis_spatial_cosmx(feat_name='CD274', 
+                           alpha = 0.8, dot_size=3,
+                           fig_size = (5,5), title_fontsize = 20, legend_fontsize = 12, 
                            title = 'Spatial mapping', return_axis=False, 
                            save = False, save_name_add = 'test', dpi=150)
 
 # CosMx: Visualization of connected component locations of feature x and y
-sp_adata.vis_all_connected(feat_name_x='', feat_name_y='', alpha = 0.8, 
-                           fig_size=(10,10), title_fontsize = 30, legend_fontsize = None, 
+sp_adata.vis_all_connected(feat_name_x='CD274', feat_name_y='PDCD1', 
+                           alpha = 0.8, dot_size=3,
+                           fig_size=(5,5), title_fontsize = 20, legend_fontsize = 12, 
                            title = 'Locations of', return_axis=False,
                            save = False, save_name_add = 'test', dpi = 150)
 
 # CosMx: Visualize top 2 connected component locations  
-sp_adata.vis_jaccard_top_n_pair(feat_name_x='', feat_name_y='', top_n = 5, alpha = 0.8, 
-                                fig_size = (10,10), title_fontsize = 30, legend_fontsize = None,
+sp_adata.vis_jaccard_top_n_pair(feat_name_x='CD274', feat_name_y='PDCD1', 
+                                top_n = 5, alpha = 0.8, dot_size=3,
+                                fig_size = (5,5), title_fontsize = 20, legend_fontsize = 12,
                                 title = 'J', return_axis=False,
                                 save = False, save_name_add = 'test', dpi=150)
 ```
