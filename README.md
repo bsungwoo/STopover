@@ -19,9 +19,17 @@ numpy 1.20.3
 pandas 1.4.3
 matplotlib 3.4.3
 pyarrow 8.0.0
+pyqt5 5.15.7
 scikit-learn 0.24.2
 scipy 1.7.3
 networkx 2.6.3
+```
+
+## Run GUI for STopover  
+```Plain Text
+from STopover import app
+
+app.main()
 ```
 
 ## Code Example  
@@ -69,7 +77,7 @@ sp_adata = STopover_cosmx(sp_load_path='~/CosMx dir', sc_adata=sc_adata, sc_cell
                           cell_metadata_file_name='metadata_file.csv', 
                           x_bins=100, y_bins=100, min_size=20, fwhm=2.5, thres_per=30, save_path='.')
 ```
-### 1-3. Calculate cell type-specific gene expression in CosMx dataset  
+#### 1-3. Calculate cell type-specific gene expression in CosMx dataset  
 ```Plain Text
 sp_adata_Tumor, sp_adata_cd8 = sp_adata.celltype_specific_adata(cell_types=['Tumor','Cytotoxic CD8+ T'])
 ```
