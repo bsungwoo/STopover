@@ -70,7 +70,9 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
             else: raise ValueError("Number of library keys and batches are different")
         # Subset the dataset to contain only the batch_name slide
         data_mod = data[data.obs[batch_colname]==batch_name].copy()
-    else: batch_library_dict = dict({'0': library_keys[0]})
+    else:
+        data_mod = data.copy()
+        batch_library_dict = dict({'0': library_keys[0]})
 
     # Calculate top n connected component location
     data_mod, J_top_n = jaccard_top_n_connected_loc_(data_mod, CCx=None, CCy=None, 
@@ -230,7 +232,7 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
 
 
 
-def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alpha = 0.8, 
+def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alpha = 0.8, vmax=None, vmin=None,
                        fig_size = (10,10), title_fontsize = 30, legend_fontsize = None, title = None, 
                        return_axis=False, save = False, path = os.getcwd(), save_name_add = '', dpi=150):
     '''
@@ -241,6 +243,8 @@ def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alph
     colorlist: color list for the visualization of CC identity
     dot_size: size of the spot visualized on the tissue
     alpha: transparency of the colored spot
+    vmax: maximum value in the colorbar; if None, it will automatically set the maximum value
+    vmax: minimum value in the colorbar; if None, it will automatically set the minimum value
 
     fig_size: size of the drawn figure
     title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
@@ -277,7 +281,7 @@ def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alph
 
     if data_type == 'others':
         if colorlist is None: cmap = 'viridis'
-        im = axs.scatter(tsimg_col, tsimg_row, s = dot_size**2, 
+        im = axs.scatter(tsimg_col, tsimg_row, s = dot_size**2, vmax=vmax, vmin=vmin,
                         c = feat_data, cmap = cmap, linewidth = 0, alpha=alpha, marker="s")
         divider = make_axes_locatable(axs)
         cax = divider.append_axes("right", size="5%", pad=0.05)

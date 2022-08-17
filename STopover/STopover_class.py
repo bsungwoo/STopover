@@ -54,6 +54,8 @@ class STopover_visium(AnnData):
             adata_mod = sp_adata.copy()
             # Add the key parameters in the .uns
             adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'] = min_size, fwhm, thres_per
+        # Make feature names unique
+        adata_mod.var_names_make_unique()
         # Preserve raw .obs data in .uns
         if J_count==0: adata_mod.uns['obs_raw'] = adata_mod.obs
 
@@ -203,7 +205,7 @@ class STopover_visium(AnnData):
                                top_n = 5, spot_size=1, alpha_img=0.8, alpha = 0.8, 
                                fig_size = (10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
                                image_res = 'hires', adjust_image = True, border = 500, 
-                               title_fontsize = 30, legend_fontsize = None, title = 'J', return_axis=False,
+                               title_fontsize = 20, legend_fontsize = None, title = 'J', return_axis=False,
                                save = False, save_name_add = '', dpi=150):
         '''
         ## Visualizing top n connected component x and y showing maximum Jaccard index
@@ -244,9 +246,9 @@ class STopover_visium(AnnData):
 
     def vis_all_connected(self, feat_name_x='', feat_name_y='',
                           spot_size=1, alpha_img=0.8, alpha = 0.8, 
-                          fig_size=(20,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
+                          fig_size=(10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
                           image_res = 'hires', adjust_image = True, border = 500, 
-                          title_fontsize=30, legend_fontsize = None, title = 'Locations of', return_axis=False,
+                          title_fontsize=20, legend_fontsize = None, title = 'Locations of', return_axis=False,
                           save = False, save_name_add = '', dpi = 150):
         '''
         ## Visualizing all connected components x and y on tissue  
@@ -294,6 +296,7 @@ class STopover_cosmx(STopover_visium):
     sp_load_path: path to CosMx SMI data directory or .h5ad Anndata object
 
     sc_adata: single-cell reference anndata for cell type annotation of CosMx SMI data
+        -> If None, then leiden cluster numbers will be used to annotate CosMx SMI data
     sc_celltype_colname: column name for cell type annotation information in metadata of single-cell (.obs)
     sc_norm_total: scaling factor for the total count normalization per cell
 
@@ -350,6 +353,9 @@ class STopover_cosmx(STopover_visium):
                 adata_mod.uns['adata_cell'] = adata_cell
         else:
             adata_mod = sp_adata.copy()
+        # Make feature names unique
+        adata_mod.var_names_make_unique()
+
         adata_mod.uns['x_bins'] = x_bins
         adata_mod.uns['y_bins'] = y_bins
         adata_mod.uns['sc_norm_total'] = sc_norm_total
@@ -444,8 +450,8 @@ class STopover_cosmx(STopover_visium):
         return adata_xy
 
 
-    def vis_spatial_cosmx(self, feat_name='', colorlist = None, dot_size=None, alpha = 0.8, 
-                          fig_size = (10,10), title_fontsize = 30, legend_fontsize = None, title = None, 
+    def vis_spatial_cosmx(self, feat_name='', colorlist = None, dot_size=None, alpha = 0.8, vmax = None, vmin = None,
+                          fig_size = (10,10), title_fontsize = 20, legend_fontsize = None, title = None, 
                           return_axis=False, save = False, save_name_add = '', dpi=150):
         '''
         ## Visualizing spatial distribution of features in CosMx dataset
@@ -455,6 +461,8 @@ class STopover_cosmx(STopover_visium):
         colorlist: color list for the visualization of CC identity
         dot_size: size of the spot visualized on the tissue
         alpha: transparency of the colored spot
+        vmax: maximum value in the colorbar; if None, it will automatically set the maximum value
+        vmax: minimum value in the colorbar; if None, it will automatically set the minimum value
 
         fig_size: size of the drawn figure
         title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
@@ -467,7 +475,7 @@ class STopover_cosmx(STopover_visium):
         ### Outut
         axs: matplotlib axis for the plot
         '''
-        axis = vis_spatial_cosmx_(data=self, feat_name=feat_name, colorlist = colorlist, dot_size=dot_size, alpha = alpha, 
+        axis = vis_spatial_cosmx_(data=self, feat_name=feat_name, colorlist = colorlist, dot_size=dot_size, alpha = alpha, vmax=vmax, vmin=vmin,
                                   fig_size = fig_size, title_fontsize = title_fontsize, legend_fontsize = legend_fontsize, title = title, 
                                   return_axis=return_axis, save = save, path = self.save_path, save_name_add = save_name_add, dpi=dpi)
         return axis
@@ -475,7 +483,7 @@ class STopover_cosmx(STopover_visium):
 
     def vis_jaccard_top_n_pair(self, feat_name_x='', feat_name_y='',
                                top_n = 5, dot_size=None, alpha = 0.8, 
-                               fig_size = (10,10), title_fontsize = 30, legend_fontsize = None,
+                               fig_size = (10,10), title_fontsize = 20, legend_fontsize = None,
                                title = 'J', return_axis=False,
                                save = False, save_name_add = '', dpi=150):
         '''
@@ -509,7 +517,7 @@ class STopover_cosmx(STopover_visium):
 
     def vis_all_connected(self, feat_name_x='', feat_name_y='',
                           dot_size=None, alpha = 0.8, 
-                          fig_size=(10,10), title_fontsize = 30, legend_fontsize = None, 
+                          fig_size=(10,10), title_fontsize = 20, legend_fontsize = None, 
                           title = 'Locations of', return_axis=False,
                           save = False, save_name_add = '', dpi = 150):
         '''
