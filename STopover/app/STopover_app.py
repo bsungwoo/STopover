@@ -2,6 +2,7 @@ import sys, os
 import pandas as pd
 import scanpy as sc
 import functools
+import pkg_resources
 
 from PyQt5.QtWidgets import *
 from PyQt5 import QtCore, QtGui
@@ -10,6 +11,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 from ..STopover_class import *
 from .STopover_ui import Ui_Dialog
+
 
 class StreamOutput(QtCore.QObject):
     '''
@@ -52,6 +54,8 @@ class STopoverApp(QMainWindow, Ui_Dialog):
         self.stopover_class = AnnData()
         self.df_feat = pd.DataFrame([])
         self.sc_adata = None
+        # Spinner loading gif generated from https://loading.io/
+        self.load_gif = pkg_resources.resource_filename(__name__, 'image/Spinner_loading.io.gif')
 
         sys.stdout = StreamOutput()
         sys.stdout.text_written.connect(self.normal_output_written)
@@ -78,7 +82,7 @@ class STopoverApp(QMainWindow, Ui_Dialog):
         @functools.wraps(func)
         def decorated_func(self):
             # Start loading image
-            movie = QtGui.QMovie("Spinner_loading.io.gif")
+            movie = QtGui.QMovie(self.load_gif)
             self.label_log.setMovie(movie)
             movie.start()
             output = func(self)
@@ -152,15 +156,16 @@ class STopoverApp(QMainWindow, Ui_Dialog):
                 required_list = ['filtered_feature_bc_matrix.h5',
                                 './spatial/tissue_positions_list.csv','./spatial/scalefactors_json.json',
                                 './spatial/tissue_hires_image.png', './spatial/tissue_lowres_image.png']
-
+                log_norm = True
                 for file in required_list:
                     if not os.path.exists(os.path.join(self.load_path, file)): not_found_element.append(file)
+            else: log_norm = False
 
             if len(not_found_element) > 0:
                 self.show_error_message('%s not found in the given directory'% ', '.join(not_found_element))
             else: 
                 try: 
-                    self.stopover_class = STopover_visium(sp_load_path=self.load_path, lognorm=False, 
+                    self.stopover_class = STopover_visium(sp_load_path=self.load_path, lognorm=log_norm, 
                                                           min_size=self.doubleSpinBox_min_size.value(), 
                                                           fwhm=self.doubleSpinBox_fwhm.value(), 
                                                           thres_per=self.doubleSpinBox_per_thres.value(), 
@@ -216,7 +221,7 @@ class STopoverApp(QMainWindow, Ui_Dialog):
         J_result_key = sorted([key for key in self.stopover_class.uns.keys() if key.startswith('J_result')])
         if len(J_result_key) > 0:
             # Visualize the J_result in the window
-            df_j = self.stopover_class.uns[J_result_key[-1]].loc[:,['Feat_1','Feat_2','J_comp']]
+            df_j = self.stopover_class.uns[J_result_key[-1]].loc[:,['Feat_1','Feat_2','J_comp']].sort_values(by='J_comp',ascending=False)
             self.textEdit_J_result.setText(df_j.to_string())
 
         if self.comboBox_vis_type.currentText() == "CC location":
@@ -233,7 +238,7 @@ class STopoverApp(QMainWindow, Ui_Dialog):
                 try: sc.pl.spatial(self.stopover_class, color=self.comboBox_feat_x.currentText())
                 except: self.show_error_message("Error in drawing spatial plot for feature x")
         elif self.comboBox_vis_type.currentText() == "Top n CC location":
-            print("Drawing locations for top 4 overlapping CCx - CCy pairs")
+            print("Drawing locations for top "+str(self.spinBox_top_n.value())+" overlapping CCx - CCy pairs")
             try: self.stopover_class.vis_jaccard_top_n_pair(feat_name_x=self.comboBox_feat_x.currentText(),
                                                             feat_name_y=self.comboBox_feat_y.currentText(), 
                                                             top_n=self.spinBox_top_n.value())
