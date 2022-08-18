@@ -196,7 +196,7 @@ class STopoverApp(QMainWindow, Ui_Dialog):
             else:
                 try:
                     self.stopover_class = STopover_cosmx(sp_load_path=self.load_path,
-                                                         sc_adata=self.sc_adata, sc_celltype_colname = self.comboBox_spec.currentText(),
+                                                         sc_adata=self.sc_adata, sc_celltype_colname = self.comboBox_ref.currentText(),
                                                          tx_file_name = tx_file_name[0], cell_exprmat_file_name=cell_exprmat_file_name[0], 
                                                          cell_metadata_file_name=cell_metadata_file_name[0], 
                                                          min_size=self.doubleSpinBox_min_size.value(), 
