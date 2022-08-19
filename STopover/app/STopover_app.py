@@ -4,8 +4,9 @@ import scanpy as sc
 import functools
 import pkg_resources
 
-from PyQt5.QtWidgets import *
-from PyQt5 import QtCore, QtGui
+from PyQt5.QtWidgets import QMainWindow, QMessageBox, QFileDialog, QApplication
+from PyQt5.QtCore import QObject, pyqtSignal, Qt
+from PyQt5.QtGui import QCloseEvent, QTextCursor, QMovie
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
@@ -13,11 +14,11 @@ from ..STopover_class import *
 from .STopover_ui import Ui_Dialog
 
 
-class StreamOutput(QtCore.QObject):
+class StreamOutput(QObject):
     '''
     Class to emit text
     '''
-    text_written = QtCore.pyqtSignal(str)
+    text_written = pyqtSignal(str)
 
     def write(self, text):
         self.text_written.emit(str(text))
@@ -27,7 +28,7 @@ class STopoverApp(QMainWindow, Ui_Dialog):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
-        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        self.setAttribute(Qt.WA_DeleteOnClose)
 
         self.comboBox_feat_x.setMaxVisibleItems(10)
         self.comboBox_feat_y.setMaxVisibleItems(10)
@@ -64,13 +65,13 @@ class STopoverApp(QMainWindow, Ui_Dialog):
         self.canvas = FigureCanvas(self.fig)
 
     # https://stackoverflow.com/questions/8356336/how-to-capture-output-of-pythons-interpreter-and-show-in-a-text-widget
-    def closeEvent(self, event: QtGui.QCloseEvent):
+    def closeEvent(self, event: QCloseEvent):
         sys.stdout = sys.__stdout__
         event.accept()
         
     def normal_output_written(self, text):
         cursor = self.textEdit_output.textCursor()
-        cursor.movePosition(QtGui.QTextCursor.End)
+        cursor.movePosition(QTextCursor.End)
         cursor.insertText(text)
         self.textEdit_output.setTextCursor(cursor)
         self.textEdit_output.ensureCursorVisible()
@@ -82,7 +83,7 @@ class STopoverApp(QMainWindow, Ui_Dialog):
         @functools.wraps(func)
         def decorated_func(self):
             # Start loading image
-            movie = QtGui.QMovie(self.load_gif)
+            movie = QMovie(self.load_gif)
             self.label_log.setMovie(movie)
             movie.start()
             output = func(self)

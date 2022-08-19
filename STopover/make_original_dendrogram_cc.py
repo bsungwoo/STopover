@@ -9,7 +9,7 @@ Translation to python and addition of visualization code: Sungwoo Bae with the h
 """
 import numpy as np
 from scipy import sparse
-import networkx as nx
+from networkx import DiGraph, from_scipy_sparse_matrix, strongly_connected_components
 
 def make_original_dendrogram_cc(U, A, threshold): 
     '''
@@ -43,8 +43,8 @@ def make_original_dendrogram_cc(U, A, threshold):
         index_x, index_y = np.meshgrid(cvoxels, cvoxels, indexing='ij')
 
         # Create directed graph and extract strongly connected components
-        G = nx.from_scipy_sparse_matrix(A[index_x,index_y], create_using=nx.DiGraph())
-        CC_profiles = [G.subgraph(c).copy().nodes() for c in nx.strongly_connected_components(G)]
+        G = from_scipy_sparse_matrix(A[index_x,index_y], create_using=DiGraph())
+        CC_profiles = [G.subgraph(c).copy().nodes() for c in strongly_connected_components(G)]
         S = len(CC_profiles)
         
         nCC = [[]]*S
@@ -76,8 +76,8 @@ def make_original_dendrogram_cc(U, A, threshold):
             nA = nA_tmp.copy()
 
             # Estimate connected components of clusters
-            G = nx.from_scipy_sparse_matrix(nA, create_using=nx.DiGraph())
-            CC_profiles = [G.subgraph(c).copy().nodes() for c in nx.strongly_connected_components(G)]
+            G = from_scipy_sparse_matrix(nA, create_using=DiGraph())
+            CC_profiles = [G.subgraph(c).copy().nodes() for c in strongly_connected_components(G)]
             S = len(CC_profiles)
             
             for j in range(S):

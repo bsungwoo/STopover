@@ -4,7 +4,7 @@ from scipy import sparse
 
 import os
 import time
-import multiprocessing as mp
+from multiprocessing import Pool
             
 from .topological_comp import extract_adjacency_spatial
 from .topological_comp import topological_comp_res
@@ -190,7 +190,7 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
 
     # Extract connected components for the features
     procs = []
-    pool = mp.Pool(processes=os.cpu_count())
+    pool = Pool(processes=os.cpu_count())
     for feat, loc in zip(val_list, loc_list):
         A, mask = extract_adjacency_spatial(loc, fwhm=fwhm)
         proc_grp = []
@@ -209,7 +209,7 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
     
     # Make dataframe for the similarity between feature 1 and 2 across the groups
     jaccard_total = []; output_cc_loc = []
-    pool = mp.Pool(processes=os.cpu_count())
+    pool = Pool(processes=os.cpu_count())
     for num, element in enumerate(group_list):
         df_subset = df_top_total[df_top_total[group_name]==element]
         

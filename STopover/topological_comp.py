@@ -8,7 +8,7 @@ Translation to python and addition of visualization code: Sungwoo Bae with the h
 
 """
 import numpy as np
-import numpy.matlib
+from numpy.matlib import repmat
 import pandas as pd
 from scipy import sparse
 from math import pi
@@ -214,7 +214,7 @@ def topological_comp_res(feat=None, min_size = 5, thres_per=30, return_mode='all
     # Calculate adjacency matrix and mask if data is provided
     # Gaussian smoothing with zero padding
     p = len(feat)
-    smooth = np.sum(mask*np.matlib.repmat(feat,1,p), axis=0)
+    smooth = np.sum(mask*repmat(feat,1,p), axis=0)
     smooth = smooth/np.sum(smooth)*np.sum(feat)
 
     ## Estimate dendrogram for feat_x
@@ -260,12 +260,12 @@ def split_connected_loc(data, feat_name_x='', feat_name_y='', return_loc_arr=Tru
     num_ccx, num_ccy = len(CCx_unique), len(CCy_unique)
 
     # Define numpy replicative array with the CCx and CCy index in each column
-    CCx = np.matlib.repmat(CCx_unique, len(CCxy), 1)
-    CCy = np.matlib.repmat(CCy_unique, len(CCxy), 1)
+    CCx = repmat(CCx_unique, len(CCxy), 1)
+    CCy = repmat(CCy_unique, len(CCxy), 1)
     CCxy_index = np.concatenate((CCx, CCy), axis=1)
     # Define numpy replicate array for CCxy across the rows
-    CCxy_rep = np.concatenate((np.matlib.repmat(CCxy[:,0].reshape((-1,1)), 1, num_ccx), 
-                                np.matlib.repmat(CCxy[:,1].reshape((-1,1)), 1, num_ccy)), axis=1)
+    CCxy_rep = np.concatenate((repmat(CCxy[:,0].reshape((-1,1)), 1, num_ccx), 
+                                repmat(CCxy[:,1].reshape((-1,1)), 1, num_ccy)), axis=1)
     
     # Create array for the intersecting elements between CCxy_index and CCxy_rep
     CCxy_fin = CCxy_index*(CCxy_index == CCxy_rep)

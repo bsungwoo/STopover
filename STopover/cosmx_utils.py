@@ -1,7 +1,7 @@
 import os
 import time
 import numpy as np
-import numpy.matlib
+from numpy.matlib import repmat
 import pandas as pd
 import scanpy as sc
 from pyarrow import csv
@@ -123,8 +123,8 @@ def read_cosmx(load_path, sc_adata=None, sc_celltype_colname = 'celltype', sc_no
     x_div_arr = np.linspace(np.min(x_coord), np.max(x_coord), num=x_bins, endpoint=False)[1:]
     y_div_arr = np.linspace(np.min(y_coord), np.max(y_coord), num=y_bins, endpoint=False)[1:]
     # Assigning the grid column and row number to each transcript based on the coordinates by x_div_arr and y_div_arr
-    tx_coord_all['array_col'] = (np.matlib.repmat(x_div_arr.reshape(1,-1), len(x_coord), 1) < np.matlib.repmat(x_coord, 1, len(x_div_arr))).sum(axis=1).astype(int)
-    tx_coord_all['array_row'] = (np.matlib.repmat(y_div_arr.reshape(1,-1), len(y_coord), 1) < np.matlib.repmat(y_coord, 1, len(y_div_arr))).sum(axis=1).astype(int)
+    tx_coord_all['array_col'] = (repmat(x_div_arr.reshape(1,-1), len(x_coord), 1) < repmat(x_coord, 1, len(x_div_arr))).sum(axis=1).astype(int)
+    tx_coord_all['array_row'] = (repmat(y_div_arr.reshape(1,-1), len(y_coord), 1) < repmat(y_coord, 1, len(y_div_arr))).sum(axis=1).astype(int)
     print("End of grid-based aggregation of CosMx: %.2f seconds" % (time.time()-start_time))
 
     ## Normalize the transcript number in each grid by total count in the cell
