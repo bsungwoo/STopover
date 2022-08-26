@@ -23,14 +23,14 @@ from .make_dendrogram_bar import make_dendrogram_bar
 
 def extract_adjacency_spatial(loc, fwhm=2.5):
     '''
-    ## Compute adjacency matrix and gaussian mask based on spatial locations of spots
+    ## Compute adjacency matrix and gaussian mask based on spatial locations of spots/grids
     ### Input
-    loc: p*2 array for x, y coordinates of p spots
+    loc: p*2 array for x, y coordinates of p spots/grids
     fwhm: full width half maximum for Gaussian smoothing
 
     ### Output
-    A: Spatial adjacency matrix for spots based on the given x,y coordiantes
-    mask: Gaussian smoothing mask for the features based on x,y coordinates of spots
+    A: Spatial adjacency matrix for spots/grids based on the given x,y coordiantes
+    mask: Gaussian smoothing mask for the features based on x,y coordinates of spots/grids
     '''
     p = loc.shape[0]
     sigma = fwhm / 2.355
@@ -40,7 +40,7 @@ def extract_adjacency_spatial(loc, fwhm=2.5):
         for j in range(i, p):
             A[i,j] = np.sqrt(sum((loc[i,:] - loc[j,:])**2))
             A[j,i] = A[i,j]
-        
+     
     A[np.where(A > fwhm)] = np.inf
 
     # Smoothing x and y
@@ -59,14 +59,14 @@ def extract_connected_comp(tx, A_sparse, threshold_x, num_spots, min_size=5):
     '''
     ## Compute commnected components
     ### Input
-    tx: gene expression profiles of a feature across p spots (p * 1 array)
-    A_sparse: sparse matrix for spatial adjacency matrix across spots (0 and 1)
+    tx: gene expression profiles of a feature across p spots/grids (p * 1 array)
+    A_sparse: sparse matrix for spatial adjacency matrix across spots/grids (0 and 1)
     threshold_x: threshold value for tx
-    num_spots: number of spots in the spatial dataset
+    num_spots: number of spots/grids in the spatial dataset
     min_size: minimum size of a connected component
 
     ### Output:
-    CCx: list containing index of spots indicating location of connected components for feature x
+    CCx: list containing index of spots/grids indicating location of connected components for feature x
     '''
     cCC_x,cE_x,cduration_x,chistory_x = make_original_dendrogram_cc(tx,A_sparse,threshold_x)
 
@@ -91,17 +91,17 @@ def extract_connected_loc_mat(CC, num_spots, format='sparse'):
     '''
     ## Calculate the integer array which explains the location of each connected component
     ### Input
-    CC: list containing index of spots for each connected component
-    num_spots: total number of spots in the spatial data used for analysis
+    CC: list containing index of spots/grids for each connected component
+    num_spots: total number of spots/grids in the spatial data used for analysis
     format: format of the connected location data
 
     ### Output
-    Returns connected component location sparse matrix: positive integers are assigned to the corresponding spots composing each connected components
-    For example 1 was given to the spots composing the first connected component, 2 to the spots composing the second connected components, and so on.
+    Returns connected component location sparse matrix: positive integers are assigned to the corresponding spots/grids composing each connected components
+    For example 1 was given to the spots/grids composing the first connected component, 2 to the spots/grids composing the second connected components, and so on.
 
     Different connected components of a feature are separated along the axis=1 of numpy array
     Therefore, when the number of spot is p and the number of connected component is m then the shape of array is p*m
-    If two conneceted components(CCs) are found in a total of 5 spots and CC1 is composed of 4th-5th spots and CC2 of 2nd-3rd spots,
+    If two conneceted components(CCs) are found in a total of 5 spots/grids and CC1 is composed of 4th-5th spots/grids and CC2 of 2nd-3rd spots/grids,
     then the array will be np.array([[0, 0], [0, 2], [0, 2], [1, 0], [1, 0]])
     '''
     if format not in ['sparse', 'array']: raise ValueError("'format' should be either 'sparse' or 'array'")
@@ -195,8 +195,8 @@ def topological_comp_res(feat=None, min_size = 5, thres_per=30, return_mode='all
     result:
     -> if J_index is True, then return (Jmax, Jcomp): maximum jaccard index, mean jaccard index and mean of maximum jaccard for CCx and CCy
     -> if J_index is False, then return jaccard similarity array between CCx and CCy along with CCx and CCy locations as below format
-    CCx location: list containing index of spots indicating location of connected components for feature x
-    CCy location: list containing index of spots indicating location of connected components for feature y
+    CCx location: list containing index of spots/grids indicating location of connected components for feature x
+    CCy location: list containing index of spots/grids indicating location of connected components for feature y
 
     data_fin: the location array of all connected components are returned
     '''

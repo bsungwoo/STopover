@@ -13,7 +13,7 @@ from .jaccard import jaccard_composite
 
 
 def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_label',
-                                 fwhm=2.5, min_size=5, thres_per=30):
+                                 fwhm=2.5, min_size=5, thres_per=30, num_workers=os.cpu_count()):
     '''
     ## Calculate Jaccard index for given feature pairs and return dataframe
         -> if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
@@ -35,6 +35,7 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
     fwhm: full width half maximum value for the gaussian smoothing kernal
     min_size: minimum size of a connected component
     thres_per: lower percentile value threshold to remove the connected components
+    num_workers: number of workers to use for multiprocessing
 
     ### Output
     df_top_total: dataframe that contains spatial overlap measures represented by (Jmax, Jmean, Jmmx, Jmmy) for the feature pairs 
@@ -190,7 +191,7 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
 
     # Extract connected components for the features
     procs = []
-    pool = Pool(processes=os.cpu_count())
+    pool = Pool(processes=min(os.cpu_count(), num_workers))
     for feat, loc in zip(val_list, loc_list):
         A, mask = extract_adjacency_spatial(loc, fwhm=fwhm)
         proc_grp = []
@@ -209,7 +210,7 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
     
     # Make dataframe for the similarity between feature 1 and 2 across the groups
     jaccard_total = []; output_cc_loc = []
-    pool = Pool(processes=os.cpu_count())
+    pool = Pool(processes=min(os.cpu_count(), num_workers))
     for num, element in enumerate(group_list):
         df_subset = df_top_total[df_top_total[group_name]==element]
         

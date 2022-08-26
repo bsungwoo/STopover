@@ -9,18 +9,64 @@ Translation to python and addition of visualization code: Sungwoo Bae with the h
 """
 import numpy as np
 from scipy import sparse
-from networkx import DiGraph, from_scipy_sparse_matrix, strongly_connected_components
+
+
+# The algorithm is identical to networkx python module
+def extract_connected_nodes(edge_list, sel_node_idx):
+    '''
+    ## Extract node indices of a connected component which contains a selected node
+    (Algorith is identical to python networkx _plain_bfs function)
+    ### Input
+    edge_list: list containing array of all nodes connected with each node
+    idx: index of the selected node (from 0 to node number)
+
+    ### Output
+    set of nodes constituting the connected components containing the selected node
+    '''
+    cc_set = set()
+    next_neighbor = {sel_node_idx}
+    while next_neighbor:
+        curr_neighbor = next_neighbor
+        next_neighbor = set()
+        # For each vertex among current neighbors of the selected node (n-hop), find the next neighbor node and add (n+1-hop)
+        # Iterate until all nodes in a connected component are found and all the vertices in the next_neighbor is empty
+        for vertex in curr_neighbor:
+            if vertex not in cc_set:
+                cc_set.add(vertex)
+                next_neighbor.update(edge_list[vertex])
+    return cc_set
+
+
+def connected_components_generator(A):
+    '''
+    ## Generator for returning connected components for the given adjacency matrix  
+    (Algorith is identical to python networkx connected_components function)
+    ### Input
+    A: sparse matrix for spatial adjacency matrix across spots/grids (0 and 1)
+
+    ### Output
+    set of nodes constituting the connected components 
+    '''
+    all_cc_set = set()
+    edge_list = [A[vertex].tocoo().col for vertex in range(A.shape[0])]
+    # Generate the new connected component only if the vertex provided is not included in the previously generated connected components
+    for vertex in range(A.shape[0]):
+        if vertex not in all_cc_set:
+            cc_set = extract_connected_nodes(edge_list, vertex)
+            all_cc_set.update(cc_set)
+            yield cc_set
+
 
 def make_original_dendrogram_cc(U, A, threshold): 
     '''
     ## Compute original dendrogram with connected components
     ### Input
     U: gene expression profiles of a feature across p spots (p * 1 array)
-    A: sparse matrix for spatial adjacency matrix across spots (0 and 1)
+    A: sparse matrix for spatial adjacency matrix across spots/grids (0 and 1)
     threshold: threshold value for U
     
     ### Output
-    CC: connected components, ncc-list, each element is a set of voxels
+    CC: connected components, ncc-list, each element is a index of spatial spots/grids
     E: ncc-by-ncc sparse matrix connectivity matrix between CCs
     duration: ncc-by-2 array, the birth and death of CCs
     history: ncc-list, each element has the index from which the CC come
@@ -42,9 +88,8 @@ def make_original_dendrogram_cc(U, A, threshold):
         # Define pairwise index arrays
         index_x, index_y = np.meshgrid(cvoxels, cvoxels, indexing='ij')
 
-        # Create directed graph and extract strongly connected components
-        G = from_scipy_sparse_matrix(A[index_x,index_y], create_using=DiGraph())
-        CC_profiles = [G.subgraph(c).copy().nodes() for c in strongly_connected_components(G)]
+        # Extract connected components for the adjacency matrix (containing voxels between the two threshold values)
+        CC_profiles = [cc for cc in connected_components_generator(A[index_x,index_y])]
         S = len(CC_profiles)
         
         nCC = [[]]*S
@@ -76,8 +121,7 @@ def make_original_dendrogram_cc(U, A, threshold):
             nA = nA_tmp.copy()
 
             # Estimate connected components of clusters
-            G = from_scipy_sparse_matrix(nA, create_using=DiGraph())
-            CC_profiles = [G.subgraph(c).copy().nodes() for c in strongly_connected_components(G)]
+            CC_profiles = [cc for cc in connected_components_generator(nA)]
             S = len(CC_profiles)
             
             for j in range(S):

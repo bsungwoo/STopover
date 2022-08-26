@@ -1,3 +1,4 @@
+import os
 import scanpy as sc
 from anndata import AnnData
 
@@ -97,7 +98,7 @@ class STopover_visium(AnnData):
 
 
     def topological_similarity(self, feat_pairs=None, use_lr_db=False, lr_db_species='human',
-                                     group_name='batch', group_list=None, J_result_name='result'):
+                                     group_name='batch', group_list=None, J_result_name='result', num_workers=os.cpu_count()):
         '''
         ## Calculate Jaccard index between topological connected components of feature pairs and return dataframe
             : if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
@@ -119,6 +120,7 @@ class STopover_visium(AnnData):
         group_list: list of the elements in the group 
 
         J_result_name: the name of the jaccard index data file name
+        num_workers: number of workers to use for multiprocessing
 
         ### Output
         df_top_total: dataframe that contains spatial overlap measures represented by (Jmax, Jmean, Jmmx, Jmmy) for the feature pairs 
@@ -131,7 +133,7 @@ class STopover_visium(AnnData):
             print("Using CellTalkDB ligand-receptor dataset")
         
         df, adata = topological_sim_pairs_(data=self, feat_pairs=feat_pairs, group_list=group_list, group_name=group_name,
-                                            fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per)
+                                            fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per, num_workers=num_workers)
         # save jaccard index result in .uns of anndata
         adata.uns['_'.join(('J',str(J_result_name),str(self.J_count)))] = df
         # Initialize the object
@@ -413,7 +415,7 @@ class STopover_cosmx(STopover_visium):
 
 
     def topological_similarity_celltype_pair(self, celltype_x='', celltype_y='', feat_pairs=None, use_lr_db=False, lr_db_species='human',
-                                             group_name='batch', group_list=None, J_result_name='result'):
+                                             group_name='batch', group_list=None, J_result_name='result', num_workers=os.cpu_count()):
         '''
         ## Calculate Jaccard index between the two cell type-specific expression anndata of CosMx data
         ### Input
@@ -446,7 +448,7 @@ class STopover_cosmx(STopover_visium):
         
         # Calculate topological similarites between the pairs from the two cell types  
         adata_xy.topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species,
-                                        group_name=group_name, group_list=group_list, J_result_name=J_result_name)
+                                        group_name=group_name, group_list=group_list, J_result_name=J_result_name, num_workers=num_workers)
         return adata_xy
 
 

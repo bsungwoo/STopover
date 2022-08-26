@@ -20,9 +20,7 @@ pandas 1.4.3
 matplotlib 3.4.3
 pyarrow 8.0.0
 pyqt5 5.15.7
-scikit-learn 0.24.2
 scipy 1.7.3
-networkx 2.6.3
 ```
 
 ## Run GUI for STopover  
@@ -31,6 +29,7 @@ from STopover import app
 
 app.main()
 ```
+.exe file for the app is uploaded on the release tab
 
 ## Code Example  
 ### 1. Create STopover object  
@@ -91,6 +90,7 @@ group_name: name of the group to seprately evaluate the topological similarity
   -> when there are multiple slides, then group_name = (group name to identify slides; e.g. 'batch')  
 group_list: list of elements of the given group  
 J_result_name: name to save the jaccard similarity index results in adata.uns  
+num_workers: number of workers to use for multiprocessing (default: os.cpu_count())  
 
 Jaccard indexes bewteen all feature pairs are saved in adata.uns under the name 'J_'  
 Connected component locations are saved in adata.obs  
@@ -130,7 +130,8 @@ sp_adata.vis_all_connected(spot_size=1, alpha_img=0.8, alpha=0.8,
                            # batch_colname ='batch', batch_name='0', # For multiple slides
                            image_res='hires',  
                            adjust_image=True, border = 50,
-                           fontsize=20, title = 'Locations of', return_axis=False,  
+                           title_fontsize = 20, legend_fontsize = 10,
+                           title = 'Locations of', return_axis=False,
                            save=False, save_name_add='test', dpi=150)  
 
 # Visium: Visualize location of top 2 connected components
@@ -140,6 +141,7 @@ sp_adata.vis_jaccard_top_n_pair(top_n=2, spot_size=1, alpha_img=0.8, alpha=0.8,
                                 # batch_colname='batch', batch_name='0', # For multiple slides
                                 image_res='hires', 
                                 adjust_image=True, border=50,
+                                title_fontsize = 20, legend_fontsize = 10,
                                 fontsize=20, title = 'J', return_axis=False,  
                                 save=False, save_name_add='test', dpi=150)  
 ```

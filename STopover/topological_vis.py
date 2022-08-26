@@ -17,9 +17,9 @@ simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
                                   top_n = 5, spot_size=1, alpha_img=0.8, alpha = 0.8, 
-                                  fig_size = (10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
+                                  fig_size = (5,5), batch_colname='batch', batch_name='0', batch_library_dict=None,
                                   image_res = 'hires', adjust_image = True, border = 500, 
-                                  title_fontsize=30, legend_fontsize=None, title = 'J', return_axis=False,
+                                  title_fontsize=20, legend_fontsize=None, title = 'J', return_axis=False,
                                   save = False, path = os.getcwd(), save_name_add = '', dpi=150):
     '''
     ## Visualizing top n connected component x and y showing maximum Jaccard index in Visium dataset
@@ -125,9 +125,9 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
 
 def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
                              spot_size=1, alpha_img=0.8, alpha = 0.8, 
-                             fig_size=(10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
+                             fig_size=(5,5), batch_colname='batch', batch_name='0', batch_library_dict=None,
                              image_res = 'hires', adjust_image = True, border = 500, 
-                             title_fontsize=30, legend_fontsize=None, title = 'Locations of', return_axis=False,
+                             title_fontsize=20, legend_fontsize=None, title = 'Locations of', return_axis=False,
                              save = False, path = os.getcwd(), save_name_add = '', dpi = 150):
     '''
     ## Visualizing all connected components x and y on tissue in Visium dataset
@@ -221,7 +221,7 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
     # Add legend to the figure
     for index, label in enumerate(category_label):
         axs.scatter([], [], c=colormap[index], label=label)
-    if legend_fontsize is None: legend_fontsize=fig_size[1]
+    if legend_fontsize is None: legend_fontsize=fig_size[1]*2
     plt.legend(frameon=False, loc='center left', bbox_to_anchor=(1, 0.5), ncol=1, fontsize=legend_fontsize)
     
     if save: fig.savefig(os.path.join(path,
@@ -233,7 +233,7 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
 
 
 def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alpha = 0.8, vmax=None, vmin=None,
-                       fig_size = (10,10), title_fontsize = 30, legend_fontsize = None, title = None, 
+                       fig_size = (5,5), title_fontsize = 20, legend_fontsize = None, title = None, 
                        return_axis=False, save = False, path = os.getcwd(), save_name_add = '', dpi=150):
     '''
     ## Visualizing spatial distribution of features in CosMx dataset
@@ -321,7 +321,7 @@ def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alph
 
 def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
                                  top_n = 5, dot_size=None, alpha = 0.8, 
-                                 fig_size = (10,10), title_fontsize = 30, legend_fontsize = None,
+                                 fig_size = (5,5), title_fontsize = 20, legend_fontsize = None,
                                  title = 'J', return_axis=False,
                                  save = False, path = os.getcwd(), save_name_add = '', dpi=150):
     '''
@@ -397,7 +397,7 @@ def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
 
 def vis_all_connected_cosmx(data, feat_name_x='', feat_name_y='',
                             dot_size=None, alpha = 0.8, 
-                            fig_size=(10,10), title_fontsize = 30, legend_fontsize = None, 
+                            fig_size=(5,5), title_fontsize = 20, legend_fontsize = None, 
                             title = 'Locations of', return_axis=False,
                             save = False, path = os.getcwd(), save_name_add = '', dpi = 150):
     '''
@@ -456,7 +456,7 @@ def vis_all_connected_cosmx(data, feat_name_x='', feat_name_y='',
 
     for index, label in enumerate(category_label):
         axs.scatter([], [], c=colorlist[index], label=label)        
-    if legend_fontsize is None: legend_fontsize=fig_size[1]
+    if legend_fontsize is None: legend_fontsize=fig_size[1]*2
     axs.legend(frameon=False, loc='center left', bbox_to_anchor=(1, 0.5), ncol=1, fontsize=legend_fontsize)
 
     axs.axis('off')
