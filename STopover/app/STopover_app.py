@@ -1,5 +1,4 @@
-from errno import EROFS
-import sys, os, time
+import sys, os
 import pandas as pd
 import scanpy as sc
 import pkg_resources
