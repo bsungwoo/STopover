@@ -92,7 +92,8 @@ class STopover_visium(AnnData):
         CellTalkDB database as pandas dataframe
         '''
         assert lr_db_species in ['human', 'mouse'], "'lr_db_species' should be either 'human' or 'mouse'"
-        lr_db = pkg_resources.resource_stream(__name__, 'data/CellTalkDB_'+lr_db_species+'_lr_pair.txt')
+        try: lr_db = pkg_resources.resource_stream('pkg_1', 'data/CellTalkDB_'+lr_db_species+'_lr_pair.txt')
+        except: lr_db = pkg_resources.resource_stream(__name__, 'data/CellTalkDB_'+lr_db_species+'_lr_pair.txt')
         feat_pairs = pd.read_csv(lr_db, delimiter='\t')
         return feat_pairs
 
