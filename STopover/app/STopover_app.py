@@ -89,8 +89,7 @@ class STopoverApp(QMainWindow, Ui_Dialog):
         self.sc_adata = None
         self.name_prefix = ''
         # Spinner loading gif generated from https://loading.io/
-        try: self.load_gif = pkg_resources.resource_filename('pkg_2', 'image/Spinner_loading.io.gif')
-        except: self.load_gif = pkg_resources.resource_filename(__name__, 'image/Spinner_loading.io.gif')
+        self.load_gif = pkg_resources.resource_filename(__name__, 'image/Spinner_loading.io.gif')
 
         sys.stdout = StreamOutput()
         sys.stdout.text_written.connect(self.normal_output_written)
