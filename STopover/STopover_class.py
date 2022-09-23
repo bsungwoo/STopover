@@ -208,7 +208,7 @@ class STopover_visium(AnnData):
                                top_n = 2, ncol = 2, spot_size=1, alpha_img=0.8, alpha = 0.8, 
                                fig_size = (10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
                                image_res = 'hires', adjust_image = True, border = 500, 
-                               title_fontsize = 20, legend_fontsize = None, title = 'J', return_axis=False,
+                               title_fontsize = 20, legend_fontsize = None, title = '', return_axis=False,
                                save = False, save_name_add = '', dpi=150):
         '''
         ## Visualizing top n connected component x and y showing maximum Jaccard index
@@ -252,7 +252,7 @@ class STopover_visium(AnnData):
                           spot_size=1, alpha_img=0.8, alpha = 0.8, vis_jaccard=True,
                           fig_size=(10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
                           image_res = 'hires', adjust_image = True, border = 500, 
-                          title_fontsize=20, legend_fontsize = None, title = 'Locations of CC', return_axis=False, axis = None, 
+                          title_fontsize=20, legend_fontsize = None, title = '', return_axis=False, axis = None, 
                           save = False, save_name_add = '', dpi = 150):
         '''
         ## Visualizing all connected components x and y on tissue  
@@ -492,7 +492,7 @@ class STopover_cosmx(STopover_visium):
     def vis_jaccard_top_n_pair(self, feat_name_x='', feat_name_y='',
                                top_n = 2, ncol = 2, dot_size=None, alpha = 0.8, 
                                fig_size = (10,10), title_fontsize = 20, legend_fontsize = None,
-                               title = 'J', return_axis=False,
+                               title = '', return_axis=False,
                                save = False, save_name_add = '', dpi=150):
         '''
         ## Visualizing top n connected component x and y showing maximum Jaccard index in CosMx dataset
@@ -527,7 +527,7 @@ class STopover_cosmx(STopover_visium):
     def vis_all_connected(self, feat_name_x='', feat_name_y='',
                           dot_size=None, alpha = 0.8, vis_jaccard=True,
                           fig_size=(10,10), title_fontsize = 20, legend_fontsize = None, 
-                          title = 'Locations of CC', return_axis = False, axis = None,
+                          title = '', return_axis = False, axis = None,
                           save = False, save_name_add = '', dpi = 150):
         '''
         ## Visualizing all connected components x and y on tissue in CosMx dataset

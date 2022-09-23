@@ -95,7 +95,7 @@ class STopoverApp(QMainWindow, Ui_Dialog):
         sys.stdout.text_written.connect(self.normal_output_written)
 
         plt.ion() # Turn on ion mode
-        self.fig = plt.Figure()
+        self.fig = plt.Figure(tight_layout = True)
         self.canvas = FigureCanvas(self.fig)
     
     def run_thread(func):
@@ -319,7 +319,8 @@ class STopoverApp(QMainWindow, Ui_Dialog):
                 try: self.stopover_class.vis_spatial_cosmx(feat_name=self.comboBox_feat_x.currentText(), fig_size=(6,6))
                 except: self.show_error_message("Error in drawing spatial plot for feature x")
             elif self.data_type=='visium':
-                try: sc.pl.spatial(self.stopover_class, color=self.comboBox_feat_x.currentText())
+                try: 
+                    sc.pl.spatial(self.stopover_class, color=self.comboBox_feat_x.currentText())
                 except: self.show_error_message("Error in drawing spatial plot for feature x")
         elif self.comboBox_vis_type.currentText() == "Top n CC location":
             print("Drawing locations for top "+str(self.spinBox_top_n.value())+" overlapping CCx - CCy pairs")
