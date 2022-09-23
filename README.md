@@ -29,7 +29,6 @@ from STopover import app
 
 app.main()
 ```
-.exe file for the app is uploaded on the release tab
 
 ## Code Example  
 ### 1. Create STopover object  
@@ -101,6 +100,15 @@ sp_adata.topological_similarity(feat_pairs=[('CD274','PDCD1')], J_result_name='r
 # Between cell fraction metadata and gene (Tumor & PDCD1)  
 sp_adata.topological_similarity(feat_pairs=[('Tumor','PDCD1')], J_result_name='result')  
 
+## Analysis for the dataset containing 4 Visium slides with batch number 0 ~ 3  
+# Between two gene expression patterns (CD274 & PDCD1)  
+sp_adata.topological_similarity(feat_pairs=[('CD274','PDCD1')], group_name='batch', group_list=[str(i) for i in range(4)], J_result_name='result')   
+# Between cell fraction metadata and gene (Tumor & PDCD1)  
+sp_adata.topological_similarity(feat_pairs=[('Tumor','PDCD1')], group_name='batch', group_list=[str(i) for i in range(4)], J_result_name='result')  
+
+## Return CellTalkDB in pandas dataframe
+sp_adata.return_celltalkdb(lr_db_species='human')
+
 ## L-R interaction analysis in Visium dataset
 sp_adata.topological_similarity(use_lr_db=True, lr_db_species='human', J_result_name='result')
 
@@ -108,12 +116,6 @@ sp_adata.topological_similarity(use_lr_db=True, lr_db_species='human', J_result_
 # Between ligand expression in celltype x and receptor expression in celltype y
 sp_adata_lr_celltype = sp_adata.topological_similarity_celltype_pair(celltype_x='Tumor', celltype_y='Cytotoxic CD8+ T', 
                                                                      use_lr_db=True, lr_db_species='human', J_result_name='result')
-
-## Analysis for the dataset containing 4 Visium slides with batch number 0 ~ 3  
-# Between two gene expression patterns (CD274 & PDCD1)  
-sp_adata.topological_similarity(feat_pairs=[('CD274','PDCD1')], group_name='batch', group_list=[str(i) for i in range(4)], J_result_name='result')   
-# Between cell fraction metadata and gene (Tumor & PDCD1)  
-sp_adata.topological_similarity(feat_pairs=[('Tumor','PDCD1')], group_name='batch', group_list=[str(i) for i in range(4)], J_result_name='result')  
 ```
 
 ### 3. Save the data file  
@@ -124,49 +126,49 @@ sp_adata.save_connected_loc_data(save_format='h5ad', filename = 'cc_loc')
 ### 4-1. Visium: visualize the overlapping connected components between two values  
 ```Plain Text  
 # Visium: Visualization of connected component locations of feature x and y
-sp_adata.vis_all_connected(spot_size=1, alpha_img=0.8, alpha=0.8,  
-                           feat_name_x='CD274', feat_name_y='PDCD1',  
+sp_adata.vis_all_connected(feat_name_x='CD274', feat_name_y='PDCD1', 
+                           spot_size=1, alpha_img=0.8, alpha=0.8, vis_jaccard=True,  
                            fig_size=(5,5), 
                            # batch_colname ='batch', batch_name='0', # For multiple slides
                            image_res='hires',  
-                           adjust_image=True, border = 50,
-                           title_fontsize = 20, legend_fontsize = 10,
-                           title = 'Locations of', return_axis=False,
+                           adjust_image=True, border=50,
+                           title_fontsize=20, legend_fontsize=10,
+                           title='', return_axis=False, axis=None,
                            save=False, save_name_add='test', dpi=150)  
 
 # Visium: Visualize location of top 2 connected components
-sp_adata.vis_jaccard_top_n_pair(top_n=2, spot_size=1, alpha_img=0.8, alpha=0.8, 
-                                feat_name_x='CD274', feat_name_y='PDCD1',  
+sp_adata.vis_jaccard_top_n_pair(feat_name_x='CD274', feat_name_y='PDCD1',  
+                                top_n=2, ncol=2, spot_size=1, alpha_img=0.8, alpha=0.8, 
                                 fig_size=(5,5), 
                                 # batch_colname='batch', batch_name='0', # For multiple slides
                                 image_res='hires', 
                                 adjust_image=True, border=50,
-                                title_fontsize = 20, legend_fontsize = 10,
-                                fontsize=20, title = 'J', return_axis=False,  
+                                title_fontsize=20, legend_fontsize=10,
+                                title='', return_axis=False,  
                                 save=False, save_name_add='test', dpi=150)  
 ```
 ### 4-2. CosMx: visualize the overlapping connected components between two values  
 ```Plain Text  
 # CosMx: Spatial mapping of feature in grid-based data
 sp_adata.vis_spatial_cosmx(feat_name='CD274', 
-                           alpha = 0.8, dot_size=3,
-                           fig_size = (5,5), title_fontsize = 20, legend_fontsize = 12, 
-                           title = 'Spatial mapping', return_axis=False, 
-                           save = False, save_name_add = 'test', dpi=150)
+                           dot_size=3, alpha=0.8, vmax=None, vmin=None, 
+                           fig_size=(5,5), title_fontsize=20, legend_fontsize=12, 
+                           title='Spatial mapping: ', return_axis=False, axis=None,
+                           save=False, save_name_add='test', dpi=150)
 
 # CosMx: Visualization of connected component locations of feature x and y
 sp_adata.vis_all_connected(feat_name_x='CD274', feat_name_y='PDCD1', 
-                           alpha = 0.8, dot_size=3,
-                           fig_size=(5,5), title_fontsize = 20, legend_fontsize = 12, 
-                           title = 'Locations of', return_axis=False,
-                           save = False, save_name_add = 'test', dpi = 150)
+                           dot_size=3, alpha = 0.8, 
+                           fig_size=(5,5), title_fontsize=20, legend_fontsize=12, 
+                           title='', return_axis=False, axis=None,
+                           save=False, save_name_add='test', dpi=150)
 
 # CosMx: Visualize top 2 connected component locations  
 sp_adata.vis_jaccard_top_n_pair(feat_name_x='CD274', feat_name_y='PDCD1', 
-                                top_n = 5, alpha = 0.8, dot_size=3,
-                                fig_size = (5,5), title_fontsize = 20, legend_fontsize = 12,
-                                title = 'J', return_axis=False,
-                                save = False, save_name_add = 'test', dpi=150)
+                                top_n=2, ncol=2, dot_size=3, alpha=0.8, 
+                                fig_size=(5,5), title_fontsize=20, legend_fontsize=12,
+                                title='', return_axis=False,
+                                save=False, save_name_add='test', dpi=150)
 ```
 
 ### 5. Initialize the STopover object for recalculation  

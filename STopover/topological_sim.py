@@ -253,7 +253,7 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
     # Get the output for connected component location and save
     data_mod = data.copy()
     output_cc_loc = pd.concat(output_cc_loc, axis=0).fillna(0).astype(int).astype('category')
-    data_mod.obs = pd.concat([data_mod.obs, output_cc_loc], axis=1)
+    data_mod.obs = data_mod.obs.join(output_cc_loc, lsuffix='_prev')
 
     # Get the output for jaccard
     output_j = [jaccard.get() for jaccard in jaccard_total] 

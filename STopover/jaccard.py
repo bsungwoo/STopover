@@ -65,11 +65,11 @@ def jaccard_and_connected_loc_(data, CCx=None, CCy=None, feat_name_x="", feat_na
     # Calculate CCxy_loc_arr: combined connected component location array for feature x and y
     data_mod = data.copy()
     if (CCx is None) or (CCy is None):
-        if len([i for i in data_mod.obs.columns if str(i).startswith('CC_1')])<2:
+        if 'CC_1_'+feat_name_x not in data_mod.obs.columns or 'CC_1_'+feat_name_y not in data_mod.obs.columns:
             CCxy_loc_arr, num_ccx = split_connected_loc(data_mod, feat_name_x=feat_name_x, feat_name_y=feat_name_y, return_loc_arr=True)
         else:
-            column_names_x = [i for i in data_mod.obs.columns if ('CC_' in str(i)) and (feat_name_x in str(i))]
-            column_names_y = [i for i in data_mod.obs.columns if ('CC_' in str(i)) and (feat_name_y in str(i))]
+            column_names_x = [i for i in data_mod.obs.columns if str(i).startswith('CC_') and str(i).endswith(feat_name_x)]
+            column_names_y = [i for i in data_mod.obs.columns if str(i).startswith('CC_') and str(i).endswith(feat_name_y)]
             CCxy_loc_arr = data_mod.obs.loc[:,(column_names_x+column_names_y)].to_numpy()
             num_ccx = len(column_names_x)   
     else:
@@ -104,7 +104,7 @@ def jaccard_and_connected_loc_(data, CCx=None, CCy=None, feat_name_x="", feat_na
 
 
 
-def jaccard_top_n_connected_loc_(data, CCx=None, CCy=None, feat_name_x='', feat_name_y='', top_n = 5):
+def jaccard_top_n_connected_loc_(data, CCx=None, CCy=None, feat_name_x='', feat_name_y='', top_n = 2):
     '''
     ## Calculate top n connected component locations for given feature pairs x and y
     ### Input
@@ -141,7 +141,8 @@ def jaccard_top_n_connected_loc_(data, CCx=None, CCy=None, feat_name_x='', feat_
                                 ['_'.join(('CC',str(i+1),str(feat_name_y))) for i in range(CCxy_loc_arr.shape[1]-num_ccx)]
     CCxy_df = pd.DataFrame(CCxy_loc_arr, columns=column_names).astype(int)
     CCxy_df.index = data_mod.obs.index
-    data_mod.obs = pd.concat([data_mod.obs, CCxy_df], axis=1)
+    # data_mod.obs = pd.concat([data_mod.obs, CCxy_df], axis=1)
+    data_mod.obs = data_mod.obs.join(CCxy_df, lsuffix='_prev')
     
     # Flatten int jaccard array and find the top n indexes and corresponding jaccard indices
     top_n_flat_index = np.argsort(-J, axis=None)[:top_n]
@@ -151,7 +152,7 @@ def jaccard_top_n_connected_loc_(data, CCx=None, CCy=None, feat_name_x='', feat_
     # Raise error if top_n value is larger than total number of J
     if top_n > np.count_nonzero(J):
         raise ValueError("'top_n' is larger than the non-zero J number")
-    
+
     for num, (i, j) in enumerate(J_top_n_arg):
         locx = data_mod.obs['_'.join(('CC',str(i+1),str(feat_name_x)))]
         locy = data_mod.obs['_'.join(('CC',str(j+1),str(feat_name_y)))]

@@ -1,9 +1,11 @@
 import os
+from tkinter.ttk import Style
 import scanpy as sc
 import pandas as pd
 import numpy as np
 from scipy import sparse
 from .jaccard import jaccard_top_n_connected_loc_
+from .jaccard import jaccard_and_connected_loc_
 
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
@@ -16,10 +18,10 @@ simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 
 def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
-                                  top_n = 5, spot_size=1, alpha_img=0.8, alpha = 0.8, 
+                                  top_n = 5, ncol = 4, spot_size=1, alpha_img=0.8, alpha = 0.8, 
                                   fig_size = (5,5), batch_colname='batch', batch_name='0', batch_library_dict=None,
                                   image_res = 'hires', adjust_image = True, border = 500, 
-                                  title_fontsize=20, legend_fontsize=None, title = 'J', return_axis=False,
+                                  title_fontsize=20, legend_fontsize=None, title = '', return_axis=False,
                                   save = False, path = os.getcwd(), save_name_add = '', dpi=150):
     '''
     ## Visualizing top n connected component x and y showing maximum Jaccard index in Visium dataset
@@ -27,6 +29,7 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
     data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
     feat_name_x, feat_name_y: name of the feature x and y
     top_n: the number of the top connected component pairs withthe  highest Jaccard similarity index
+    ncol: number of columns to visualize top n CCs
     spot_size: size of the spot visualized on the tissue
     alpha_img: transparency of the tissue, alpha: transparency of the colored spot
 
@@ -51,9 +54,9 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
     axs: matplotlib axis for the plot
     '''
     # Set figure parameters
-    xsize = ((top_n-1)//4)+1
-    if xsize > 1: ysize = 4
-    else: ysize = ((top_n-1)%4)+1
+    xsize = ((top_n-1)//ncol)+1
+    if xsize > 1: ysize = ncol
+    else: ysize = ((top_n-1)%ncol)+1
     sc.set_figure_params(figsize=(fig_size[0]*ysize, fig_size[1]*xsize), facecolor='white', frameon=False)
     fig, axs = plt.subplots(xsize, ysize, tight_layout=True, squeeze=False)
 
@@ -88,32 +91,32 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
     else:
         crop_coord_list = None
 
-    # Define the colormap with three different colors: for CC locations of feature x, feature_y and intersecting regions
-    colormap = ["#FBBC05","#4285F4","#34A853"]
-
     for i in range(top_n):
         # Remove the spots not included in the top connected components
         data_mod_xy = data_mod[(data_mod.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))] != 0), :].copy()
         
-        # Make categorical variables
-        data_mod_xy.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))] = \
-            data_mod_xy.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))].astype('category')
-
+        # Define the colormap with three different colors: for CC locations of feature x, feature_y and intersecting regions
+        colormap_mod = [["#A2E1CA","#FBBC05","#4285F4","#34A853"][index] for index in data_mod_xy.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))].cat.categories]
         sc.pl.spatial(data_mod_xy, img_key=image_res,
                       color='_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y)),
                       library_id=batch_library_dict[batch_name],
-                      palette = colormap, size=spot_size, alpha = alpha,
+                      palette = colormap_mod, size=spot_size, alpha = alpha,
                       alpha_img = alpha_img,
-                      legend_loc = None, ax = axs[i//4][i%4], show = False, crop_coord = crop_coord_list)
-        axs[i//4][i%4].set_title(feat_name_x+' & '+feat_name_y+'\n'+title+" top "+str(i+1)+" CCxy", fontsize = title_fontsize)
-        axs[i//4][i%4].add_artist(offsetbox.AnchoredText(f'J = {J_top_n[i]:.3}', loc='upper right', frameon=False, prop=dict(size = fig_size[0]*2)))
+                      legend_loc = None, ax = axs[i//ncol][i%ncol], show = False, crop_coord = crop_coord_list)
+        axs[i//ncol][i%ncol].set_title(feat_name_x+' & '+feat_name_y+title+'\n'+"top "+str(i+1)+" CCxy", fontsize = title_fontsize)
+        axs[i//ncol][i%ncol].add_artist(offsetbox.AnchoredText(f'J_local = {J_top_n[i]:.3f}', loc='upper right', bbox_to_anchor=(1, 1), bbox_transform=axs[i//ncol][i%ncol].transAxes,
+                                                         frameon=False, prop=dict(size = fig_size[0]*2.5)))
+
+    if top_n < xsize*ysize: 
+        for i in range(top_n, xsize*ysize): axs[i//ncol][i%ncol].axis('off')
     
     # Add legend to the figure
+    colormap = ["#FBBC05","#4285F4","#34A853"]
     category_label = [feat_name_x,feat_name_y,"Overlap"]
     for index, label in enumerate(category_label):
         plt.scatter([], [], c=colormap[index], label=label)
     if legend_fontsize is None: legend_fontsize=fig_size[1]*xsize*2
-    plt.legend(frameon=False, loc='center left',  bbox_to_anchor=(1, 0.5), ncol=1, fontsize=legend_fontsize)#, bbox_transform = plt.gcf().transFigure)
+    plt.legend(frameon=False, loc='center left', bbox_to_anchor=(1, 0.5), ncol=1, fontsize=legend_fontsize)#, bbox_transform = plt.gcf().transFigure)
 
     if save: fig.savefig(os.path.join(path,'_'.join(('Visium_J_top',str(top_n),
                                                     feat_name_x,feat_name_y+save_name_add+'.png'))), dpi=dpi)
@@ -124,10 +127,11 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
 
 
 def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
-                             spot_size=1, alpha_img=0.8, alpha = 0.8, 
+                             spot_size=1, alpha_img=0.8, alpha = 0.8, vis_jaccard=True,
                              fig_size=(5,5), batch_colname='batch', batch_name='0', batch_library_dict=None,
                              image_res = 'hires', adjust_image = True, border = 500, 
-                             title_fontsize=20, legend_fontsize=None, title = 'Locations of', return_axis=False,
+                             title_fontsize=20, legend_fontsize=None, title = 'Locations of', 
+                             return_axis=False, axis = None,
                              save = False, path = os.getcwd(), save_name_add = '', dpi = 150):
     '''
     ## Visualizing all connected components x and y on tissue in Visium dataset
@@ -135,11 +139,9 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
     ### Input  
     data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
     feat_name_x, feat_name_y: name of the feature x and y
-    vis_intersect_only: 
-        visualize only the intersecting spots for connected components of featrure x and y
-        -> spots are color-coded by connected component in x
     spot_size: size of the spot visualized on the tissue
     alpha_img: transparency of the tissue, alpha: transparency of the colored spot
+    vis_jaccard: whether to visualize jaccard index on right corner of the plot
 
     fig_size: size of the drawn figure
     batch_colname: column name to categorize the batch in .obs
@@ -153,8 +155,9 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
     border: border of the spots around the spots; this information is used to adjust the image
     title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
     return_axis: whether to return the plot axis
+    axis: matplotlib axes for plotting single image
 
-    save: whether to save of figure, path: saving path
+    save: whether to save of figure (when not axis is not given), path: saving path
     save_name_add: additional name to be added in the end of the filename
     dpi: dpi for image
 
@@ -190,13 +193,16 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
             ((1 * ((cc_loc_x_df != 0) & (cc_loc_y_df == 0))) + \
             (2 * ((cc_loc_x_df == 0) & (cc_loc_y_df != 0))) + \
             (3 * ((cc_loc_x_df != 0) & (cc_loc_y_df != 0)))).astype('category')
-        
+    # Calculate J_comp between the two feature pairs
+    J_comp = jaccard_and_connected_loc_(data_mod_x, feat_name_x=feat_name_x, feat_name_y=feat_name_y, J_index=True,
+                                        return_mode='jaccard', return_sep_loc=False)
     # Remove the spots not included in the top connected components
     data_mod_x = data_mod_x[data_mod_x.obs['Over'] != 0, :].copy()
             
     # Set figure parameters
-    sc.set_figure_params(figsize=fig_size, facecolor='white', frameon=False)
-    fig, axs = plt.subplots(1, 1, tight_layout=True)
+    sc.set_figure_params(facecolor='white', frameon=False)
+    if axis is None: fig, axs = plt.subplots(1, 1, figsize=fig_size, tight_layout=True)
+    else: axs = axis
     
     # Adjust the image to contain the whole slide image
     if adjust_image:
@@ -216,41 +222,45 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
                   library_id=batch_library_dict[batch_name],
                   palette = colormap, size=spot_size, alpha_img = alpha_img,
                   alpha = alpha, legend_loc = None, ax = axs, show = False, crop_coord = crop_coord_list)
-    axs.set_title(feat_name_x+' & '+feat_name_y+'\n'+title+" CC", fontsize = title_fontsize)
+    axs.set_title(feat_name_x+' & '+feat_name_y+title, fontsize = title_fontsize)
+    if vis_jaccard: axs.add_artist(offsetbox.AnchoredText(f'J_comp = {J_comp:.3f}', loc='upper right', bbox_to_anchor=(1, 1), bbox_transform=axs.transAxes,
+                                                          frameon=False, prop=dict(size = fig_size[1]*2.5)))
     
     # Add legend to the figure
     for index, label in enumerate(category_label):
         axs.scatter([], [], c=colormap[index], label=label)
     if legend_fontsize is None: legend_fontsize=fig_size[1]*2
-    plt.legend(frameon=False, loc='center left', bbox_to_anchor=(1, 0.5), ncol=1, fontsize=legend_fontsize)
+    axs.legend(frameon=False, loc='center left', bbox_to_anchor=(1, 0.5), ncol=1, fontsize=legend_fontsize)
     
-    if save: fig.savefig(os.path.join(path,
-                                    '_'.join(('Visium_loc_CCxy',feat_name_x,feat_name_y,save_name_add+'.png'))), dpi=dpi)
+    if (axs is None) and save: fig.savefig(os.path.join(path,
+                                '_'.join(('Visium_loc_CCxy',feat_name_x,feat_name_y,save_name_add+'.png'))), dpi=dpi)
 
     if return_axis: return axs
-    else: plt.show()
+    elif axis is None: plt.show()
 
 
 
-def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alpha = 0.8, vmax=None, vmin=None,
+def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alpha = 0.8, vmax=None, vmin=None, sort_labels=True,
                        fig_size = (5,5), title_fontsize = 20, legend_fontsize = None, title = None, 
-                       return_axis=False, save = False, path = os.getcwd(), save_name_add = '', dpi=150):
+                       return_axis=False, figure = None, axis = None, save = False, path = os.getcwd(), save_name_add = '', dpi=150):
     '''
     ## Visualizing spatial distribution of features in CosMx dataset
     ### Input
     data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
-    feat_name_x, feat_name_y: name of the feature x and y
+    feat_name: name of the feature to visualize
     colorlist: color list for the visualization of CC identity
     dot_size: size of the spot visualized on the tissue
     alpha: transparency of the colored spot
     vmax: maximum value in the colorbar; if None, it will automatically set the maximum value
     vmax: minimum value in the colorbar; if None, it will automatically set the minimum value
+    sort_labels: sort the category labels in alphanumeric order if the name of categorical feature is provided to 'feat_name'
 
     fig_size: size of the drawn figure
     title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
     return_axis: whether to return the plot axis
+    figure: matplotlib figure for plotting single image, axis: matplotlib axes for plotting single image
 
-    save: whether to save of figure, path: saving path
+    save: whether to save of figure (when not axis is not given), path: saving path
     save_name_add: additional name to be added in the end of the filename
     dpi: dpi for image
 
@@ -263,8 +273,9 @@ def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alph
     tsimg_col = tsimg[:,0]
 
     # Set figure parameters
-    sc.set_figure_params(figsize=fig_size, facecolor='white', frameon=False)
-    fig, axs = plt.subplots(1,1, tight_layout=True)
+    sc.set_figure_params(facecolor='white', frameon=False)
+    if axis is None or figure is None: fig, axs = plt.subplots(1,1, figsize=fig_size, tight_layout=True)
+    else: axs = axis; fig = figure
     if dot_size is None: dot_size = fig_size[1]/1.5
 
     if feat_name in data.var_names:
@@ -290,7 +301,7 @@ def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alph
         cbar.ax.tick_params(labelsize=legend_fontsize)
     else:
         # Factorize the data and draw sccater plot
-        factorize_data = pd.factorize(feat_data, sort=True)
+        factorize_data = pd.factorize(feat_data, sort=sort_labels)
         cats = factorize_data[1].tolist()
         if colorlist is None:
             colorlist = ["#a2e1ca", "#110f1f", "#f09bf1", "#02531d", "#3ba7e5", 
@@ -299,7 +310,8 @@ def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alph
                         "#fb7810", "#922eb1", "#9f6c3b", "#fe2b27","#8adc30", "#2e0d93", "#8de6c0", 
                         "#370e01", "#e8ced5", "#113630", "#1cf1a3", "#1e1e58", "#f09ede", "#48950f", 
                         "#a93aae", "#20f53d", "#8c1132", "#38b5fc", "#805f84", "#577cf5", "#e2d923", "#69ef7b","#1e0e76"]
-            cmap = colors.ListedColormap(colorlist)
+        if len(cats) < len(colorlist): colorlist = colorlist[:len(cats)]
+        cmap = colors.ListedColormap(colorlist)
         axs.scatter(tsimg_col, tsimg_row, s = dot_size**2, 
                     c = factorize_data[0], cmap = cmap, linewidth = 0, alpha=alpha, marker="s")
 
@@ -309,20 +321,22 @@ def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alph
         axs.legend(frameon=False, loc='center left', bbox_to_anchor=(1, 0.5), ncol=((len(cats)-1)//20)+1, fontsize=legend_fontsize)
 
     axs.axis('off')
-    if title is None: axs.set_title(str(feat_name), fontsize=title_fontsize)
-    else: axs.set_title(title + ' '+ str(feat_name), fontsize=title_fontsize)
+    if feat_name in data.var_names: add_param = ", style = 'italic'" # write in italics if the gene symbol is an input
+    else: add_param = ""
+    if title is None: eval("axs.set_title(str(feat_name), fontsize=title_fontsize"+add_param+")")
+    else: eval("axs.set_title(title + str(feat_name), fontsize=title_fontsize"+add_param+")")
 
-    if save: fig.savefig(os.path.join(path, '_'.join(('CosMx_spatial',feat_name,save_name_add+'.png'))), dpi=dpi)
+    if (axis is None or figure is None) and save: fig.savefig(os.path.join(path, '_'.join(('CosMx_spatial',feat_name,save_name_add+'.png'))), dpi=dpi)
     
     if return_axis: return axs
-    else: plt.show()
+    elif axis is None or figure is None: plt.show()
 
 
 
 def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
-                                 top_n = 5, dot_size=None, alpha = 0.8, 
+                                 top_n = 5, ncol=4, dot_size=None, alpha = 0.8, 
                                  fig_size = (5,5), title_fontsize = 20, legend_fontsize = None,
-                                 title = 'J', return_axis=False,
+                                 title = '', return_axis=False,
                                  save = False, path = os.getcwd(), save_name_add = '', dpi=150):
     '''
     ## Visualizing top n connected component x and y showing maximum Jaccard index in CosMx dataset
@@ -331,6 +345,7 @@ def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
     data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
     feat_name_x, feat_name_y: name of the feature x and y
     top_n: the number of the top connected component pairs withthe  highest Jaccard similarity index
+    ncol: number of columns to visualize the top n CCs
     dot_size: size of the spot visualized on the tissue
     alpha: transparency of the colored spot
 
@@ -351,9 +366,9 @@ def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
     tsimg_col = tsimg[:,0]
 
     # Set figure parameters
-    xsize = ((top_n-1)//4)+1
-    if xsize > 1: ysize = 4
-    else: ysize = ((top_n-1)%4)+1
+    xsize = ((top_n-1)//ncol)+1
+    if xsize > 1: ysize = ncol
+    else: ysize = ((top_n-1)%ncol)+1
     sc.set_figure_params(figsize=(fig_size[0]*ysize, fig_size[1]*xsize), facecolor='white', frameon=False)
     fig, axs = plt.subplots(xsize, ysize, tight_layout=True, squeeze=False)
 
@@ -363,29 +378,29 @@ def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
 
     # Define the colormap with three different colors: for CC locations of feature x, feature_y and intersecting regions
     colorlist = ["#A2E1CA","#FBBC05","#4285F4","#34A853"]
-    cmap = colors.ListedColormap(colorlist)
     if dot_size is None: dot_size = fig_size[0]/1.5
 
     for i in range(top_n):
-        # Make categorical variables
-        data_mod.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))] = \
-            data_mod.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))].astype('category')
-
         # Factorize the data and draw sccater plot
         factorize_data = pd.factorize(data_mod.obs['_'.join(('CCxy_top',str(i+1),feat_name_x,feat_name_y))], sort=True)
-        axs[i//4][i%4].scatter(tsimg_col, tsimg_row, s = dot_size**2, c = factorize_data[0], 
+        colorlist_mod = [["#A2E1CA","#FBBC05","#4285F4","#34A853"][index] for index in factorize_data[1]]
+        cmap = colors.ListedColormap(colorlist_mod)
+        axs[i//ncol][i%ncol].scatter(tsimg_col, tsimg_row, s = dot_size**2, c = factorize_data[0], 
                                 cmap = cmap, alpha=alpha, marker="s")
 
-        axs[i//4][i%4].axis('off')
-        axs[i//4][i%4].set_title(feat_name_x+' & '+feat_name_y+'\n'+title+" top "+str(i+1)+" CCxy", fontsize = title_fontsize)
-        axs[i//4][i%4].add_artist(offsetbox.AnchoredText(f'J = {J_top_n[i]:.3}', loc='upper right', frameon=False, prop=dict(size = fig_size[0]*2)))
+        axs[i//ncol][i%ncol].axis('off')
+        axs[i//ncol][i%ncol].set_title(feat_name_x+' & '+feat_name_y+title+'\n'+"top "+str(i+1)+" CCxy", fontsize = title_fontsize)
+        axs[i//ncol][i%ncol].add_artist(offsetbox.AnchoredText(f'J_local = {J_top_n[i]:.3f}', loc='upper left', bbox_to_anchor=(1, 1), bbox_transform=axs[i//ncol][i%ncol].transAxes,
+                                                        frameon=False, prop=dict(size = fig_size[0]*2.5)))
+    if top_n < xsize*ysize: 
+        for i in range(top_n, xsize*ysize): axs[i//ncol][i%ncol].axis('off')
         
     # Add legend to the figure
     category_label = ["Others",feat_name_x,feat_name_y,"Overlap"]
     for index, label in enumerate(category_label):
         plt.scatter([], [], c=colorlist[index], label=label)        
     if legend_fontsize is None: legend_fontsize=fig_size[1]*xsize*2
-    plt.legend(frameon=False, loc='center left',  bbox_to_anchor=(1, 0.5), ncol=1, fontsize=legend_fontsize)
+    plt.legend(frameon=False, loc='center left', bbox_to_anchor=(1, 0.5), ncol=1, fontsize=legend_fontsize)
 
     if save: fig.savefig(os.path.join(path,'_'.join(('Visium_J_top',str(top_n),
                                                     feat_name_x,feat_name_y+save_name_add+'.png'))), dpi=dpi)
@@ -396,9 +411,9 @@ def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
 
 
 def vis_all_connected_cosmx(data, feat_name_x='', feat_name_y='',
-                            dot_size=None, alpha = 0.8, 
+                            dot_size=None, alpha = 0.8, vis_jaccard=True,
                             fig_size=(5,5), title_fontsize = 20, legend_fontsize = None, 
-                            title = 'Locations of', return_axis=False,
+                            title = 'Locations of', return_axis=False, axis = None,
                             save = False, path = os.getcwd(), save_name_add = '', dpi = 150):
     '''
     ## Visualizing all connected components x and y on tissue in CosMx dataset
@@ -408,12 +423,14 @@ def vis_all_connected_cosmx(data, feat_name_x='', feat_name_y='',
     feat_name_x, feat_name_y: name of the feature x and y
     dot_size: size of the spot visualized on the tissue
     alpha: transparency of the colored spot
+    vis_jaccard: whether to visualize jaccard index on right corner of the plot
 
     fig_size: size of the drawn figure
     title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
     return_axis: whether to return the plot axis
+    axis: matplotlib axes for plotting single image
 
-    save: whether to save of figure, path: saving path
+    save: whether to save of figure (when not axis is not given), path: saving path
     save_name_add: additional name to be added in the end of the filename
     dpi: dpi for image
 
@@ -432,8 +449,9 @@ def vis_all_connected_cosmx(data, feat_name_x='', feat_name_y='',
     else:
         raise ValueError("No CC location data for the given 'feat_x' and 'feat_y'")
 
-    sc.set_figure_params(figsize=fig_size, facecolor='white', frameon=False)
-    fig, axs = plt.subplots(1,1, tight_layout=True, figsize=fig_size)
+    sc.set_figure_params(facecolor='white', frameon=False)
+    if axis is None: fig, axs = plt.subplots(1,1, figsize=fig_size, tight_layout=True)
+    else: axs = axis
 
     # Calculate overlapping locations
     data_mod = data.copy()
@@ -458,12 +476,17 @@ def vis_all_connected_cosmx(data, feat_name_x='', feat_name_y='',
         axs.scatter([], [], c=colorlist[index], label=label)        
     if legend_fontsize is None: legend_fontsize=fig_size[1]*2
     axs.legend(frameon=False, loc='center left', bbox_to_anchor=(1, 0.5), ncol=1, fontsize=legend_fontsize)
-
     axs.axis('off')
-    axs.set_title(feat_name_x+' & '+feat_name_y+'\n'+title+" CC", fontsize = title_fontsize)
+    axs.set_title(feat_name_x+' & '+feat_name_y+title, fontsize = title_fontsize)
 
-    if save:
+    if vis_jaccard: 
+        J_comp = jaccard_and_connected_loc_(data_mod, feat_name_x=feat_name_x, feat_name_y=feat_name_y, J_index=True,
+                                            return_mode='jaccard', return_sep_loc=False)
+        axs.add_artist(offsetbox.AnchoredText(f'J_comp = {J_comp:.3f}', loc='upper left', bbox_to_anchor=(1, 1), bbox_transform=axs.transAxes,
+                                              frameon=False, prop=dict(size = fig_size[1]*2.5)))
+
+    if (axis is None) and save:
         fig.savefig(os.path.join(path,'_'.join(('CosMx_loc_CCxy',feat_name_x,feat_name_y,save_name_add+'.png'))), dpi=dpi)
     
     if return_axis: return axs
-    else: plt.show()
+    elif axis is None: plt.show()

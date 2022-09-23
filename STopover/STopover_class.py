@@ -187,7 +187,7 @@ class STopover_visium(AnnData):
         return J_result
 
 
-    def jaccard_top_n_connected_loc(self, feat_name_x='', feat_name_y='', top_n = 5):
+    def jaccard_top_n_connected_loc(self, feat_name_x='', feat_name_y='', top_n = 2):
         '''
         ## Calculate top n connected component locations for given feature pairs x and y
         ### Input
@@ -198,13 +198,14 @@ class STopover_visium(AnnData):
         AnnData with intersecting location of top n connected components between feature x and y saved in metadata(.obs)
         -> top 1, 2, 3, ... intersecting connected component locations are separately saved
         '''
-        adata = jaccard_top_n_connected_loc_(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y, top_n = top_n)
+        adata, J_top_n = jaccard_top_n_connected_loc_(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y, top_n = top_n)
+        adata.uns['_'.join(('J_top',feat_name_x, feat_name_y, str(top_n)))] = J_top_n
         # Initialize the object
         self.reinitalize(sp_adata=adata, lognorm=False, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count+1)
 
 
     def vis_jaccard_top_n_pair(self, feat_name_x='', feat_name_y='',
-                               top_n = 5, spot_size=1, alpha_img=0.8, alpha = 0.8, 
+                               top_n = 2, ncol = 2, spot_size=1, alpha_img=0.8, alpha = 0.8, 
                                fig_size = (10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
                                image_res = 'hires', adjust_image = True, border = 500, 
                                title_fontsize = 20, legend_fontsize = None, title = 'J', return_axis=False,
@@ -214,6 +215,7 @@ class STopover_visium(AnnData):
         ### Input
         feat_name_x, feat_name_y: name of the feature x and y
         top_n: the number of the top connected component pairs withthe  highest Jaccard similarity index
+        ncol: number of columns to visualize top n CCs
         spot_size: size of the spot visualized on the tissue
         alpha_img: transparency of the tissue, alpha: transparency of the colored spot
 
@@ -238,7 +240,7 @@ class STopover_visium(AnnData):
         axs: matplotlib axis for the plot
         '''
         axis = vis_jaccard_top_n_pair_visium(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
-                                             top_n=top_n, spot_size=spot_size, alpha_img=alpha_img, alpha=alpha, 
+                                             top_n=top_n, ncol = ncol, spot_size=spot_size, alpha_img=alpha_img, alpha=alpha, 
                                              fig_size=fig_size, batch_colname=batch_colname, batch_name=batch_name, batch_library_dict=batch_library_dict,
                                              image_res=image_res, adjust_image=adjust_image, border=border, 
                                              title_fontsize=title_fontsize, legend_fontsize = legend_fontsize, title=title, return_axis=return_axis,
@@ -247,10 +249,10 @@ class STopover_visium(AnnData):
     
 
     def vis_all_connected(self, feat_name_x='', feat_name_y='',
-                          spot_size=1, alpha_img=0.8, alpha = 0.8, 
+                          spot_size=1, alpha_img=0.8, alpha = 0.8, vis_jaccard=True,
                           fig_size=(10,10), batch_colname='batch', batch_name='0', batch_library_dict=None,
                           image_res = 'hires', adjust_image = True, border = 500, 
-                          title_fontsize=20, legend_fontsize = None, title = 'Locations of', return_axis=False,
+                          title_fontsize=20, legend_fontsize = None, title = 'Locations of CC', return_axis=False, axis = None, 
                           save = False, save_name_add = '', dpi = 150):
         '''
         ## Visualizing all connected components x and y on tissue  
@@ -258,6 +260,7 @@ class STopover_visium(AnnData):
         feat_name_x, feat_name_y: name of the feature x and y
         spot_size: size of the spot visualized on the tissue
         alpha_img: transparency of the tissue, alpha: transparency of the colored spot
+        vis_jaccard: whether to visualize jaccard index on right corner of the plot
 
         fig_size: size of the drawn figure
         batch_colname: column name to categorize the batch in .obs
@@ -271,6 +274,7 @@ class STopover_visium(AnnData):
         border: border of the spots around the spots; this information is used to adjust the image
         fontsize: size of the figure title, title: title of the figure
         return_axis: whether to return the plot axis
+        axis: matplotlib axes for plotting single image
 
         save: whether to save of figure, path: saving path
         save_name_add: additional name to be added in the end of the filename
@@ -280,10 +284,10 @@ class STopover_visium(AnnData):
         axs: matplotlib axis for the plot
         '''
         axis = vis_all_connected_visium(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
-                                        spot_size=spot_size, alpha_img = alpha_img, alpha = alpha, 
+                                        spot_size=spot_size, alpha_img = alpha_img, alpha = alpha, vis_jaccard = vis_jaccard,
                                         fig_size = fig_size, batch_colname=batch_colname, batch_name = batch_name, batch_library_dict=batch_library_dict,
                                         image_res = image_res, adjust_image = adjust_image, border = border, 
-                                        title_fontsize=title_fontsize, legend_fontsize = legend_fontsize, title = title, return_axis=return_axis,
+                                        title_fontsize=title_fontsize, legend_fontsize = legend_fontsize, title = title, return_axis=return_axis, axis = axis,
                                         save = save, path = self.save_path, save_name_add = save_name_add, dpi = dpi)
         return axis
 
@@ -452,23 +456,25 @@ class STopover_cosmx(STopover_visium):
         return adata_xy
 
 
-    def vis_spatial_cosmx(self, feat_name='', colorlist = None, dot_size=None, alpha = 0.8, vmax = None, vmin = None,
+    def vis_spatial_cosmx(self, feat_name='', colorlist = None, dot_size=None, alpha = 0.8, vmax = None, vmin = None, sort_labels=True,
                           fig_size = (10,10), title_fontsize = 20, legend_fontsize = None, title = None, 
-                          return_axis=False, save = False, save_name_add = '', dpi=150):
+                          return_axis=False, figure = None, axis = None, save = False, save_name_add = '', dpi=150):
         '''
         ## Visualizing spatial distribution of features in CosMx dataset
         ### Input
         data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
-        feat_name_x, feat_name_y: name of the feature x and y
+        feat_name: name of the feature to visualize
         colorlist: color list for the visualization of CC identity
         dot_size: size of the spot visualized on the tissue
         alpha: transparency of the colored spot
         vmax: maximum value in the colorbar; if None, it will automatically set the maximum value
         vmax: minimum value in the colorbar; if None, it will automatically set the minimum value
+        sort_labels: sort the category labels in alphanumeric order if the name of categorical feature is provided to 'feat_name'
 
         fig_size: size of the drawn figure
         title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
         return_axis: whether to return the plot axis
+        figure: matplotlib figure for plotting single image, axis: matplotlib axes for plotting single image
 
         save: whether to save of figure, path: saving path
         save_name_add: additional name to be added in the end of the filename
@@ -477,14 +483,14 @@ class STopover_cosmx(STopover_visium):
         ### Outut
         axs: matplotlib axis for the plot
         '''
-        axis = vis_spatial_cosmx_(data=self, feat_name=feat_name, colorlist = colorlist, dot_size=dot_size, alpha = alpha, vmax=vmax, vmin=vmin,
+        axis = vis_spatial_cosmx_(data=self, feat_name=feat_name, colorlist = colorlist, dot_size=dot_size, alpha = alpha, vmax=vmax, vmin=vmin, sort_labels=sort_labels,
                                   fig_size = fig_size, title_fontsize = title_fontsize, legend_fontsize = legend_fontsize, title = title, 
-                                  return_axis=return_axis, save = save, path = self.save_path, save_name_add = save_name_add, dpi=dpi)
+                                  return_axis=return_axis, figure=figure, axis = axis, save = save, path = self.save_path, save_name_add = save_name_add, dpi=dpi)
         return axis
 
 
     def vis_jaccard_top_n_pair(self, feat_name_x='', feat_name_y='',
-                               top_n = 5, dot_size=None, alpha = 0.8, 
+                               top_n = 2, ncol = 2, dot_size=None, alpha = 0.8, 
                                fig_size = (10,10), title_fontsize = 20, legend_fontsize = None,
                                title = 'J', return_axis=False,
                                save = False, save_name_add = '', dpi=150):
@@ -495,6 +501,7 @@ class STopover_cosmx(STopover_visium):
         data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
         feat_name_x, feat_name_y: name of the feature x and y
         top_n: the number of the top connected component pairs withthe  highest Jaccard similarity index
+        ncol: number of columns to visualize top n CCs
         dot_size: size of the spot visualized on the tissue
         alpha: transparency of the colored spot
 
@@ -510,7 +517,7 @@ class STopover_cosmx(STopover_visium):
         axs: matplotlib axis for the plot
         '''
         axis = vis_jaccard_top_n_pair_cosmx(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
-                                             top_n = top_n, dot_size= dot_size, alpha = alpha, 
+                                             top_n = top_n, ncol = ncol, dot_size= dot_size, alpha = alpha, 
                                              fig_size = fig_size, title_fontsize = title_fontsize, legend_fontsize = legend_fontsize,
                                              title = title, return_axis=return_axis,
                                              save = save, path = self.save_path, save_name_add = save_name_add, dpi=dpi)
@@ -518,9 +525,9 @@ class STopover_cosmx(STopover_visium):
     
 
     def vis_all_connected(self, feat_name_x='', feat_name_y='',
-                          dot_size=None, alpha = 0.8, 
+                          dot_size=None, alpha = 0.8, vis_jaccard=True,
                           fig_size=(10,10), title_fontsize = 20, legend_fontsize = None, 
-                          title = 'Locations of', return_axis=False,
+                          title = 'Locations of CC', return_axis = False, axis = None,
                           save = False, save_name_add = '', dpi = 150):
         '''
         ## Visualizing all connected components x and y on tissue in CosMx dataset
@@ -530,10 +537,12 @@ class STopover_cosmx(STopover_visium):
         feat_name_x, feat_name_y: name of the feature x and y
         dot_size: size of the spot visualized on the tissue
         alpha: transparency of the colored spot
+        vis_jaccard: whether to visualize jaccard index on right corner of the plot
 
         fig_size: size of the drawn figure
         title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
         return_axis: whether to return the plot axis
+        axis: matplotlib axes for plotting single image
 
         save: whether to save of figure, path: saving path
         save_name_add: additional name to be added in the end of the filename
@@ -543,8 +552,8 @@ class STopover_cosmx(STopover_visium):
         axs: matplotlib axis for the plot
         '''
         axis = vis_all_connected_cosmx(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
-                                       dot_size=dot_size, alpha = alpha, 
+                                       dot_size=dot_size, alpha = alpha, vis_jaccard = vis_jaccard,
                                        fig_size= fig_size, title_fontsize = title_fontsize, legend_fontsize = legend_fontsize, 
-                                       title = title, return_axis = return_axis,
+                                       title = title, return_axis = return_axis, axis = axis,
                                        save = save, path = self.save_path, save_name_add = save_name_add, dpi = dpi)
         return axis

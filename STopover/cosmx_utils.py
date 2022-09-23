@@ -129,6 +129,7 @@ def read_cosmx(load_path, sc_adata=None, sc_celltype_colname = 'celltype', sc_no
 
     ## Normalize the transcript number in each grid by total count in the cell
     tx_by_cell_grid = tx_coord_all.groupby([fov_colname,cell_id_colname,'array_col','array_row',transcript_colname])[transcript_colname].count().to_frame('count')
+    # Calculate fraction of each transcript (transcript count in a cell/total count in a cell) in a grid
     tx_by_cell_grid['tx_fx_by_grid'] = tx_by_cell_grid['count'] / tx_by_cell_grid.groupby([fov_colname,cell_id_colname]).transform('sum')['count']
     # Generate normalization count matrix by grid
     grid_tx_count = tx_by_cell_grid.pivot_table(index=['array_col','array_row'], columns=transcript_colname, values='tx_fx_by_grid', aggfunc=['sum']).fillna(0)
