@@ -2,8 +2,8 @@ from setuptools import setup, find_packages
 
 setup(
     name = "STopover",
-    version = "1.0.5",
-    description = "Graph filtration for extraction of spatial overlap patterns in spatial transcriptomic data",
+    version = "1.0.6",
+    description = "Tool to discover spatial colocalization and interaction in the tumor microenvironment using graph filtration in spatial transcriptomics data",
     url = "https://github.com/bsungwoo/STopover.git",
     author = "Sungwoo Bae, Hyekyoung Lee, Hongyoon Choi",
     packages = find_packages(include=['STopover', 'STopover.*']),

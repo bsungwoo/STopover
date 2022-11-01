@@ -1,14 +1,11 @@
-# STopover: graph filtration for extraction of spatial overlap patterns in spatial transcriptomic data
+# STopover: method to capture spatial colocalization and interaction in the TME using graph filtration in spatial transcriptomics data  
 
 ## Python environment for implementation     
 ### Install conda environment and add jupyter kernel  
 ```Plain Text  
   conda create -n STopover python=3.8
   conda activate STopover
-  ## For the private code (using token)
-  pip install git+https://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@github.com/bsungwoo/STopover.git
-  ## For the public code
-  (pip install git+https://github.com/bsungwoo/STopover.git)
+  pip install git+https://github.com/bsungwoo/STopover.git
   python -m ipykernel install --user --name STopover --display-name STopover
 ```
 ### Dependency (python)  
@@ -77,7 +74,7 @@ sp_adata = STopover_cosmx(sp_load_path='~/CosMx dir', sc_adata=sc_adata, sc_cell
 ```
 #### 1-3. Calculate cell type-specific gene expression in CosMx dataset  
 ```Plain Text
-sp_adata_Tumor, sp_adata_cd8 = sp_adata.celltype_specific_adata(cell_types=['Tumor','Cytotoxic CD8+ T'])
+sp_adata_tumor, sp_adata_cd8 = sp_adata.celltype_specific_adata(cell_types=['Tumor','Cytotoxic CD8+ T'])
 ```
 
 ### 2. Calculate topological similarity between the two values (expression or metadata)  

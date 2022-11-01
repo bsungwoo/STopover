@@ -20,7 +20,7 @@ class STopover_visium(AnnData):
     sp_load_path: path to 10X-formatted Visium dataset directory or .h5ad Anndata object
     lognorm: whether to lognormalize (total count normalize and log transform) the count matrix saved in adata.X
     min_size: minimum size of a connected component
-    fwhm: full width half maximum value for the gaussian smoothing kernal
+    fwhm: full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent spots
     thres_per: lower percentile value threshold to remove the connected components
     save_path: path to save the data files
     J_count: number of jaccard similarity calculations after the first definition
@@ -72,6 +72,7 @@ class STopover_visium(AnnData):
         self.thres_per = thres_per
         self.save_path = save_path
         self.J_count = J_count
+        self.spatial_type = 'visium'
     
 
     def reinitalize(self, sp_adata, lognorm, min_size, fwhm, thres_per, save_path, J_count):
@@ -132,7 +133,7 @@ class STopover_visium(AnnData):
             feat_pairs = feat_pairs[['ligand_gene_symbol','receptor_gene_symbol']]
             print("Using CellTalkDB ligand-receptor dataset")
         
-        df, adata = topological_sim_pairs_(data=self, feat_pairs=feat_pairs, group_list=group_list, group_name=group_name,
+        df, adata = topological_sim_pairs_(data=self, feat_pairs=feat_pairs, spatial_type=self.spatial_type, group_list=group_list, group_name=group_name,
                                             fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per, num_workers=num_workers)
         # save jaccard index result in .uns of anndata
         adata.uns['_'.join(('J',str(J_result_name),str(self.J_count)))] = df
@@ -313,7 +314,7 @@ class STopover_cosmx(STopover_visium):
     x_bins, y_bins: number of bins to divide the CosMx SMI data (for grid-based aggregation)
 
     min_size: minimum size of a connected component
-    fwhm: full width half maximum value for the gaussian smoothing kernal
+    fwhm: full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent grid
     thres_per: lower percentile value threshold to remove the connected components
     save_path: path to save the data files
     J_count: number of jaccard similarity calculations after the first definition
@@ -381,6 +382,7 @@ class STopover_cosmx(STopover_visium):
         self.sc_celltype_colname = sc_celltype_colname
         self.transcript_colname = transcript_colname
         self.sc_norm_total = sc_norm_total
+        self.spatial_type = 'cosmx'
 
 
     def reinitalize(self,sp_adata, lognorm=False, sc_celltype_colname=None, sc_norm_total=None, x_bins=None, y_bins=None, 

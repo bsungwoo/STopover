@@ -12,8 +12,8 @@ from .topological_comp import topological_comp_res
 from .jaccard import jaccard_composite
 
 
-def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_label',
-                                 fwhm=2.5, min_size=5, thres_per=30, num_workers=os.cpu_count()):
+def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list=None, group_name='Layer_label',
+                           fwhm=2.5, min_size=5, thres_per=30, num_workers=os.cpu_count()):
     '''
     ## Calculate Jaccard index for given feature pairs and return dataframe
         -> if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
@@ -26,13 +26,14 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
         -> (C and D) should be same data format: all in metadata (.obs.columns) or all in gene names(.var.index)
         -> If the data format is not same the majority of the data format will be automatically searched
         -> and the rest of the features with different format will be removed from the pairs
+    spatial_type: type of the spatial data (should be either 'visium' or 'cosmx')
 
     group_name: 
         the column name for the groups saved in metadata(.obs)
         spatial data is divided according to the group and calculate topological overlap separately in each group
     group_list: list of the name of groups
 
-    fwhm: full width half maximum value for the gaussian smoothing kernal
+    fwhm: full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent spots/grids
     min_size: minimum size of a connected component
     thres_per: lower percentile value threshold to remove the connected components
     num_workers: number of workers to use for multiprocessing
@@ -50,6 +51,9 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
     else: raise ValueError("'feat_pairs' should be pandas dataframe or list")
     if df_feat.shape[1] != 2:
         raise ValueError("'feat_pairs' should be list format: [('A','B'),('C','D')] or equivalent pandas dataframe")
+    
+    # Check the format of the data type
+    if spatial_type not in ['visium', 'cosmx']: raise ValueError("'spatial_type' should be either 'visium' or 'cosmx'")
 
     # Add group name if no group name is provided
     if group_list is None:
@@ -59,7 +63,7 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
         if group_name not in data.obs.columns:
             raise ValueError("'group_name' not found in columns of 'data.obs'")
         if not (set(group_list) <= set(data.obs[group_name])):
-            raise ValueError("Some elements in 'group_list' not found in 'data.obs["+str(group_name)+"]'")
+            raise ValueError("Some elements in 'group_list' not found in 'data.obs['"+str(group_name)+"']'")
         data = data[data.obs[group_name].isin(group_list)].copy()
     
     # Determine the type of the data
@@ -86,14 +90,10 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
         raise ValueError("None of the second features in the pairs are found")
     
     # Filter the dataframe to contain only the existing data
-    if obs_tf_x and obs_tf_y:
-        df_feat = df_feat[obs_data_x & obs_data_y].reset_index(drop=True)
-    elif (not obs_tf_x) and obs_tf_y:
-        df_feat = df_feat[var_data_x & obs_data_y].reset_index(drop=True)
-    elif obs_tf_x and (not obs_tf_y):
-        df_feat = df_feat[obs_data_x & var_data_y].reset_index(drop=True)
-    else:
-        df_feat = df_feat[var_data_x & var_data_y].reset_index(drop=True)
+    if obs_tf_x and obs_tf_y: df_feat = df_feat[obs_data_x & obs_data_y].reset_index(drop=True)
+    elif (not obs_tf_x) and obs_tf_y: df_feat = df_feat[var_data_x & obs_data_y].reset_index(drop=True)
+    elif obs_tf_x and (not obs_tf_y): df_feat = df_feat[obs_data_x & var_data_y].reset_index(drop=True)
+    else: df_feat = df_feat[var_data_x & var_data_y].reset_index(drop=True)
 
     # Repeat the process for the proivded group_list
     for num, i in enumerate(group_list):
@@ -178,8 +178,12 @@ def topological_sim_pairs_(data, feat_pairs, group_list=None, group_name='Layer_
         df_top_total = pd.concat([df_top_total, df_tmp], axis=0)
 
         # Add the location information of the spots
-        try: loc_list.append(data_sub.obs.loc[:,['array_col','array_row']].to_numpy())
+        try: df_loc = data_sub.obs.loc[:,['array_col','array_row']]
         except: raise ValueError("'data' should contain coordinates of spots in .obs as 'array_col' and 'array_row'")
+        if spatial_type == 'visium':
+            df_loc['array_row'] = df_loc['array_row']*np.sqrt(3)*0.5
+            df_loc['array_col'] = df_loc['array_col']*0.5
+        loc_list.append(df_loc.to_numpy())
         
     # Make dataframe for the list of feature 1 and 2 across the groups
     column_names = [group_name,'Feat_1','Feat_2','Avg_1','Avg_2','Index_1','Index_2']

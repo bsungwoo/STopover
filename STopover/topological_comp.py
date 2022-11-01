@@ -11,7 +11,7 @@ import numpy as np
 from numpy.matlib import repmat
 import pandas as pd
 from scipy import sparse
-from math import pi
+from scipy.spatial.distance import pdist, squareform
 from anndata import AnnData
 
 import os
@@ -26,27 +26,22 @@ def extract_adjacency_spatial(loc, fwhm=2.5):
     ## Compute adjacency matrix and gaussian mask based on spatial locations of spots/grids
     ### Input
     loc: p*2 array for x, y coordinates of p spots/grids
-    fwhm: full width half maximum for Gaussian smoothing
+    fwhm: full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent spots/grids
 
     ### Output
     A: Spatial adjacency matrix for spots/grids based on the given x,y coordiantes
     mask: Gaussian smoothing mask for the features based on x,y coordinates of spots/grids
     '''
-    p = loc.shape[0]
     sigma = fwhm / 2.355
     # adjacency matrix between spots
-    A = np.zeros((p,p))
-    for i in range(p):
-        for j in range(i, p):
-            A[i,j] = np.sqrt(sum((loc[i,:] - loc[j,:])**2))
-            A[j,i] = A[i,j]
-     
+    A = np.round(squareform(pdist(loc, 'euclidean')), 4)
+    # Replace the distance to infinity in case when it exceeds fwhm
     A[np.where(A > fwhm)] = np.inf
 
     # Smoothing x and y
     # Gaussian smoothing with zero padding
     # adjacency matrix was actually distance matrix
-    mask = 1/(2*pi*sigma**2)*np.exp(-(A**2)/(2*sigma**2))
+    mask = 1/(2*np.pi*sigma**2)*np.exp(-(A**2)/(2*sigma**2))
         
     # really estimate adjacency matrix (convert to 1, 0)
     min_distance = np.min(A[np.nonzero(A)])
