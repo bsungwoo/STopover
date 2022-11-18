@@ -1,4 +1,4 @@
-# STopover: method to capture spatial colocalization and interaction in the TME using graph filtration in spatial transcriptomics data  
+# STopover: capturing spatial colocalization and interaction in the TME using topological analysis in spatial transcriptomics data  
 
 ## Python environment for implementation     
 ### Install conda environment and add jupyter kernel  
@@ -28,7 +28,7 @@ app.main()
 ```
 
 ## Code Example  
-Please refer to Visium_sample.ipynb & SMI_sample files
+Please refer to Visium_sample.ipynb & SMI_sample.ipynb files
 
 ### 1. Create STopover object  
 sp_adata: Anndata object for VisiumCosMx SMI data with count matrix ('raw') in .X  
