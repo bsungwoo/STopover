@@ -310,6 +310,7 @@ def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alph
                         "#fb7810", "#922eb1", "#9f6c3b", "#fe2b27","#8adc30", "#2e0d93", "#8de6c0", 
                         "#370e01", "#e8ced5", "#113630", "#1cf1a3", "#1e1e58", "#f09ede", "#48950f", 
                         "#a93aae", "#20f53d", "#8c1132", "#38b5fc", "#805f84", "#577cf5", "#e2d923", "#69ef7b","#1e0e76"]
+        if len(cats) > len(colorlist): colorlist = colorlist * ((len(cats)-1)//len(colorlist)) + colorlist[:len(cats)%len(colorlist)]
         if len(cats) < len(colorlist): colorlist = colorlist[:len(cats)]
         cmap = colors.ListedColormap(colorlist)
         axs.scatter(tsimg_col, tsimg_row, s = dot_size**2, 

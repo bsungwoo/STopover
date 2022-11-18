@@ -288,7 +288,7 @@ def save_connected_loc_data_(data, save_format='h5ad', path = os.getcwd(), filen
     ### Output: None
     '''
     if len([i for i in data.obs.columns if str(i).startswith('Comb_CC')])<2:
-        raise ValueError("'data' does not contain location of connected components")
+        print("'data' does not contain location of connected components")
 
     if save_format=="h5ad":
         data_mod = data.copy()
