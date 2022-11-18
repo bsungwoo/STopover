@@ -415,8 +415,10 @@ class STopover_cosmx(STopover_visium):
         grid_tx_count_celltype: list of celltype specific grid-based count matrix as sparse.csr_matrix format
         '''
         grid_count_celltype_list = celltype_specific_mat(sp_adata=self, tx_info_name='tx_by_cell_grid', celltype_colname=self.sc_celltype_colname, 
-                                                            cell_types=cell_types, transcript_colname=self.transcript_colname, sc_norm_total=self.sc_norm_total)
-
+                                                         cell_types=cell_types, transcript_colname=self.transcript_colname, sc_norm_total=self.sc_norm_total)
+        grid_count_celltype_list = [STopover_cosmx(celltype_stopover, sc_celltype_colname=self.sc_celltype_colname, 
+                                    sc_norm_total=self.sc_norm_total, x_bins=self.x_bins, y_bins=self.y_bins, 
+                                    min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path) for celltype_stopover in grid_count_celltype_list]                                                
         return grid_count_celltype_list
 
 

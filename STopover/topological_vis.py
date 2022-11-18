@@ -1,5 +1,4 @@
 import os
-from tkinter.ttk import Style
 import scanpy as sc
 import pandas as pd
 import numpy as np
@@ -119,7 +118,7 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
     plt.legend(frameon=False, loc='center left', bbox_to_anchor=(1, 0.5), ncol=1, fontsize=legend_fontsize)#, bbox_transform = plt.gcf().transFigure)
 
     if save: fig.savefig(os.path.join(path,'_'.join(('Visium_J_top',str(top_n),
-                                                    feat_name_x,feat_name_y+save_name_add+'.png'))), dpi=dpi)
+                                                    feat_name_x,feat_name_y))+save_name_add+'.png'), dpi=dpi)
 
     if return_axis: return axs
     else: plt.show()
@@ -233,7 +232,7 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
     axs.legend(frameon=False, loc='center left', bbox_to_anchor=(1, 0.5), ncol=1, fontsize=legend_fontsize)
     
     if (axs is None) and save: fig.savefig(os.path.join(path,
-                                '_'.join(('Visium_loc_CCxy',feat_name_x,feat_name_y,save_name_add+'.png'))), dpi=dpi)
+                                '_'.join(('Visium_loc_CCxy',feat_name_x,feat_name_y))+save_name_add+'.png'), dpi=dpi)
 
     if return_axis: return axs
     elif axis is None: plt.show()
@@ -327,7 +326,7 @@ def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alph
     if title is None: eval("axs.set_title(str(feat_name), fontsize=title_fontsize"+add_param+")")
     else: eval("axs.set_title(title + str(feat_name), fontsize=title_fontsize"+add_param+")")
 
-    if (axis is None or figure is None) and save: fig.savefig(os.path.join(path, '_'.join(('CosMx_spatial',feat_name,save_name_add+'.png'))), dpi=dpi)
+    if (axis is None or figure is None) and save: fig.savefig(os.path.join(path, '_'.join(('CosMx_spatial',feat_name))+save_name_add+'.png'), dpi=dpi)
     
     if return_axis: return axs
     elif axis is None or figure is None: plt.show()
@@ -404,7 +403,7 @@ def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
     plt.legend(frameon=False, loc='center left', bbox_to_anchor=(1, 0.5), ncol=1, fontsize=legend_fontsize)
 
     if save: fig.savefig(os.path.join(path,'_'.join(('Visium_J_top',str(top_n),
-                                                    feat_name_x,feat_name_y+save_name_add+'.png'))), dpi=dpi)
+                                                    feat_name_x,feat_name_y))+save_name_add+'.png'), dpi=dpi)
 
     if return_axis: return axs
     else: plt.show()
@@ -487,7 +486,7 @@ def vis_all_connected_cosmx(data, feat_name_x='', feat_name_y='',
                                               frameon=False, prop=dict(size = fig_size[1]*2.5)))
 
     if (axis is None) and save:
-        fig.savefig(os.path.join(path,'_'.join(('CosMx_loc_CCxy',feat_name_x,feat_name_y,save_name_add+'.png'))), dpi=dpi)
+        fig.savefig(os.path.join(path,'_'.join(('CosMx_loc_CCxy',feat_name_x,feat_name_y))+save_name_add+'.png'), dpi=dpi)
     
     if return_axis: return axs
     elif axis is None: plt.show()

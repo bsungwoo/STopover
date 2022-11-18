@@ -28,6 +28,8 @@ app.main()
 ```
 
 ## Code Example  
+Please refer to Visium_sample.ipynb & SMI_sample files
+
 ### 1. Create STopover object  
 sp_adata: Anndata object for VisiumCosMx SMI data with count matrix ('raw') in .X  
 sp_load_path: path to Visium/CosMx directory or '*.h5ad' file  
