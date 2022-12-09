@@ -145,14 +145,14 @@ def read_cosmx(load_path, sc_adata=None, sc_celltype_colname = 'celltype', sc_no
     ## Generate AnnData for the problem
     # Load expression matrix
     exp_mat = csv.read_csv(os.path.join(load_path, cell_exprmat_file_name)).to_pandas()
-    exp_mat = exp_mat[exp_mat[fov_colname] != 0].set_index([fov_colname,cell_id_colname])
+    exp_mat = exp_mat[exp_mat[cell_id_colname] != 0].set_index([fov_colname,cell_id_colname])
     # Generate cell barcodes for CosMx SMI data
     cell_names_expmat = exp_mat.index.to_frame()
     cell_names_expmat = (cell_names_expmat[fov_colname].astype(str) + '_' + cell_names_expmat[cell_id_colname].astype(str)).to_numpy()
     # Load CosMx SMI cell metadata
-    cell_meta = csv.read_csv(os.path.join(load_path, cell_metadata_file_name)).to_pandas().loc[:,[meta_xcoord_colname, meta_ycoord_colname]]
-    cell_meta.columns = ['array_col', 'array_row']
-    cell_meta = pd.concat([cell_meta, exp_mat.index.to_frame().reset_index(drop=True)], axis=1)
+    cell_meta = csv.read_csv(os.path.join(load_path, cell_metadata_file_name)).to_pandas().loc[:,[fov_colname,cell_id_colname,meta_xcoord_colname,meta_ycoord_colname]]
+    cell_meta.columns = [fov_colname,cell_id_colname,'array_col','array_row']
+    cell_meta = pd.merge(cell_meta, exp_mat.index.to_frame().reset_index(drop=True), on=[fov_colname,cell_id_colname], how='inner')
     # Generate CosMx SMI spatial anndata file
     sp_adata_cell = an(X = sparse.csr_matrix(exp_mat, dtype=np.float32), obs=cell_meta)
     sp_adata_cell.var_names = var_names
@@ -229,7 +229,7 @@ def celltype_specific_mat(sp_adata, tx_info_name='tx_by_cell_grid', celltype_col
         # Log transformation of grid based count and make sparse matrix
         grid_tx_count_celltype_ = (sc_norm_total*sparse.csr_matrix(grid_tx_count_celltype, dtype=np.float32)).log1p()
         # Create anndata for cell type specific count matrix
-        grid_adata_celltype = an(X=grid_tx_count_celltype_, obs=sp_adata.obs)
+        grid_adata_celltype = an(X=grid_tx_count_celltype_, obs=sp_adata.obs[['array_col','array_row']])
         grid_adata_celltype.var_names = grid_tx_count_celltype.columns.to_frame()[transcript_colname].to_numpy()
         grid_adata_celltype_list.append(grid_adata_celltype)
 
