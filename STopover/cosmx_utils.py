@@ -17,16 +17,16 @@ def annotate_cosmx(sp_adata, sc_adata=None, sc_norm_total=1e3,
                    sc_celltype_colname = 'celltype', fov_colname = 'fov', cell_id_colname='cell_ID', return_df=True):
     '''
     ## Annotate cells composing CosMx SMI data
-    
+
     ### Input
     sp_adata: CosMx SMI anndata with raw count matrix in .X
     sc_adata: single-cell reference anndata with raw count matrix in .X (cell type annotation of CosMx SMI data)
     sc_celltype_colname: column name for cell annotation of single-cell data (in .obs)
     return_format: whether to return cell annotation dataframe ('dataframe') or anndata file ('adata')
-    
+
     ### Output
     sp_adata: spatial anndata for cell-level CosMx expression data with cell annotation
-    return_df: whether to return pandas dataframe that summarizes cell type for each cell 
+    return_df: whether to return pandas dataframe that summarizes cell type for each cell
     '''
     # Normalize, log transform and scale spatial data
     sc.pp.normalize_total(sp_adata, target_sum=sc_norm_total, inplace=True)
@@ -54,7 +54,7 @@ def annotate_cosmx(sp_adata, sc_adata=None, sc_norm_total=1e3,
         sc_adata.obs[sc_celltype_colname] = sc_adata.obs[sc_celltype_colname].astype(object).fillna('nan')
         sc_adata.obs[sc_celltype_colname] = sc_adata.obs[sc_celltype_colname].astype('category')
 
-        # Scale single-cell and spatial data 
+        # Scale single-cell and spatial data
         sc.pp.scale(sc_adata, max_value=10)
         sc.pp.scale(sp_adata, max_value=10)
         # Perform cell label transfer from single-cell to CosMx data
@@ -72,14 +72,14 @@ def annotate_cosmx(sp_adata, sc_adata=None, sc_norm_total=1e3,
         # Data frame containing annotated cell types in CosMx SMI data
         df_celltype = sp_adata.obs.loc[:,[sc_celltype_colname,
                                           fov_colname,cell_id_colname]].set_index([fov_colname,cell_id_colname])
-        return sp_adata.raw.to_adata(), df_celltype 
+        return sp_adata.raw.to_adata(), df_celltype
     else:
         return sp_adata.raw.to_adata()
 
 
 
 def read_cosmx(load_path, sc_adata=None, sc_celltype_colname = 'celltype', sc_norm_total=1e3,
-               tx_file_name = 'tx_file.csv', cell_exprmat_file_name='exprMat_file.csv', cell_metadata_file_name='metadata_file.csv', 
+               tx_file_name = 'tx_file.csv', cell_exprmat_file_name='exprMat_file.csv', cell_metadata_file_name='metadata_file.csv',
                fov_colname = 'fov', cell_id_colname='cell_ID', tx_xcoord_colname='x_global_px', tx_ycoord_colname='y_global_px', transcript_colname='target',
                meta_xcoord_colname='CenterX_global_px', meta_ycoord_colname='CenterY_global_px',
                x_bins=100, y_bins=100):
@@ -107,7 +107,7 @@ def read_cosmx(load_path, sc_adata=None, sc_celltype_colname = 'celltype', sc_no
     else:
         if sc_celltype_colname not in sc_adata.obs.columns:
             print("Cell type annotation (sc_celltype_colname) not found in sc_adata.obs")
-        
+
     ## Read transcript information file
     start_time = time.time()
     tx_coord_all = csv.read_csv(os.path.join(load_path, tx_file_name)).to_pandas().loc[:,[fov_colname,cell_id_colname,
@@ -163,7 +163,7 @@ def read_cosmx(load_path, sc_adata=None, sc_celltype_colname = 'celltype', sc_no
 
     ## Annotation of cell-level CosMx SMI data
     sp_adata_cell, df_celltype = annotate_cosmx(sp_adata_cell, sc_adata, sc_norm_total=sc_norm_total,
-                                                sc_celltype_colname = sc_celltype_colname, 
+                                                sc_celltype_colname = sc_celltype_colname,
                                                 fov_colname = fov_colname, cell_id_colname=cell_id_colname, return_df=True)
     print("End of annotating CosMx cell-level anndata: %.2f seconds" % (time.time()-start_time))
 
@@ -190,7 +190,7 @@ def read_cosmx(load_path, sc_adata=None, sc_celltype_colname = 'celltype', sc_no
 
 
 
-def celltype_specific_mat(sp_adata, tx_info_name='tx_by_cell_grid', celltype_colname=None, cell_types=[''], 
+def celltype_specific_mat(sp_adata, tx_info_name='tx_by_cell_grid', celltype_colname=None, cell_types=[''],
                           transcript_colname='target', sc_norm_total=1e3):
     '''
     ## Return cell type specific transcript count matrix
@@ -207,14 +207,14 @@ def celltype_specific_mat(sp_adata, tx_info_name='tx_by_cell_grid', celltype_col
     '''
     if tx_info_name not in sp_adata.uns.keys():
         raise ValueError("'sp_adata.uns' should contain 'tx_info_name' which explains transcript information by cells and grids")
-    
+
     tx_by_cell_grid = sp_adata.uns[tx_info_name]
     if celltype_colname not in tx_by_cell_grid.columns:
         raise ValueError("'celltype_colname' should be among the column names of dataframe: 'tx_info_name'")
     # Boolean pandas series for the celltype inclusion
-    if not (set(cell_types) <= set(tx_by_cell_grid[celltype_colname].cat.categories)): 
+    if not (set(cell_types) <= set(tx_by_cell_grid[celltype_colname].cat.categories)):
         raise ValueError("Some of the cell types in 'cell_types' are not found in the sp_data")
-    
+
     # Subset the transcript information by cell type
     grid_adata_celltype_list = []
     for celltype in cell_types:
