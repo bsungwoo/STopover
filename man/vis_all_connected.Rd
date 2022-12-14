@@ -33,7 +33,7 @@ vis_all_connected(
 )
 }
 \arguments{
-\item{sp_object}{spatial data (Seurat object) to be used in calculating topological similarity}
+\item{sp_object}{spatial data (Seurat object) to be used}
 
 \item{feat_name_x}{name of the feature x (default = '')}
 

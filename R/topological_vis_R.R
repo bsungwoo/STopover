@@ -1,6 +1,6 @@
 #' Visualizing all connected components of feature x and y
 #' @description Visualizing connected component locations of feature x and feature y on the tissue and return plots or save plots if designated
-#' @param sp_object spatial data (Seurat object) to be used in calculating topological similarity
+#' @param sp_object spatial data (Seurat object) to be used
 #' @param feat_name_x name of the feature x (default = '')
 #' @param feat_name_y name of the feature y (default = '')
 #' @param celltype_x cell type corresponding to the first feature if the cell type specific data is provided (default = NULL)
@@ -40,8 +40,8 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
   # Check the data type
   spatial_type <- ifelse(class(sp_object@images$image)[1]=="SlideSeq","cosmx","visium")
   # Convert the feature name if cell type specific data is provided
-  if (!is.null(celltype_x)){feat_name_x <- paste0(celltype_x,"_",feat_name_x)}
-  if (!is.null(celltype_y)){feat_name_y <- paste0(celltype_y,"_",feat_name_y)}
+  if (!is.null(celltype_x) & spatial_type=='cosmx'){feat_name_x <- paste0(celltype_x,"_",feat_name_x)}
+  if (!is.null(celltype_y) & spatial_type=='cosmx'){feat_name_y <- paste0(celltype_y,"_",feat_name_y)}
   # Aggregate all connected components and save overlapping regions separately
   sp_object[['Over']] = factor(((1 * ((sp_object[[paste0('Comb_CC_',feat_name_x)]] != 0) &
                                         (sp_object[[paste0('Comb_CC_',feat_name_y)]] == 0))) +
@@ -156,7 +156,7 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
 
 #' Visualizing top connected components with the highest local Jaccard index
 #' @description Visualizing top connected component locations of feature x and feature y having the highest local Jaccard index and return plots or save plots if designated
-#' @param sp_object spatial data (Seurat object) to be used in calculating topological similarity
+#' @param sp_object spatial data (Seurat object) to be used
 #' @param feat_name_x name of the feature x (default = '')
 #' @param feat_name_y name of the feature y (default = '')
 #' @param celltype_x cell type corresponding to the first feature if the cell type specific data is provided (default = NULL)
@@ -197,11 +197,11 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
                                    fig_width=5, fig_height=5){
   if (length(slide_name) > 1){stop("'slide_name' should be one element of names(sp_object@images)")}
   if (!slide_name %in% names(sp_object@images)){stop("'slide_name' should be among names(sp_object@images)")}
-  # Convert the feature name if cell type specific data is provided
-  if (!is.null(celltype_x)){feat_name_x <- paste0(celltype_x,"_",feat_name_x)}
-  if (!is.null(celltype_y)){feat_name_y <- paste0(celltype_y,"_",feat_name_y)}
   # Check the data type
   spatial_type <- ifelse(class(sp_object@images$image)[1]=="SlideSeq","cosmx","visium")
+  # Convert the feature name if cell type specific data is provided
+  if (!is.null(celltype_x) & spatial_type=='cosmx'){feat_name_x <- paste0(celltype_x,"_",feat_name_x)}
+  if (!is.null(celltype_y) & spatial_type=='cosmx'){feat_name_y <- paste0(celltype_y,"_",feat_name_y)}
 
   # Define the 'batch' column according to the slide names: names(sp_object@images)
   df_image_all <- data.frame()
