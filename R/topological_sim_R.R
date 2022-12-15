@@ -11,23 +11,23 @@
 #'   \item (C and D) should be same data format: all in metadata (.obs.columns) or all in gene names (.var.index).
 #'   \item If the data format is not same the majority of the data format will be automatically searched and the rest of the features with different format will be removed from the pairs (default = '.').
 #' }
+#' @param use_lr_db whether to use list of features in CellTalkDB L-R database (default = F)
+#' @param lr_db_species select species to utilize in CellTalkDB database (default = 'human')
+#' @param min_size minimum size of a connected component: number of spots/grids (default = 20)
+#' @param fwhm full width half maximum value for the Gaussian smoothing kernel as the multiple of the central distance between the adjacent spots (default = 2.5)
+#' @param thres_per lower percentile value threshold to remove the connected components (default = 30)
 #' @param conda.env.name name of the conda environment to use for STopover analysis (default = 'STopover')
 #' @param assay assay to extract sparse matrix in Seurat object (default = 'Spatial')
 #' @param slot slot to extract sparse matrix in Seurat object (default = 'data': expecting lognormalized matrix in 'data')
 #' @param lognorm whether to lognormalize the sparse matrix in the slot before calculating topological similarity (default = F)
-#' @param min_size minimum size of a connected component: number of spots/grids (default = 20)
-#' @param fwhm full width half maximum value for the Gaussian smoothing kernel as the multiple of the central distance between the adjacent spots (default = 2.5)
-#' @param thres_per lower percentile value threshold to remove the connected components (default = 30)
-#' @param use_lr_db whether to use list of features in CellTalkDB L-R database (default = F)
-#' @param lr_db_species select species to utilize in CellTalkDB database (default = 'human')
 #' @param J_result_name the name of the jaccard index data file name (default = 'result')
 #' @return spatial data (Seurat object) with connected component location described as integers in metadata (meta.data)
 #' @export
 topological_similarity <- function(sp_object, feat_pairs=data.frame(),
+                                   use_lr_db=F, lr_db_species='human',
+                                   min_size=20, fwhm=2.5, thres_per=30,
                                    conda.env.name="STopover",
                                    assay='Spatial', slot='data', lognorm=F,
-                                   min_size=20, fwhm=2.5, thres_per=30,
-                                   use_lr_db=F, lr_db_species='human',
                                    J_result_name='result'){
   if (dim(feat_pairs)[2]!=2){stop("There should be two columns in 'feat_pairs'")}
   # Check the data type
@@ -44,9 +44,9 @@ topological_similarity <- function(sp_object, feat_pairs=data.frame(),
   # Preprocess spatial data and run topological analysis
   try({
     if (spatial_type=="cosmx"){
-      stopover_object <- STopover$STopover_cosmx(sp_adata=adata_sp, min_size=20, fwhm=2.5, thres_per=30)
+      stopover_object <- STopover$STopover_cosmx(sp_adata=adata_sp, min_size=min_size, fwhm=fwhm, thres_per=thres_per)
     } else {
-      stopover_object <- STopover$STopover_visium(sp_adata=adata_sp, min_size=20, fwhm=2.5, thres_per=30)
+      stopover_object <- STopover$STopover_visium(sp_adata=adata_sp, min_size=min_size, fwhm=fwhm, thres_per=thres_per)
     }
     group_list <- names(sp_object@images)
     if (length(group_list)==1){group_list <- list(group_list)}
@@ -83,6 +83,11 @@ topological_similarity <- function(sp_object, feat_pairs=data.frame(),
 #'   \item (C and D) should be same data format: all in metadata (.obs.columns) or all in gene names (.var.index).
 #'   \item If the data format is not same the majority of the data format will be automatically searched and the rest of the features with different format will be removed from the pairs (default = '.').
 #' }
+#' @param use_lr_db whether to use list of features in CellTalkDB L-R database (default = F)
+#' @param lr_db_species select species to utilize in CellTalkDB database (default = 'human')
+#' @param min_size minimum size of a connected component: number of spots/grids (default = 20)
+#' @param fwhm full width half maximum value for the Gaussian smoothing kernel as the multiple of the central distance between the adjacent spots (default = 2.5)
+#' @param thres_per lower percentile value threshold to remove the connected components (default = 30)
 #' @param conda.env.name name of the conda environment to use for STopover analysis (default = 'STopover')
 #' @param assay assay to extract sparse matrix in Seurat object (default = 'Spatial')
 #' @param slot slot to extract sparse matrix in Seurat object (default = 'data': expecting lognormalized matrix in 'data')
@@ -94,23 +99,19 @@ topological_similarity <- function(sp_object, feat_pairs=data.frame(),
 #' @param assay assay to extract sparse matrix in Seurat object while calculating topological similarity between cell types in visium dataset (default = 'Spatial')
 #' @param slot slot to extract sparse matrix in Seurat object while calculating topological similarity between cell types in visium dataset (default = 'data')
 #' @param lognorm whether to lognormalize the sparse matrix in the slot before calculating topological similarity in visium dataset (default = F)
-#' @param min_size minimum size of a connected component: number of spots/grids (default = 20)
-#' @param fwhm full width half maximum value for the Gaussian smoothing kernel as the multiple of the central distance between the adjacent spots (default = 2.5)
-#' @param thres_per lower percentile value threshold to remove the connected components (default = 30)
-#' @param use_lr_db whether to use list of features in CellTalkDB L-R database (default = F)
-#' @param lr_db_species select species to utilize in CellTalkDB database (default = 'human')
 #' @param J_result_name the name of the jaccard index data file name (default = 'result')
 #' @return spatial data (Seurat object) with connected component location described as integers in metadata (meta.data)
 #' @export
 topological_similarity_celltype_pair <- function(sp_object, celltype_x='',celltype_y='',
                                                  feat_pairs=data.frame(),
+                                                 use_lr_db=F, lr_db_species='human',
+                                                 min_size=20, fwhm=2.5, thres_per=30,
                                                  conda.env.name='STopover',
                                                  fov_colname = 'fov', cell_id_colname='cell_ID',
                                                  celltype_colname='celltype', transcript_colname='target',
                                                  sc_norm_total=1e3,
                                                  assay='Spatial', slot='data',lognorm=F,
-                                                 min_size=20, fwhm=2.5, thres_per=30,
-                                                 use_lr_db=F, lr_db_species='human', J_result_name='result'){
+                                                 J_result_name='result'){
   spatial_type <- class(sp_object@images$image)[1]
   if (dim(feat_pairs)[2]!=2){stop("There should be two columns in 'feat_pairs'")}
   # Install and load environment

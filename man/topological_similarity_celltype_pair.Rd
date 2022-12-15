@@ -9,6 +9,11 @@ topological_similarity_celltype_pair(
   celltype_x = "",
   celltype_y = "",
   feat_pairs = data.frame(),
+  use_lr_db = F,
+  lr_db_species = "human",
+  min_size = 20,
+  fwhm = 2.5,
+  thres_per = 30,
   conda.env.name = "STopover",
   fov_colname = "fov",
   cell_id_colname = "cell_ID",
@@ -18,11 +23,6 @@ topological_similarity_celltype_pair(
   assay = "Spatial",
   slot = "data",
   lognorm = F,
-  min_size = 20,
-  fwhm = 2.5,
-  thres_per = 30,
-  use_lr_db = F,
-  lr_db_species = "human",
   J_result_name = "result"
 )
 }
@@ -44,6 +44,16 @@ topological_similarity_celltype_pair(
 \item If the data format is not same the majority of the data format will be automatically searched and the rest of the features with different format will be removed from the pairs (default = '.').
 }}
 
+\item{use_lr_db}{whether to use list of features in CellTalkDB L-R database (default = F)}
+
+\item{lr_db_species}{select species to utilize in CellTalkDB database (default = 'human')}
+
+\item{min_size}{minimum size of a connected component: number of spots/grids (default = 20)}
+
+\item{fwhm}{full width half maximum value for the Gaussian smoothing kernel as the multiple of the central distance between the adjacent spots (default = 2.5)}
+
+\item{thres_per}{lower percentile value threshold to remove the connected components (default = 30)}
+
 \item{conda.env.name}{name of the conda environment to use for STopover analysis (default = 'STopover')}
 
 \item{fov_colname}{column name for barcodes corresponding to fov (default = 'fov')}
@@ -61,16 +71,6 @@ topological_similarity_celltype_pair(
 \item{slot}{slot to extract sparse matrix in Seurat object while calculating topological similarity between cell types in visium dataset (default = 'data')}
 
 \item{lognorm}{whether to lognormalize the sparse matrix in the slot before calculating topological similarity in visium dataset (default = F)}
-
-\item{min_size}{minimum size of a connected component: number of spots/grids (default = 20)}
-
-\item{fwhm}{full width half maximum value for the Gaussian smoothing kernel as the multiple of the central distance between the adjacent spots (default = 2.5)}
-
-\item{thres_per}{lower percentile value threshold to remove the connected components (default = 30)}
-
-\item{use_lr_db}{whether to use list of features in CellTalkDB L-R database (default = F)}
-
-\item{lr_db_species}{select species to utilize in CellTalkDB database (default = 'human')}
 
 \item{J_result_name}{the name of the jaccard index data file name (default = 'result')}
 }
