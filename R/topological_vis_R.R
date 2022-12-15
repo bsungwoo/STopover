@@ -149,7 +149,8 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
   if (save){ggplot2::ggsave(file.path(save_path,
                                       paste0(paste(c(spatial_type,'loc_CCxy',feat_name_x,feat_name_y),collapse="_"),
                                              save_name_add, '.png')),
-                            height=fig_height*slide_nrow, width=fig_width*slide_ncol, dpi=dpi, bg = "white")}
+                            height=fig_height*slide_nrow, width=fig_width*slide_ncol, dpi=dpi, bg = "white",
+                            units = "cm", limitsize=F)}
   if (return_plot){return(p_mod)}
 }
 
@@ -280,7 +281,8 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
   if (save){ggplot2::ggsave(file.path(save_path,
                                       paste0(paste(c(spatial_type,slide_name,'J_top',top_n,feat_name_x,feat_name_y),collapse="_"),
                                              save_name_add,'.png')),
-                            height=fig_height*slide_nrow, width=fig_width*slide_ncol, dpi=dpi, bg = "white")}
+                            height=fig_height*slide_nrow, width=fig_width*slide_ncol, dpi=dpi, bg = "white",
+                            units = "cm", limitsize=F)}
   if (return_plot){
     if (return_sp_object) {
       try(Seurat::Idents(sp_object) <- "seurat_clusters")
