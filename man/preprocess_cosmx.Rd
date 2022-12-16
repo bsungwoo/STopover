@@ -21,10 +21,7 @@ preprocess_cosmx(
   meta_xcoord_colname = "CenterX_global_px",
   meta_ycoord_colname = "CenterY_global_px",
   x_bins = 100,
-  y_bins = 100,
-  min_size = 20,
-  fwhm = 2.5,
-  thres_per = 30
+  y_bins = 100
 )
 }
 \arguments{
@@ -64,12 +61,6 @@ preprocess_cosmx(
 \item{x_bins}{number of bins to divide the CosMx SMI data (for grid-based aggregation) (default = 100)}
 
 \item{y_bins}{number of bins to divide the CosMx SMI data (for grid-based aggregation) (default = 100)}
-
-\item{min_size}{minimum size of a connected component (as the number of spots or grids) (default = 20)}
-
-\item{fwhm}{full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent grid (default = 2.5)}
-
-\item{thres_per}{lower percentile value threshold to remove the connected components (default = 30)}
 }
 \value{
 Seurat object that contains grid-based or cell-level log-normalized count matrix in 'counts & data' slots, coordinates in '@images$image', and transcript information in '@assays$Spatial@misc' (only for grid-based data)

@@ -23,7 +23,8 @@ topological_similarity_celltype_pair(
   assay = "Spatial",
   slot = "data",
   lognorm = F,
-  J_result_name = "result"
+  J_result_name = "result",
+  num_workers = NULL
 )
 }
 \arguments{
@@ -73,6 +74,11 @@ topological_similarity_celltype_pair(
 \item{lognorm}{whether to lognormalize the sparse matrix in the slot before calculating topological similarity in visium dataset (default = F)}
 
 \item{J_result_name}{the name of the jaccard index data file name (default = 'result')}
+
+\item{num_workers}{number of the workers for the multiprocessing (default = NULL)
+\itemize{
+\item if NULL, the maximum number of CPUs will be used for the multiprocessing
+}}
 }
 \value{
 spatial data (Seurat object) with connected component location described as integers in metadata (meta.data)

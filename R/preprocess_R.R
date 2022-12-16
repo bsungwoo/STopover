@@ -106,9 +106,6 @@ convert_to_anndata <- function(sp_object, features=NULL, conda.env.name='STopove
 #' @param meta_ycoord_colname column name for global x, y coordinates in cell-level metadata file (default = 'CenterY_global_px')
 #' @param x_bins number of bins to divide the CosMx SMI data (for grid-based aggregation) (default = 100)
 #' @param y_bins number of bins to divide the CosMx SMI data (for grid-based aggregation) (default = 100)
-#' @param min_size minimum size of a connected component (as the number of spots or grids) (default = 20)
-#' @param fwhm full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent grid (default = 2.5)
-#' @param thres_per lower percentile value threshold to remove the connected components (default = 30)
 #' @return Seurat object that contains grid-based or cell-level log-normalized count matrix in 'counts & data' slots, coordinates in '@images$image', and transcript information in '@assays$Spatial@misc' (only for grid-based data)
 #' @export
 preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='STopover',
@@ -120,8 +117,7 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
                              transcript_colname='target',
                              meta_xcoord_colname='CenterX_global_px',
                              meta_ycoord_colname='CenterY_global_px',
-                             x_bins=100, y_bins=100,
-                             min_size=20, fwhm=2.5, thres_per=30){
+                             x_bins=100, y_bins=100){
   # Install and load environment
   install_load_env(conda.env.name)
   ## Import anndata
@@ -150,8 +146,7 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
                                           transcript_colname=transcript_colname,
                                           meta_xcoord_colname=meta_xcoord_colname,
                                           meta_ycoord_colname=meta_ycoord_colname,
-                                          x_bins=as.integer(x_bins), y_bins=as.integer(y_bins),
-                                          min_size=as.integer(min_size), fwhm=fwhm, thres_per=thres_per)
+                                          x_bins=as.integer(x_bins), y_bins=as.integer(y_bins))
 
   # Create Seurat object for grid-based and cell-level cosmx data
   print("Creating Seurat object for grid-based and cell-level CosMx data")

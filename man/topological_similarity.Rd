@@ -16,7 +16,8 @@ topological_similarity(
   assay = "Spatial",
   slot = "data",
   lognorm = F,
-  J_result_name = "result"
+  J_result_name = "result",
+  num_workers = NULL
 )
 }
 \arguments{
@@ -52,6 +53,11 @@ topological_similarity(
 \item{lognorm}{whether to lognormalize the sparse matrix in the slot before calculating topological similarity (default = F)}
 
 \item{J_result_name}{the name of the jaccard index data file name (default = 'result')}
+
+\item{num_workers}{number of the workers for the multiprocessing (default = NULL)
+\itemize{
+\item if NULL, the maximum number of CPUs will be used for the multiprocessing
+}}
 }
 \value{
 spatial data (Seurat object) with connected component location described as integers in metadata (meta.data)

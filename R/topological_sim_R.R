@@ -21,6 +21,10 @@
 #' @param slot slot to extract sparse matrix in Seurat object (default = 'data': expecting lognormalized matrix in 'data')
 #' @param lognorm whether to lognormalize the sparse matrix in the slot before calculating topological similarity (default = F)
 #' @param J_result_name the name of the jaccard index data file name (default = 'result')
+#' @param num_workers number of the workers for the multiprocessing (default = NULL)
+#' \itemize{
+#'   \item if NULL, the maximum number of CPUs will be used for the multiprocessing
+#' }
 #' @return spatial data (Seurat object) with connected component location described as integers in metadata (meta.data)
 #' @export
 topological_similarity <- function(sp_object, feat_pairs=data.frame(),
@@ -28,7 +32,7 @@ topological_similarity <- function(sp_object, feat_pairs=data.frame(),
                                    min_size=20, fwhm=2.5, thres_per=30,
                                    conda.env.name="STopover",
                                    assay='Spatial', slot='data', lognorm=F,
-                                   J_result_name='result'){
+                                   J_result_name='result', num_workers=NULL){
   # if (dim(feat_pairs)[2]!=2){stop("There should be two columns in 'feat_pairs'")}
   # Check the data type
   spatial_type <- ifelse(class(sp_object@images$image)[1]=="SlideSeq","cosmx","visium")
@@ -46,15 +50,24 @@ topological_similarity <- function(sp_object, feat_pairs=data.frame(),
     if (spatial_type=="cosmx"){
       stopover_object <- STopover$STopover_cosmx(sp_adata=adata_sp, min_size=min_size, fwhm=fwhm, thres_per=thres_per)
     } else {
-      stopover_object <- STopover$STopover_visium(sp_adata=adata_sp, min_size=min_size, fwhm=fwhm, thres_per=thres_per)
+      stopover_object <- STopover$STopover_visium(sp_adata=adata_sp, min_size=min_size, fwhm=fwhm, thres_per=thres_per, lognorm=lognorm)
     }
     group_list <- names(sp_object@images)
     if (length(group_list)==1){group_list <- list(group_list)}
     # Calculate topological similarity between two features
-    stopover_object$topological_similarity(feat_pairs=feat_pairs,
-                                           use_lr_db=use_lr_db,
-                                           lr_db_species=lr_db_species,
-                                           group_name='batch', group_list=group_list)
+    if (is.null(num_workers)){
+      stopover_object$topological_similarity(feat_pairs=feat_pairs,
+                                             use_lr_db=use_lr_db,
+                                             lr_db_species=lr_db_species,
+                                             group_name='batch', group_list=group_list,
+                                             J_result_name = J_result_name)
+    } else {
+      stopover_object$topological_similarity(feat_pairs=feat_pairs,
+                                             use_lr_db=use_lr_db,
+                                             lr_db_species=lr_db_species,
+                                             group_name='batch', group_list=group_list,
+                                             J_result_name = J_result_name, num_workers = num_workers)
+    }
     # Saving CC location data into the metadata of spatial Seurat object
     cc_loc_df <- reticulate::py_to_r(stopover_object$obs)
     cc_loc_names <- grep(colnames(cc_loc_df), pattern = "Comb_CC_", value=T)
@@ -100,6 +113,10 @@ topological_similarity <- function(sp_object, feat_pairs=data.frame(),
 #' @param slot slot to extract sparse matrix in Seurat object while calculating topological similarity between cell types in visium dataset (default = 'data')
 #' @param lognorm whether to lognormalize the sparse matrix in the slot before calculating topological similarity in visium dataset (default = F)
 #' @param J_result_name the name of the jaccard index data file name (default = 'result')
+#' @param num_workers number of the workers for the multiprocessing (default = NULL)
+#' \itemize{
+#'   \item if NULL, the maximum number of CPUs will be used for the multiprocessing
+#' }
 #' @return spatial data (Seurat object) with connected component location described as integers in metadata (meta.data)
 #' @export
 topological_similarity_celltype_pair <- function(sp_object, celltype_x='',celltype_y='',
@@ -111,7 +128,7 @@ topological_similarity_celltype_pair <- function(sp_object, celltype_x='',cellty
                                                  celltype_colname='celltype', transcript_colname='target',
                                                  sc_norm_total=1e3,
                                                  assay='Spatial', slot='data',lognorm=F,
-                                                 J_result_name='result'){
+                                                 J_result_name='result', num_workers=NULL){
   spatial_type <- class(sp_object@images$image)[1]
   # if (dim(feat_pairs)[2]!=2){stop("There should be two columns in 'feat_pairs'")}
   # Install and load environment
@@ -124,16 +141,18 @@ topological_similarity_celltype_pair <- function(sp_object, celltype_x='',cellty
     # Calculate connected components for feature pairs
     sp_object_xy <- topological_similarity(sp_object,
                                            feat_pairs=feat_pairs,
+                                           use_lr_db = use_lr_db, lr_db_species = lr_db_species,
+                                           min_size=min_size, fwhm=fwhm, thres_per=thres_per,
                                            conda.env.name=conda.env.name,
                                            assay=assay, slot=slot, lognorm=lognorm,
-                                           min_size=min_size, fwhm=fwhm, thres_per=thres_per,
-                                           use_lr_db = use_lr_db, lr_db_species = lr_db_species)
+                                           J_result_name=J_result_name, num_workers=num_workers)
     # Calculate connected components for celltype pairs
     sp_object_celltype <- topological_similarity(sp_object,
                                                  feat_pairs=data.frame("X"=celltype_x, "Y"=celltype_y),
+                                                 min_size=min_size, fwhm=fwhm, thres_per=thres_per,
                                                  conda.env.name=conda.env.name,
                                                  assay=assay, slot=slot, lognorm=lognorm,
-                                                 min_size=min_size, fwhm=fwhm, thres_per=thres_per)
+                                                 J_result_name=J_result_name, num_workers=num_workers)
     df_over = (sp_object_celltype[[paste0('Comb_CC_',celltype_x)]] != 0) * (sp_object_celltype[[paste0('Comb_CC_',celltype_y)]] != 0)
     colnames(df_over) = "cell_over"
     sp_object_xy <- Seurat::AddMetaData(sp_object_xy, df_over)
@@ -173,9 +192,13 @@ topological_similarity_celltype_pair <- function(sp_object, celltype_x='',cellty
                                         min_size=min_size, fwhm=fwhm, thres_per=thres_per)
 
     # Calculate topological similarites between the pairs from the two cell types
-    adata_xy$topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species,
-                                    group_name='batch', group_list=NULL, J_result_name=J_result_name)
-
+    if (is.null(num_workers)){
+      adata_xy$topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species,
+                                      group_name='batch', group_list=NULL, J_result_name=J_result_name)
+    } else {
+      adata_xy$topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species,
+                                      group_name='batch', group_list=NULL, J_result_name=J_result_name, num_workers=num_workers)
+    }
     sparse_mtx <- reticulate::py_to_r(adata_xy$X$T)
     colnames(sparse_mtx) <- reticulate::py_to_r(adata_xy$obs_names$values)
     rownames(sparse_mtx) <- reticulate::py_to_r(adata_xy$var_names$values)
