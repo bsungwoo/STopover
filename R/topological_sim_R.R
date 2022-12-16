@@ -29,7 +29,7 @@ topological_similarity <- function(sp_object, feat_pairs=data.frame(),
                                    conda.env.name="STopover",
                                    assay='Spatial', slot='data', lognorm=F,
                                    J_result_name='result'){
-  if (dim(feat_pairs)[2]!=2){stop("There should be two columns in 'feat_pairs'")}
+  # if (dim(feat_pairs)[2]!=2){stop("There should be two columns in 'feat_pairs'")}
   # Check the data type
   spatial_type <- ifelse(class(sp_object@images$image)[1]=="SlideSeq","cosmx","visium")
   # Install and load environment
@@ -113,7 +113,7 @@ topological_similarity_celltype_pair <- function(sp_object, celltype_x='',cellty
                                                  assay='Spatial', slot='data',lognorm=F,
                                                  J_result_name='result'){
   spatial_type <- class(sp_object@images$image)[1]
-  if (dim(feat_pairs)[2]!=2){stop("There should be two columns in 'feat_pairs'")}
+  # if (dim(feat_pairs)[2]!=2){stop("There should be two columns in 'feat_pairs'")}
   # Install and load environment
   install_load_env(conda.env.name)
   ann <- reticulate::import('anndata', convert = FALSE)
