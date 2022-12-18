@@ -77,7 +77,9 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
   sp_object_mod <- sp_object
   Seurat::Idents(sp_object_mod) <- "Over"
   if (spatial_type=='visium'){
-    sp_object_mod <- subset(sp_object_mod, idents = c(feat_name_x, feat_name_y, "Over"))
+    # Subset the dataset to contain only the connected components in visium
+    cc_loc_levels <- setdiff(levels(sp_object_mod@meta.data[['Over']]),0)
+    sp_object_mod <- subset(sp_object_mod, idents = cc_loc_levels)
   }
   # Draw spatial cluster plot for connected component locations
   if (spatial_type=='cosmx'){alpha_img <- 0}
@@ -244,15 +246,17 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
     # Subset the object to highlight the top i connected component locations
     sp_object_mod <- sp_object
     Seurat::Idents(sp_object_mod) <- paste0('CCxy_top_',i)
-    if (spatial_type=='visium'){sp_object_mod <- subset(sp_object_mod, idents = c(feat_name_x, feat_name_y, "Over"))}
 
+    # Subset the dataset to contain only the connected components in visium
+    if (spatial_type=='visium'){
+      cc_loc_levels <- setdiff(levels(sp_object_mod@meta.data[[paste0('CCxy_top_',i)]]),0)
+      sp_object_mod <- subset(sp_object_mod, idents = cc_loc_levels)
+    } else {
+      cc_loc_levels <- levels(sp_object_mod@meta.data[[paste0('CCxy_top_',i)]])
+    }
     # Assign colors and labels to the spots/grids
     color.map <- c("0"="#A2E1CA","1"="#FBBC05","2"="#4285F4","3"="#34A853")
-    if (spatial_type=='visium') {
-      color.map <- color.map[as.character(setdiff(levels(sp_object_mod@meta.data[[paste0('CCxy_top_',i)]]),0))]
-    } else if (spatial_type=='cosmx') {
-      color.map <- color.map[as.character(levels(sp_object_mod@meta.data[[paste0('CCxy_top_',i)]]))]
-    }
+    color.map <- color.map[as.character(cc_loc_levels)]
     feature_map <- c("0"="Others","1"=feat_name_x,"2"=feat_name_y,"3"="Over")
     levels(sp_object_mod@meta.data[[paste0('CCxy_top_',i)]]) <- feature_map[as.character(levels(sp_object_mod@meta.data[[paste0('CCxy_top_',i)]]))]
 

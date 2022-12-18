@@ -46,5 +46,4 @@ patchwork 1.1.1
 ```
 
 ## R Code Example  
-Please refer to [README_R.md](https://github.com/bsungwoo/STopover/blob/dev/R/README_R.md)  
-
+Please refer to vignettes in the package  
