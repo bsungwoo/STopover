@@ -49,6 +49,16 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
                                           (sp_object[[paste0('Comb_CC_',feat_name_y)]] != 0))) +
                                   (3 * ((sp_object[[paste0('Comb_CC_',feat_name_x)]] != 0) &
                                           (sp_object[[paste0('Comb_CC_',feat_name_y)]] != 0)))))
+  # Assign colors and labels to the spots/grids
+  feature_map <- c("0"="Others","1"=feat_name_x,"2"=feat_name_y,"3"="Over")
+  levels(sp_object@meta.data[['Over']]) <- feature_map[as.character(levels(sp_object@meta.data[['Over']]))]
+  color.map <- c("#A2E1CA","#FBBC05","#4285F4","#34A853")
+  names(color.map) <- c("Others", feat_name_x, feat_name_y, "Over")
+  if (spatial_type=='visium') {
+    color.map <- color.map[as.character(setdiff(levels(sp_object@meta.data[['Over']]),"Others"))]
+  } else if (spatial_type=='cosmx') {
+    color.map <- color.map[as.character(levels(sp_object@meta.data[['Over']]))]
+  }
 
   # Define the 'batch' column according to the slide names: names(sp_object@images)
   df_image_all <- data.frame()
@@ -77,14 +87,12 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
   sp_object_mod <- sp_object
   Seurat::Idents(sp_object_mod) <- "Over"
   if (spatial_type=='visium'){
-    # Subset the dataset to contain only the connected components in visium
-    cc_loc_levels <- setdiff(levels(sp_object_mod@meta.data[['Over']]),0)
-    sp_object_mod <- subset(sp_object_mod, idents = cc_loc_levels)
+    sp_object_mod <- subset(sp_object_mod, idents = c(feat_name_x, feat_name_y, "Over"))
   }
   # Draw spatial cluster plot for connected component locations
   if (spatial_type=='cosmx'){alpha_img <- 0}
   p <- Seurat::SpatialPlot(sp_object_mod, alpha=alpha, image.alpha = alpha_img,
-                           label=F, crop=crop_image,
+                           label=F, crop=crop_image, cols = color.map,
                            pt.size.factor=dot_size,
                            combine=FALSE)
 
@@ -111,17 +119,6 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
     sp_object_mod <- subset(sp_object, idents = slide_names[i])
     comb_cc_loc <- c(paste0("Comb_CC_",feat_name_x), paste0("Comb_CC_",feat_name_y))
 
-    # Assign colors and labels to the spots/grids
-    sp_object_mod@meta.data[['Over']] <- factor(sp_object_mod@meta.data[['Over']])
-    color.map <- c("0"="#A2E1CA","1"="#FBBC05","2"="#4285F4","3"="#34A853")
-    if (spatial_type=='visium') {
-      color.map <- color.map[as.character(setdiff(levels(sp_object_mod@meta.data[['Over']]),0))]
-    } else if (spatial_type=='cosmx') {
-      color.map <- color.map[as.character(levels(sp_object_mod@meta.data[['Over']]))]
-    }
-    feature_map <- c("0"="Others","1"=feat_name_x,"2"=feat_name_y,"3"="Over")
-    levels(sp_object_mod@meta.data[['Over']]) <- feature_map[as.character(levels(sp_object_mod@meta.data[['Over']]))]
-
     # Convert CC location factor information into numeric values
     for (cc_element in comb_cc_loc){
       sp_object_mod@meta.data[[cc_element]] <- as.numeric(as.character(sp_object_mod@meta.data[[cc_element]]))
@@ -131,7 +128,6 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
 
     p[[i]] <- p[[i]] + ggplot2::ggtitle(paste0(slide_titles[[i]],
                                                feat_name_x,' & ',feat_name_y, add_title_text)) +
-      ggplot2::scale_fill_manual(values = as.character(color.map)) +
       ggplot2::theme(plot.title=ggplot2::element_text(size=title_fontsize,hjust=0.5),
                      legend.title=ggplot2::element_blank(), legend.position='right',
                      legend.text=ggplot2::element_text(size=legend_fontsize,hjust=0.5))
@@ -243,22 +239,20 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
     cc_loc_xy <- reticulate::py_to_r(adata_sp_mod$obs[[paste(c("CCxy_top",i,feat_name_x,feat_name_y),collapse = "_")]]$astype('int'))
     sp_object[[paste0('CCxy_top_',i)]] <- factor(cc_loc_xy)
 
+    # Assign colors and labels to the spots/grids
+    color.map <- c("0"="#A2E1CA","1"="#FBBC05","2"="#4285F4","3"="#34A853")
+    if (spatial_type=='visium') {
+      color.map <- color.map[as.character(setdiff(levels(sp_object@meta.data[[paste0('CCxy_top_',i)]]),0))]
+    } else if (spatial_type=='cosmx') {
+      color.map <- color.map[as.character(levels(sp_object@meta.data[[paste0('CCxy_top_',i)]]))]
+    }
+    feature_map <- c("0"="Others","1"=feat_name_x,"2"=feat_name_y,"3"="Over")
+    levels(sp_object@meta.data[[paste0('CCxy_top_',i)]]) <- feature_map[as.character(levels(sp_object@meta.data[[paste0('CCxy_top_',i)]]))]
+
     # Subset the object to highlight the top i connected component locations
     sp_object_mod <- sp_object
     Seurat::Idents(sp_object_mod) <- paste0('CCxy_top_',i)
-
-    # Subset the dataset to contain only the connected components in visium
-    if (spatial_type=='visium'){
-      cc_loc_levels <- setdiff(levels(sp_object_mod@meta.data[[paste0('CCxy_top_',i)]]),0)
-      sp_object_mod <- subset(sp_object_mod, idents = cc_loc_levels)
-    } else {
-      cc_loc_levels <- levels(sp_object_mod@meta.data[[paste0('CCxy_top_',i)]])
-    }
-    # Assign colors and labels to the spots/grids
-    color.map <- c("0"="#A2E1CA","1"="#FBBC05","2"="#4285F4","3"="#34A853")
-    color.map <- color.map[as.character(cc_loc_levels)]
-    feature_map <- c("0"="Others","1"=feat_name_x,"2"=feat_name_y,"3"="Over")
-    levels(sp_object_mod@meta.data[[paste0('CCxy_top_',i)]]) <- feature_map[as.character(levels(sp_object_mod@meta.data[[paste0('CCxy_top_',i)]]))]
+    if (spatial_type=='visium'){sp_object_mod <- subset(sp_object_mod, idents = c(feat_name_x, feat_name_y, "Over"))}
 
     # Draw spatial cluster plot for connected component locations
     p[[i]] <- Seurat::SpatialDimPlot(sp_object_mod, alpha=alpha, image.alpha = alpha_img,
