@@ -6,6 +6,7 @@
   conda create -n STopover python=3.8
   conda activate STopover
   pip install git+https://github.com/bsungwoo/STopover.git@dev
+  pip install jupyter
   python -m ipykernel install --user --name STopover --display-name STopover
 ```
 ### Run GUI for STopover (PyQt)  
