@@ -5,7 +5,6 @@ from scipy import sparse
 import os
 import time
 from multiprocessing import Pool
-from multiprocessing import freeze_support
             
 from .topological_comp import extract_adjacency_spatial
 from .topological_comp import topological_comp_res
@@ -45,8 +44,6 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     data_mod: AnnData with summed location of all connected components in metadata(.obs) across all feature pairs
     '''
     start_time = time.time()
-    # Freeze support for multiprocessing
-    freeze_support()
     
     # Check the format of the feature pairs
     if isinstance(feat_pairs, pd.DataFrame): df_feat = feat_pairs
