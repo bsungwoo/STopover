@@ -11,7 +11,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 from ..STopover_class import *
 from .STopover_ui import Ui_Dialog
-from multiprocessing import freeze_support
+# from multiprocessing import freeze_support
 
 class StreamOutput(QObject):
     '''
@@ -358,5 +358,5 @@ def main():
 
 
 if __name__ == "__main__": 
-    freeze_support()
+    # freeze_support()
     main()
