@@ -63,6 +63,7 @@ class STopoverApp(QMainWindow, Ui_Dialog):
         self.comboBox_feat_x.setMaxVisibleItems(10)
         self.comboBox_feat_y.setMaxVisibleItems(10)
         self.comboBox_ref.setMaxVisibleItems(10)
+        self.doubleSpinBox_cpu_no.setValue(os.cpu_count())
 
         self.pushButton_visdir.clicked.connect(lambda: self.open_files('visium', 'dir'))
         self.pushButton_visfile.clicked.connect(lambda: self.open_files('visium', 'file'))
