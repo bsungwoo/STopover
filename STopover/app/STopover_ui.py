@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file '/home/nmadmin/DATA2/STopover/STopover/app/STopover.ui'
+# Form implementation generated from reading ui file './STopover/app/STopover.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.7
 #
