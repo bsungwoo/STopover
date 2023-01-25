@@ -138,8 +138,8 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
         # Extract the non-overlapping feat list from group i and save index number corresponding to feature pairs
         if obs_tf_x != obs_tf_y:
             # In case type of feature x and y is different
-            comb_feat_list_x = df_tmp.iloc[:,1].drop_duplicates().reset_index().set_index(0)
-            comb_feat_list_y = df_tmp.iloc[:,2].drop_duplicates().reset_index().set_index(1)
+            comb_feat_list_x = df_tmp.iloc[:,1].drop_duplicates().reset_index().set_index(df_feat.columns[0])
+            comb_feat_list_y = df_tmp.iloc[:,2].drop_duplicates().reset_index().set_index(df_feat.columns[1])
             # Find the index for the combined feature
             df_tmp['Index_1'] = comb_feat_list_x.loc[df_tmp.iloc[:,1]].reset_index()['index'].astype(int)
             df_tmp['Index_2'] = comb_feat_list_y.loc[df_tmp.iloc[:,2]].reset_index()['index'].astype(int)

@@ -72,7 +72,6 @@ convert_to_anndata <- function(sp_object, features=NULL, conda.env.name='STopove
     colnames(df_coord) <- c("array_col","array_row","batch")
     obs <- cbind(df_coord, obs)
   }
-
   # Create anndata object for analysis
   adata <- ann$AnnData(
     X = Matrix::t(sparse_mtx),
