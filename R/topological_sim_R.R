@@ -35,7 +35,8 @@ topological_similarity <- function(sp_object, feat_pairs=data.frame(),
                                    J_result_name='result', num_workers=NULL){
   # if (dim(feat_pairs)[2]!=2){stop("There should be two columns in 'feat_pairs'")}
   # Check the data type
-  spatial_type <- ifelse(class(sp_object@images$image)[1]=="SlideSeq","cosmx","visium")
+  spatial_type <- ifelse(grepl(lower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","cosmx")
+  cat(paste("The provided object is considered a",spatial_type,"dataset"))
   # Install and load environment
   install_load_env(conda.env.name)
   ## Import STopover
@@ -129,7 +130,9 @@ topological_similarity_celltype_pair <- function(sp_object, celltype_x='',cellty
                                                  sc_norm_total=1e3,
                                                  assay='Spatial', slot='data',lognorm=F,
                                                  J_result_name='result', num_workers=NULL){
-  spatial_type <- class(sp_object@images$image)[1]
+  # Check the data type
+  spatial_type <- ifelse(grepl(lower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","cosmx")
+  cat(paste("The provided object is considered a",spatial_type,"dataset"))
   # if (dim(feat_pairs)[2]!=2){stop("There should be two columns in 'feat_pairs'")}
   # Install and load environment
   install_load_env(conda.env.name)
@@ -164,8 +167,8 @@ topological_similarity_celltype_pair <- function(sp_object, celltype_x='',cellty
       feat_pairs <- return_celltalkdb(lr_db_species=lr_db_species, conda.env.name = conda.env.name)
       feat_pairs <- feat_pairs[,c('ligand_gene_symbol','receptor_gene_symbol')]
       use_lr_db <- F
-      print(paste0("Calculating topological similarity between genes in ",celltype_x," and ",celltype_y))
-      print("Using CellTalkDB ligand-receptor dataset")
+      cat(paste0("Calculating topological similarity between genes in ",celltype_x," and ",celltype_y))
+      cat("Using CellTalkDB ligand-receptor dataset")
     } else {
       colnames(feat_pairs) <- c('ligand_gene_symbol','receptor_gene_symbol')
     }

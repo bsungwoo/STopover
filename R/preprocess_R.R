@@ -30,7 +30,7 @@ install_load_env <- function(conda.env.name='STopover'){
 #' @export
 convert_to_anndata <- function(sp_object, features=NULL, conda.env.name='STopover',
                                assay='Spatial', slot='data', add_coord=F, add_uns=list()){
-  if (is.null(features)) print("'features' is NULL: using all features in Seurat object")
+  if (is.null(features)) cat("'features' is NULL: using all features in Seurat object")
 
   # Install and load environment
   install_load_env(conda.env.name)
@@ -133,7 +133,7 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
   } else {
     adata_sc <- NULL
   }
-  print("Reading CosMx SMI data: annotating cells and creating grid-based data")
+  cat("Reading CosMx SMI data: annotating cells and creating grid-based data")
   adata_sp_all <- STopover$STopover_cosmx(sp_load_path=sp_load_path, sc_adata=adata_sc,
                                           sc_celltype_colname = sc_celltype_colname,
                                           sc_norm_total=sc_norm_total,
@@ -149,7 +149,7 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
                                           x_bins=as.integer(x_bins), y_bins=as.integer(y_bins))
 
   # Create Seurat object for grid-based and cell-level cosmx data
-  print("Creating Seurat object for grid-based and cell-level CosMx data")
+  cat("Creating Seurat object for grid-based and cell-level CosMx data")
   sp_object_list <- list()
   for (idx in 1:2){
     if (idx==2) {adata <- adata_sp_all$uns['adata_cell']}
