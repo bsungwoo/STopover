@@ -39,7 +39,7 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
                               fig_width=4, fig_height=4){
   # Check the data type
   spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","cosmx")
-  cat(paste("The provided object is considered a",spatial_type,"dataset"))
+  cat(paste0("The provided object is considered a ",spatial_type," dataset\n"))
   # Convert the feature name if cell type specific data is provided
   if (!is.null(celltype_x) & spatial_type=='cosmx'){feat_name_x <- paste0(celltype_x,"_",feat_name_x)}
   if (!is.null(celltype_y) & spatial_type=='cosmx'){feat_name_y <- paste0(celltype_y,"_",feat_name_y)}
@@ -202,7 +202,7 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
   if (!slide_name %in% names(sp_object@images)){stop("'slide_name' should be among names(sp_object@images)")}
   # Check the data type
   spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","cosmx")
-  cat(paste("The provided object is considered a",spatial_type,"dataset"))
+  cat(paste0("The provided object is considered a ",spatial_type," dataset\n"))
   # Convert the feature name if cell type specific data is provided
   if (!is.null(celltype_x) & spatial_type=='cosmx'){feat_name_x <- paste0(celltype_x,"_",feat_name_x)}
   if (!is.null(celltype_y) & spatial_type=='cosmx'){feat_name_y <- paste0(celltype_y,"_",feat_name_y)}

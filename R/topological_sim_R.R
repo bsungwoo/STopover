@@ -36,7 +36,7 @@ topological_similarity <- function(sp_object, feat_pairs=data.frame(),
   # if (dim(feat_pairs)[2]!=2){stop("There should be two columns in 'feat_pairs'")}
   # Check the data type
   spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","cosmx")
-  cat(paste("The provided object is considered a",spatial_type,"dataset"))
+  cat(paste0("The provided object is considered a ",spatial_type," dataset\n"))
   # Install and load environment
   install_load_env(conda.env.name)
   ## Import STopover
@@ -132,7 +132,7 @@ topological_similarity_celltype_pair <- function(sp_object, celltype_x='',cellty
                                                  J_result_name='result', num_workers=NULL){
   # Check the data type
   spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","cosmx")
-  cat(paste("The provided object is considered a",spatial_type,"dataset"))
+  cat(paste0("The provided object is considered a ",spatial_type," dataset\n"))
   # if (dim(feat_pairs)[2]!=2){stop("There should be two columns in 'feat_pairs'")}
   # Install and load environment
   install_load_env(conda.env.name)
@@ -167,8 +167,8 @@ topological_similarity_celltype_pair <- function(sp_object, celltype_x='',cellty
       feat_pairs <- return_celltalkdb(lr_db_species=lr_db_species, conda.env.name = conda.env.name)
       feat_pairs <- feat_pairs[,c('ligand_gene_symbol','receptor_gene_symbol')]
       use_lr_db <- F
-      cat(paste0("Calculating topological similarity between genes in ",celltype_x," and ",celltype_y))
-      cat("Using CellTalkDB ligand-receptor dataset")
+      cat(paste0("Calculating topological similarity between genes in ",celltype_x," and ",celltype_y,"\n"))
+      cat("Using CellTalkDB ligand-receptor dataset\n")
     } else {
       colnames(feat_pairs) <- c('ligand_gene_symbol','receptor_gene_symbol')
     }
