@@ -134,7 +134,7 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
                      legend.text=ggplot2::element_text(size=legend_fontsize,hjust=0.5))
     if (vis_jaccard) {p[[i]] <- p[[i]] + ggplot2::annotate("text", x=Inf, y=Inf,
                                                            label=paste0("J_comp: ",
-                                                                        format(J_comp, nsmall = 3, digits=3)),
+                                                                        format(round(J_comp,3), nsmall = 3, digits=3)),
                                                            size=legend_fontsize/3, hjust=1, vjust=1)}
   }
   # Draw plot
@@ -271,7 +271,7 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
                      legend.text=ggplot2::element_text(size=legend_fontsize,hjust=0.5))
     if (vis_jaccard) {p[[i]] <- p[[i]] + ggplot2::annotate("text", x=Inf, y=Inf,
                                                            label=paste0("J_comp: ",
-                                                                        format(J_top[i], nsmall = 3, digits=3)),
+                                                                        format(round(J_top[i],3), nsmall = 3, digits=3)),
                                                            size=legend_fontsize/3, hjust=1, vjust=1)}
   }
 
