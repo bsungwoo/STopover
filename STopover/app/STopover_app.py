@@ -145,7 +145,8 @@ class STopoverApp(QMainWindow, Ui_Dialog):
     
     @run_thread
     def topological_sim_(self, object, feat_pairs, use_lr_db, lr_db_species, error_output=""):
-        return object.topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species, num_workers=int(self.doubleSpinBox_cpu_no.value()))
+        return object.topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species, 
+                                             num_workers=int(self.doubleSpinBox_cpu_no.value()), progress_bar=True)
 
     @run_thread
     def save_connected_loc_data_(self, object, save_format, filename, print_output="Finished", error_output=""):
