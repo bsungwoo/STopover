@@ -1,50 +1,45 @@
-# STopover: capturing spatial colocalization and interaction in the TME using topological analysis in spatial transcriptomics data  
+# STopover
+Tool to capture spatial colocalization and interaction in the TME using topological analysis in spatial transcriptomics data  
+* Cite as: Bae S, Lee H, Na KJ, Lee DS, Choi H, Kim YT. STopover captures spatial colocalization and interaction in the tumor microenvironment using topological analysis in spatial transcriptomics data. bioRxiv, 2022.  
+* https://doi.org/10.1101/2022.11.16.516708  
 
-## Python for implementation  
-### Install conda environment and add jupyter kernel  
+## Installation and running
+### 1. Python
+#### Install conda environment and add jupyter kernel
 ```Plain Text  
   conda create -n STopover python=3.8
   conda activate STopover
-  pip install git+https://github.com/bsungwoo/STopover.git@dev
+  pip install git+https://github.com/bsungwoo/STopover.git
   pip install jupyter
   python -m ipykernel install --user --name STopover --display-name STopover
 ```
-### Run GUI for STopover (PyQt)  
+#### Run GUI for STopover (PyQt)
 ```Plain Text
 conda activate STopover
 python
 from STopover import app
 app.main()
 ```
-### Dependency (python)  
-```Plain Text
-python 3.8
-scanpy 1.9.1
-numpy 1.20.3
-pandas 1.4.3
-matplotlib 3.4.3
-pyarrow 8.0.0
-pyqt5 5.15.7
-scipy 1.7.3
-```
-### Python Code Example  
-Please refer to [README_Python.md](https://github.com/bsungwoo/STopover/blob/dev/STopover/README_Python.md)  
-
-## R for implementation  
-### Install R package and open vignettes  
+### 2. R
 ```Plain Text  
-  devtools::install_github("bsungwoo/STopover@dev", build_vignettes = T, force = T)  
-  library(STopover)  
-  ??STopover  # Explanation for topological similarity and short examples  
+  devtools::install_github("bsungwoo/STopover", build_vignettes = T, force = T)
+```
+### 3. Standalone app (packaged with [pyinstaller](https://github.com/pyinstaller/pyinstaller))  
+Please download file: [STopover_v1_windows.exe]()  
+
+## Key packages
+** Python  
+Please refer to yaml file: [Python requirements](https://github.com/bsungwoo/STopover/blob/master/STopover_env.yaml)  
+** R  
+Please refer to DESCRIPTION file: [R requirements](https://github.com/bsungwoo/STquantool/blob/master/DESCRIPTION)  
+
+## Usage
+### Python Code Example
+Please refer to [README_Python.md](https://github.com/bsungwoo/STopover/blob/master/STopover/README_Python.md)  
+### R Code Example
+Please refer to vignettes in the package  
+```Plain Text
+  library(STopover)
+  ??STopover  # Explanation for topological similarity and short examples
   browseVignettes("STopover")  # Browse for the vignettes (Rmd files in vignettes)
 ```
-### Dependency (R)  
-```Plain Text
-Seurat 4.1.1
-reticulate 1.25
-dplyr 1.0.9
-patchwork 1.1.1
-```
-
-## R Code Example  
-Please refer to vignettes in the package  

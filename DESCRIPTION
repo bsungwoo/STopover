@@ -16,8 +16,18 @@ Authors@R:
                  role = c("aut"),
                  email = "chy1000@snu.ac.kr",
                  comment = c(ORCID = "0000-0002-8895-2449")))
-Description: .
+Description: STopover performs topological analysis to compute the colocalization patterns between cell types and map the location of cell-cell interactions. While gradually lowering the threshold for the feature, the connected components (CCs) are extracted based on the spatial distance between the unit tissue region and the persistence of the CCs. Local and global Jaccard indices are calculated between the CCs of a feature pair to measure the extent of spatial overlap.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.1
+Depends:
+      R (>= 4.0.0)
+Imports:
+      reticulate (>= 1.25),
+      Seurat (>= 4.1.0),
+      hdf5r,
+      dplyr (>= 1.0.9),
+      clusterProfiler (>= 4.2.2),
+      org.Mm.eg.db,
+      org.Hs.eg.db

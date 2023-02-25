@@ -4,7 +4,7 @@ from scipy import sparse
 
 import os
 import time
-from multiprocessing import Pool
+import parmap
             
 from .topological_comp import extract_adjacency_spatial
 from .topological_comp import topological_comp_res
@@ -193,35 +193,30 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     print('End of data preparation')
     print("Elapsed time: %.2f seconds " % (time.time()-start_time))
 
-    # Extract connected components for the features
-    procs = []
-    pool = Pool(processes=min(os.cpu_count(), num_workers))
-    for feat, loc in zip(val_list, loc_list):
-        A, mask = extract_adjacency_spatial(loc, fwhm=fwhm)
-        proc_grp = []
-        for index in range(feat.shape[1]):
-            proc = pool.apply_async(func=topological_comp_res,
-                                    args=(feat[:,index].reshape((-1,1)), min_size, thres_per, 'cc_loc', A, mask))                                    
-            proc_grp.append(proc)
-        procs.append(proc_grp)
-    pool.close()
-    pool.join()
-    # Get the output in case feature x and feature y has same data type
-    output_cc = [[proc.get() for proc in proc_grp] for proc_grp in procs]
-
-    print('End of computation for topological similarity')
-    print("Elapsed time: %.2f seconds " % (time.time()-start_time))
+    # Start the multiprocessing for extracting adjacency matrix and mask
+    print("Calculation for adjacency matrix and mask")
+    adjacency_mask = parmap.map(extract_adjacency_spatial, loc_list, fwhm=fwhm, 
+                                pm_pbar=True, pm_processes=min(os.cpu_count(), num_workers))
+    feat_A_mask_pair = [(feat[:,feat_idx].reshape((-1,1)),adjacency_mask[grp_idx][0],adjacency_mask[grp_idx][1]) \
+                        for grp_idx, feat in enumerate(val_list) for feat_idx in range(feat.shape[1])]
+    # Start the multiprocessing for finding connected components of each feature
+    print("Calculation for connected components for each feature")
+    output_cc = parmap.starmap(topological_comp_res, feat_A_mask_pair, min_size=min_size, thres_per=thres_per, return_mode='cc_loc', 
+                               pm_pbar=True, pm_processes=min(os.cpu_count(), num_workers))
     
     # Make dataframe for the similarity between feature 1 and 2 across the groups
-    jaccard_total = []; output_cc_loc = []
-    pool = Pool(processes=min(os.cpu_count(), num_workers))
+    print('Calculation for composite jaccard indexes between feature pairs')
+    CCxy_loc_mat_list = []; output_cc_loc=[]
+    feat_num_sum = 0
     for num, element in enumerate(group_list):
         df_subset = df_top_total[df_top_total[group_name]==element]
-        
         # Find the subset of the given data
         data_sub = data[data.obs[group_name]==element].copy()
-        # Add the connected component location
-        df_cc_loc = pd.concat([pd.DataFrame(mat) for mat in output_cc[num]], axis=1)
+        # Add the connected component location of all features in each group
+        feat_num = val_list[num].shape[1]
+        arr_cc_loc = np.concatenate(output_cc[feat_num_sum:(feat_num_sum+feat_num)], axis=1)
+        df_cc_loc = pd.DataFrame(arr_cc_loc)
+        feat_num_sum += feat_num
 
         # Make dataframe representing location of CC when the data type is different between feature x and y
         if obs_tf_x != obs_tf_y:
@@ -242,17 +237,12 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
 
         for index in range(len(df_subset)):
             if obs_tf_x != obs_tf_y:
-                CCx_loc_mat = output_cc[num][:len(comb_feat_list_x)][df_subset['Index_1'].iloc[index]]
-                CCy_loc_mat = output_cc[num][len(comb_feat_list_x):][df_subset['Index_2'].iloc[index]]
+                CCx_loc_mat = arr_cc_loc[:,:len(comb_feat_list_x)][:,df_subset['Index_1'].iloc[index]]
+                CCy_loc_mat = arr_cc_loc[:,len(comb_feat_list_x):][:,df_subset['Index_2'].iloc[index]]
             else:
-                CCx_loc_mat = output_cc[num][df_subset['Index_1'].iloc[index]]
-                CCy_loc_mat = output_cc[num][df_subset['Index_2'].iloc[index]]
-
-            jaccard = pool.apply_async(func=jaccard_composite, 
-                                       args=(CCx_loc_mat, CCy_loc_mat))
-            jaccard_total.append(jaccard)
-    pool.close()
-    pool.join()
+                CCx_loc_mat = arr_cc_loc[:,df_subset['Index_1'].iloc[index]]
+                CCy_loc_mat = arr_cc_loc[:,df_subset['Index_2'].iloc[index]]
+            CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat))
 
     # Get the output for connected component location and save
     data_mod = data.copy()
@@ -260,7 +250,8 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     data_mod.obs = data_mod.obs.join(output_cc_loc, lsuffix='_prev')
 
     # Get the output for jaccard
-    output_j = [jaccard.get() for jaccard in jaccard_total] 
+    output_j = parmap.starmap(jaccard_composite, CCxy_loc_mat_list,
+                              pm_pbar=True, pm_processes=min(os.cpu_count(), num_workers))
     
     # Create dataframe for J metrics
     output_j = pd.DataFrame(output_j, columns=['J_comp'])
