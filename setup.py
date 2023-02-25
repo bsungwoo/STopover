@@ -11,5 +11,5 @@ setup(
     package_data = {'': ['data/*.txt', 'app/image/*']},
     install_requires = ["scanpy~=1.9.0","pandas~=1.4.3","numpy~=1.20.3","matplotlib~=3.4.3",
                         "scipy~=1.7.3","pyqt5~=5.15.7","leidenalg",
-                        "pyarrow", "ply", "pytest", "parmap"]
+                        "pyarrow", "ply", "pytest", "parmap~=1.6.0"]
 )

@@ -1,6 +1,6 @@
 Package: STopover
 Title: Tool to capture spatial colocalization and interaction in the TME using topological analysis in spatial transcriptomics data
-Version: 1.0.7
+Version: 1.1.0
 Authors@R: 
         c(person(given = "Sungwoo",
                  family = "Bae",

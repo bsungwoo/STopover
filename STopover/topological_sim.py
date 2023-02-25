@@ -194,18 +194,18 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     print("Elapsed time: %.2f seconds " % (time.time()-start_time))
 
     # Start the multiprocessing for extracting adjacency matrix and mask
-    print("Calculation for adjacency matrix and mask")
+    print("Calculation of adjacency matrix and mask")
     adjacency_mask = parmap.map(extract_adjacency_spatial, loc_list, fwhm=fwhm, 
                                 pm_pbar=True, pm_processes=min(os.cpu_count(), num_workers))
     feat_A_mask_pair = [(feat[:,feat_idx].reshape((-1,1)),adjacency_mask[grp_idx][0],adjacency_mask[grp_idx][1]) \
                         for grp_idx, feat in enumerate(val_list) for feat_idx in range(feat.shape[1])]
     # Start the multiprocessing for finding connected components of each feature
-    print("Calculation for connected components for each feature")
+    print("Calculation of connected components for each feature")
     output_cc = parmap.starmap(topological_comp_res, feat_A_mask_pair, min_size=min_size, thres_per=thres_per, return_mode='cc_loc', 
                                pm_pbar=True, pm_processes=min(os.cpu_count(), num_workers))
     
     # Make dataframe for the similarity between feature 1 and 2 across the groups
-    print('Calculation for composite jaccard indexes between feature pairs')
+    print('Calculation of composite jaccard indexes between feature pairs')
     CCxy_loc_mat_list = []; output_cc_loc=[]
     feat_num_sum = 0
     for num, element in enumerate(group_list):
