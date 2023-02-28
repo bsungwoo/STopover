@@ -201,12 +201,12 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     feat_A_mask_pair = [(feat[:,feat_idx].reshape((-1,1)),adjacency_mask[grp_idx][0],adjacency_mask[grp_idx][1]) \
                         for grp_idx, feat in enumerate(val_list) for feat_idx in range(feat.shape[1])]
     # Start the multiprocessing for finding connected components of each feature
-    print("\nCalculation of connected components for each feature")
+    print("Calculation of connected components for each feature")
     output_cc = parmap.starmap(topological_comp_res, feat_A_mask_pair, min_size=min_size, thres_per=thres_per, return_mode='cc_loc', 
                                pm_pbar=progress_bar, pm_processes=min(os.cpu_count(), num_workers))
     
     # Make dataframe for the similarity between feature 1 and 2 across the groups
-    print('\nCalculation of composite jaccard indexes between feature pairs')
+    print('Calculation of composite jaccard indexes between feature pairs')
     CCxy_loc_mat_list = []; output_cc_loc=[]
     feat_num_sum = 0
     for num, element in enumerate(group_list):
@@ -260,6 +260,6 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     # Create dataframe with pairwise topological similarity measures
     df_top_total = pd.concat([df_top_total.iloc[:,:-2], output_j], axis=1)
     
-    print("\nEnd of the whole process: %.2f seconds" % (time.time()-start_time))
+    print("End of the whole process: %.2f seconds" % (time.time()-start_time))
     
     return df_top_total, data_mod
