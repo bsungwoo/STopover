@@ -17,13 +17,20 @@ Tool to capture spatial colocalization and interaction in the TME using topologi
 ```
 #### Run GUI for STopover (PyQt)
 ```Plain Text
-conda activate STopover
-python
-from STopover import app
-app.main()
+  conda activate STopover
+  python
+  from STopover import app
+  app.main()
 ```
 ### 2. R
-```Plain Text  
+```Plain Text
+  # Install BiocManager dependencies
+  if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+  BiocManager::install("clusterProfiler")
+  BiocManager::install("org.Mm.eg.db")
+  BiocManager::install("org.Hs.eg.db")
+  
+  # Install STopover
   devtools::install_github("bsungwoo/STopover", build_vignettes = T, force = T)
 ```
 ### 3. Standalone app (packaged with [pyinstaller](https://github.com/pyinstaller/pyinstaller))  
