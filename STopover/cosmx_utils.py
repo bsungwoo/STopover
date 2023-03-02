@@ -36,29 +36,30 @@ def annotate_cosmx(sp_adata, sc_adata=None, sc_norm_total=1e3,
 
     if sc_adata is not None:
         # Normalize single-cell data
-        sc_adata.var_names_make_unique()
-        sc.pp.normalize_total(sc_adata, target_sum=1e4, inplace=True)
+        sc_adata_ = sc_adata.copy()
+        sc_adata_.var_names_make_unique()
+        sc.pp.normalize_total(sc_adata_, target_sum=1e4, inplace=True)
         # Log transform and scale single-cell data
-        sc.pp.log1p(sc_adata)
-        sc_adata.raw = sc_adata
+        sc.pp.log1p(sc_adata_)
+        # sc_adata_.raw = sc_adata_
         # Find intersecting genes
-        inter_var_names = sc_adata.var_names.intersection(sp_adata.var_names)
-        sc_adata = sc_adata[:, inter_var_names]
+        inter_var_names = sc_adata_.var_names.intersection(sp_adata.var_names)
+        sc_adata_ = sc_adata_[:, inter_var_names]
         sp_adata = sp_adata[:, inter_var_names]
 
         # Perform PCA and find neighbords and umap embedding
-        sc.pp.pca(sc_adata)
-        sc.pp.neighbors(sc_adata)
-        sc.tl.umap(sc_adata)
+        sc.pp.pca(sc_adata_)
+        sc.pp.neighbors(sc_adata_)
+        sc.tl.umap(sc_adata_)
         # Fill nan values and designate as categorical variable
-        sc_adata.obs[sc_celltype_colname] = sc_adata.obs[sc_celltype_colname].astype(object).fillna('nan')
-        sc_adata.obs[sc_celltype_colname] = sc_adata.obs[sc_celltype_colname].astype('category')
+        sc_adata_.obs[sc_celltype_colname] = sc_adata_.obs[sc_celltype_colname].astype(object).fillna('nan')
+        sc_adata_.obs[sc_celltype_colname] = sc_adata_.obs[sc_celltype_colname].astype('category')
 
         # Scale single-cell and spatial data
-        sc.pp.scale(sc_adata, max_value=10)
+        sc.pp.scale(sc_adata_, max_value=10)
         sc.pp.scale(sp_adata, max_value=10)
         # Perform cell label transfer from single-cell to CosMx data
-        sc.tl.ingest(sp_adata, sc_adata, obs=sc_celltype_colname, embedding_method='umap')
+        sc.tl.ingest(sp_adata, sc_adata_, obs=sc_celltype_colname, embedding_method='umap')
     else:
         # Find highly variable genes in spatial data
         sc.pp.highly_variable_genes(sp_adata, flavor="seurat", n_top_genes=2000)
@@ -88,6 +89,7 @@ def read_cosmx(load_path, sc_adata=None, sc_celltype_colname = 'celltype', sc_no
     ### Input
     load_path: path to load the CosMx SMI files
     sc_adata: single-cell reference anndata for cell type annotation of CosMx SMI data
+        -> raw count matrix should be saved in .X
         -> If None, then leiden cluster numbers will be used to annotate CosMx SMI data
     sc_celltype_colname: column name for cell type annotation information in metadata of single-cell (.obs)
     sc_norm_total: scaling factor for the total count normalization per cell

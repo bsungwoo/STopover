@@ -304,6 +304,8 @@ class STopover_cosmx(STopover_visium):
     sp_load_path: path to CosMx SMI data directory or .h5ad Anndata object
 
     sc_adata: single-cell reference anndata for cell type annotation of CosMx SMI data
+        -> raw count matrix should be saved in .X
+        -> If .h5ad file directory is provided, it will load the h5ad file
         -> If None, then leiden cluster numbers will be used to annotate CosMx SMI data
     sc_celltype_colname: column name for cell type annotation information in metadata of single-cell (.obs)
     sc_norm_total: scaling factor for the total count normalization per cell
@@ -351,7 +353,10 @@ class STopover_cosmx(STopover_visium):
                     adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'], adata_mod.uns['x_bins'], \
                         adata_mod.uns['y_bins'], adata_mod.uns['sc_norm_total'], adata_mod.uns['sc_celltype_colname'], adata_mod.uns['transcript_colname']
                 except: pass
-            except: 
+            except:
+                if isinstance(sp_load_path, str):
+                    try: sc_adata = sc.read_h5ad(sc_adata)
+                    except: sc_adata = None
                 adata_mod, adata_cell = read_cosmx(sp_load_path, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, sc_norm_total=sc_norm_total,
                                                    tx_file_name = tx_file_name, cell_exprmat_file_name=cell_exprmat_file_name, cell_metadata_file_name=cell_metadata_file_name, 
                                                    fov_colname = fov_colname, cell_id_colname=cell_id_colname, 
