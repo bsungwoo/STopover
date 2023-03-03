@@ -15,7 +15,6 @@ from scipy.spatial.distance import pdist, squareform
 from anndata import AnnData
 
 import os
-import parmap
             
 from .make_original_dendrogram_cc import make_original_dendrogram_cc
 from .make_smoothed_dendrogram import make_smoothed_dendrogram
@@ -71,10 +70,10 @@ def extract_connected_comp(tx, A_sparse, threshold_x, num_spots, min_size=5):
     
     ## Estimate bars for plot for feat_x
     cvertical_x_x,cvertical_y_x,chorizontal_x_x,chorizontal_y_x,cdots_x,clayer_x = make_dendrogram_bar(chistory_x,cduration_x)
-    _,_,_,_,_,nlayer_x = make_dendrogram_bar(nhistory_x,nduration_x,cvertical_x_x,cvertical_y_x,chorizontal_x_x,chorizontal_y_x,cdots_x)
+    nvertical_x_x,nvertical_y_x,nhorizontal_x_x,nhorizontal_y_x,ndots_x,nlayer_x = make_dendrogram_bar(nhistory_x,nduration_x,cvertical_x_x,cvertical_y_x,chorizontal_x_x,chorizontal_y_x,cdots_x)
     
     ## Remove unnecessary variables
-    del cvertical_x_x,cvertical_y_x,chorizontal_x_x,chorizontal_y_x,cdots_x,clayer_x
+    del cvertical_x_x,cvertical_y_x,chorizontal_x_x,chorizontal_y_x,cdots_x,clayer_x,nvertical_x_x,nvertical_y_x,nhorizontal_x_x,nhorizontal_y_x,ndots_x
 
     ## Extract connected components for feat_x
     sind = nlayer_x[0]
@@ -171,7 +170,7 @@ def filter_connected_loc_exp(CC_loc_mat, data=None, feat=None, thres_per=30, ret
 
 
 
-def topological_comp_res(feat=None, A=None, mask=None, min_size = 5, thres_per=30, return_mode='all'):
+def topological_comp_res(feat=None, min_size = 5, thres_per=30, return_mode='all', A=None, mask=None):
     '''
     ## Calculate topological connected components for the given feature value
     ### Input
@@ -184,6 +183,8 @@ def topological_comp_res(feat=None, A=None, mask=None, min_size = 5, thres_per=3
     'all': return jaccard index result along with array for location of connected components
     'cc_loc': return array or Anndata containing location of connected components
     'jaccard_cc_list': return jaccard index result only (when J_comp is True, then return jaccard composite index, and when false, return jaccard similarity array with CC locations)
+
+    A: spatial adjacency matrix, mask: mask for gaussian smoothing
 
     ### Output
     result:
