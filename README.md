@@ -31,7 +31,7 @@ Tool to capture spatial colocalization and interaction in the TME using topologi
   BiocManager::install("org.Hs.eg.db")
   
   # Install STopover
-  devtools::install_github("bsungwoo/STopover", build_vignettes = T, force = T)
+  devtools::install_github("bsungwoo/STopover", force = T)
 ```
 ### 3. Standalone app (packaged with [pyinstaller](https://github.com/pyinstaller/pyinstaller))  
 Please download file: [STopover_v1_windows.exe](https://github.com/bsungwoo/STopover/releases/download/v1.1.0/STopover_1.1.0_windows.exe)  
@@ -46,10 +46,5 @@ Please refer to DESCRIPTION file: [R requirements](https://github.com/bsungwoo/S
 ### Python Code Example
 Please refer to [README_Python.md](https://github.com/bsungwoo/STopover/blob/master/STopover/README_Python.md)  
 ### R Code Example
-Please refer to vignettes in the package and the below documents  
-```Plain Text
-  library(STopover)
-  ??STopover  # Explanation for topological similarity and short examples
-  browseVignettes("STopover")  # Browse for the vignettes (Rmd files in vignettes)
-```
+Please refer the below documents  
 Link to documents: [STopover_visium](https://rpubs.com/bsungwoo/STopover_visium), [STopover_cosmx](https://rpubs.com/bsungwoo/STopover_cosmx)  
