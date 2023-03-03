@@ -99,7 +99,7 @@ class STopover_visium(AnnData):
 
 
     def topological_similarity(self, feat_pairs=None, use_lr_db=False, lr_db_species='human',
-                                     group_name='batch', group_list=None, J_result_name='result', num_workers=os.cpu_count()):
+                                     group_name='batch', group_list=None, J_result_name='result', num_workers=os.cpu_count(), progress_bar=True):
         '''
         ## Calculate Jaccard index between topological connected components of feature pairs and return dataframe
             : if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
@@ -122,6 +122,7 @@ class STopover_visium(AnnData):
 
         J_result_name: the name of the jaccard index data file name
         num_workers: number of workers to use for multiprocessing
+        progress_bar: whether to show the progress bar during multiprocessing
 
         ### Output
         df_top_total: dataframe that contains spatial overlap measures represented by (Jmax, Jmean, Jmmx, Jmmy) for the feature pairs 
@@ -134,7 +135,7 @@ class STopover_visium(AnnData):
             print("Using CellTalkDB ligand-receptor dataset")
         
         df, adata = topological_sim_pairs_(data=self, feat_pairs=feat_pairs, spatial_type=self.spatial_type, group_list=group_list, group_name=group_name,
-                                            fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per, num_workers=num_workers)
+                                            fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per, num_workers=num_workers, progress_bar=progress_bar)
         # save jaccard index result in .uns of anndata
         adata.uns['_'.join(('J',str(J_result_name),str(self.J_count)))] = df
         # Initialize the object
@@ -303,6 +304,8 @@ class STopover_cosmx(STopover_visium):
     sp_load_path: path to CosMx SMI data directory or .h5ad Anndata object
 
     sc_adata: single-cell reference anndata for cell type annotation of CosMx SMI data
+        -> raw count matrix should be saved in .X
+        -> If .h5ad file directory is provided, it will load the h5ad file
         -> If None, then leiden cluster numbers will be used to annotate CosMx SMI data
     sc_celltype_colname: column name for cell type annotation information in metadata of single-cell (.obs)
     sc_norm_total: scaling factor for the total count normalization per cell
@@ -350,7 +353,12 @@ class STopover_cosmx(STopover_visium):
                     adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'], adata_mod.uns['x_bins'], \
                         adata_mod.uns['y_bins'], adata_mod.uns['sc_norm_total'], adata_mod.uns['sc_celltype_colname'], adata_mod.uns['transcript_colname']
                 except: pass
-            except: 
+            except:
+                if isinstance(sc_adata, str):
+                    try: sc_adata = sc.read_h5ad(sc_adata)
+                    except: 
+                        print("Path to 'sc_adata' h5ad file not found: replacing with None")
+                        sc_adata = None
                 adata_mod, adata_cell = read_cosmx(sp_load_path, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, sc_norm_total=sc_norm_total,
                                                    tx_file_name = tx_file_name, cell_exprmat_file_name=cell_exprmat_file_name, cell_metadata_file_name=cell_metadata_file_name, 
                                                    fov_colname = fov_colname, cell_id_colname=cell_id_colname, 
@@ -423,7 +431,7 @@ class STopover_cosmx(STopover_visium):
 
 
     def topological_similarity_celltype_pair(self, celltype_x='', celltype_y='', feat_pairs=None, use_lr_db=False, lr_db_species='human',
-                                             group_name='batch', group_list=None, J_result_name='result', num_workers=os.cpu_count()):
+                                             group_name='batch', group_list=None, J_result_name='result', num_workers=os.cpu_count(), progress_bar=True):
         '''
         ## Calculate Jaccard index between the two cell type-specific expression anndata of CosMx data
         ### Input
@@ -456,7 +464,7 @@ class STopover_cosmx(STopover_visium):
         
         # Calculate topological similarites between the pairs from the two cell types  
         adata_xy.topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species,
-                                        group_name=group_name, group_list=group_list, J_result_name=J_result_name, num_workers=num_workers)
+                                        group_name=group_name, group_list=group_list, J_result_name=J_result_name, num_workers=num_workers, progress_bar=progress_bar)
         return adata_xy
 
 
