@@ -354,9 +354,11 @@ class STopover_cosmx(STopover_visium):
                         adata_mod.uns['y_bins'], adata_mod.uns['sc_norm_total'], adata_mod.uns['sc_celltype_colname'], adata_mod.uns['transcript_colname']
                 except: pass
             except:
-                if isinstance(sp_load_path, str):
+                if isinstance(sc_adata, str):
                     try: sc_adata = sc.read_h5ad(sc_adata)
-                    except: sc_adata = None
+                    except: 
+                        print("Path to 'sc_adata' h5ad file not found: replacing with None")
+                        sc_adata = None
                 adata_mod, adata_cell = read_cosmx(sp_load_path, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, sc_norm_total=sc_norm_total,
                                                    tx_file_name = tx_file_name, cell_exprmat_file_name=cell_exprmat_file_name, cell_metadata_file_name=cell_metadata_file_name, 
                                                    fov_colname = fov_colname, cell_id_colname=cell_id_colname, 

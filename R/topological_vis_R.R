@@ -1,3 +1,72 @@
+#' Visualizing CosMx SMI data on the grid
+#' @description  Visualizing CosMx SMI data with ggplot2
+#' @param sp_object spatial data (Seurat object) to be used
+#' @param feature feature to visualize on the grid
+#' @param plot_title title of the plot (default = feature)
+#' @param title_fontsize fontsize of the plot title (default = 12)
+#' @param color_dis if the feature is discrete value, provide vector of colors to distinguish the values (default = c("#A2E1CA","#FBBC05","#4285F4","#34A853"))
+#' @param color_cont if the feature is a continuous variable, provide color palette to use from RColorBrewer::brewer.pal.info (default = "RdPu")
+#' @param vmax if the feature is a continuous variable, provide the maximum of the colorbar (default = NULL)
+#' @param vmin if the feature is a continuous variable, provide the minimum of the colorbar (default = NULL)
+#' @param legend_loc location of the legend (default= 'right')
+#' @param legend_fontsize fontsize of the legend title (default = 12)
+#' @export
+#' @return ggplot object
+vis_spatial_cosmx <- function(sp_object, feature, plot_title=feature, title_fontsize=12,
+                              color_dis=c("#A2E1CA","#FBBC05","#4285F4","#34A853"),
+                              color_cont="RdPu",vmin=NULL, vmax=NULL, legend_loc='right',
+                              legend_fontsize=12) {
+  if (!identical(setdiff(c("array_col","array_row",feature), colnames(sp_object@meta.data)), character(0))){
+    stop("'array_col', 'array_row', or 'feature' not found among column names of metadata")
+  }
+  df <- sp_object@meta.data[,c("array_col","array_row",feature)]
+  if (!is.null(levels(sp_object@meta.data[[feature]]))){
+    eval(parse(text=paste0("
+    p <- ggplot2::ggplot(df, ggplot2::aes(x = array_col, y = array_row, fill =",
+                           feature,")) + ggplot2::theme_minimal() +
+      ggplot2::geom_tile() + ggplot2::ggtitle(plot_title) +
+      ggplot2::coord_fixed() + ggplot2::scale_fill_manual(values = color_dis)")))
+  } else {
+    if (!color_cont %in% rownames(RColorBrewer::brewer.pal.info)){
+      stop(paste0("'color_cont' should be among: ",
+                  paste(rownames(RColorBrewer::brewer.pal.info), collapse = ", ")))
+    }
+    # Fix the minmax value
+    if (!is.null(vmax)) {
+      if (vmax < max(df[[feature]])) df[df[feature]>vmax,][feature] <- vmax
+      if (is.null(vmin)) {
+        vmin <- min(df[[feature]])
+      } else{
+          if (vmin > min(df[[feature]])) df[df[feature]<vmin,][feature] <- vmin
+      }
+    } else if (!is.null(vmin)) {
+      if (vmin > min(df[[feature]])) df[df[feature]<vmin,][feature] <- vmin
+      vmax <- max(df[[feature]])
+    }
+    # Draw plot
+    eval(parse(text=paste0("
+    p <- ggplot2::ggplot(df, ggplot2::aes(x = array_col, y = array_row, fill =",
+                           feature,")) + ggplot2::theme_minimal() +
+      ggplot2::geom_tile() + ggplot2::ggtitle(plot_title) +
+      ggplot2::coord_fixed() + ggplot2::scale_fill_distiller(palette = color_cont, ",
+                           "type='seq', limits=c(vmin,vmax))")))
+  }
+  p <- p +
+    ggplot2::theme(panel.border = ggplot2::element_blank(),
+                   panel.grid.major = ggplot2::element_blank(),
+                   panel.grid.minor = ggplot2::element_blank(),
+                   plot.title=ggplot2::element_text(size=title_fontsize,hjust=0.5),
+                   axis.title.x=ggplot2::element_blank(),
+                   axis.title.y=ggplot2::element_blank(),
+                   axis.text.x=ggplot2::element_blank(),
+                   axis.text.y=ggplot2::element_blank(),
+                   axis.ticks.x = ggplot2::element_blank(),
+                   axis.ticks.y = ggplot2::element_blank(),
+                   legend.position=legend_loc,
+                   legend.text=ggplot2::element_text(size=legend_fontsize,hjust=0.5))
+  return(p)
+}
+
 #' Visualizing all connected components of feature x and y
 #' @description Visualizing connected component locations of feature x and feature y on the tissue and return plots or save plots if designated
 #' @param sp_object spatial data (Seurat object) to be used
@@ -100,11 +169,14 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
     sp_object_mod <- subset(sp_object_mod, idents = names(color.map))
   }
   # Draw spatial cluster plot for connected component locations
-  if (spatial_type=='cosmx'){alpha_img <- 0}
-  p <- Seurat::SpatialPlot(sp_object_mod, alpha=alpha, image.alpha = alpha_img,
-                           label=F, crop=crop_image, cols = color.map,
-                           pt.size.factor=dot_size,
-                           combine=FALSE)
+  if (spatial_type=='cosmx'){
+    p <- list(vis_spatial_cosmx(sp_object_mod, "Over", color_dis=color.map))
+  } else{
+    p <- Seurat::SpatialPlot(sp_object_mod, alpha=alpha, image.alpha = alpha_img,
+                             label=F, crop=crop_image, cols = color.map,
+                             pt.size.factor=dot_size,
+                             combine=FALSE)
+  }
 
   # Install and load conda environment
   install_load_env(conda.env.name)
@@ -125,8 +197,12 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
   }
   # Generate plots
   for (i in 1:length(p)){
-    Seurat::Idents(sp_object) <- "batch"
-    sp_object_mod <- subset(sp_object, idents = slide_names[i])
+    if (spatial_type=='visium'){
+      Seurat::Idents(sp_object) <- "batch"
+      sp_object_mod <- subset(sp_object, idents = slide_names[i])
+    } else {
+      sp_object_mod <- sp_object
+    }
     comb_cc_loc <- c(paste0("Comb_CC_",feat_name_x), paste0("Comb_CC_",feat_name_y))
 
     # Convert CC location factor information into numeric values
@@ -239,9 +315,11 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
   }
 
   # Subset the slide by the image name: names(sp_object@images)
-  Seurat::Idents(sp_object) <- "batch"
-  sp_object <- subset(sp_object, idents = slide_name)
-  sp_object@images <- sp_object@images[slide_name]
+  if (spatial_type == 'visium'){
+    Seurat::Idents(sp_object) <- "batch"
+    sp_object <- subset(sp_object, idents = slide_name)
+    sp_object@images <- sp_object@images[slide_name]
+  }
 
   # Install and load conda environment
   install_load_env(conda.env.name)
@@ -279,10 +357,14 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
     if (spatial_type=='visium'){sp_object_mod <- subset(sp_object_mod, idents = feature_map[names(color.map)])}
 
     # Draw spatial cluster plot for connected component locations
-    p[[i]] <- Seurat::SpatialPlot(sp_object_mod, alpha=alpha, image.alpha = alpha_img,
-                                  label=F, crop=crop_image,
-                                  pt.size.factor=dot_size,
-                                  combine=FALSE)[[1]]
+    if (spatial_type == 'visium'){
+      p[[i]] <- Seurat::SpatialPlot(sp_object_mod, alpha=alpha, image.alpha = alpha_img,
+                                    label=F, crop=crop_image,
+                                    pt.size.factor=dot_size,
+                                    combine=FALSE)[[1]]
+    } else {
+      p[[i]] <- vis_spatial_cosmx(sp_object_mod, paste0('CCxy_top_',i), color_dis=color.map)
+    }
     p[[i]] <- p[[i]] + ggplot2::ggtitle(paste0(ifelse(is.null(slide_title), paste0(slide_name,'\n'),
                                                       ifelse(slide_title=='','',paste0(slide_title,'\n'))),
                                                feat_name_x,' & ',feat_name_y, add_title_text,": ",

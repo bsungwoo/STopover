@@ -62,16 +62,21 @@ convert_to_anndata <- function(sp_object, features=NULL, conda.env.name='STopove
 
   # Extract coordinates of the spots or grids
   spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","cosmx")
-  if (add_coord & spatial_type=='visium'){
-    if (assay!='Spatial'){warning("Coordinates in the assay '",assay,"' will be used.")}
-    df_coord <- data.frame()
-    for (slide_name in names(sp_object@images)){
-      df_image <- sp_object@images[[slide_name]]@coordinates[,c("col","row")]
-      df_image[['batch']] <- slide_name
-      df_coord <- rbind(df_coord, df_image)
+  if (add_coord) {
+    if (spatial_type=='visium') {
+      if (assay!='Spatial'){warning("Coordinates in the assay '",assay,"' will be used.")}
+      df_coord <- data.frame()
+      for (slide_name in names(sp_object@images)){
+        df_image <- sp_object@images[[slide_name]]@coordinates[,c("col","row")]
+        df_image[['batch']] <- slide_name
+        df_coord <- rbind(df_coord, df_image)
+      }
+      colnames(df_coord) <- c("array_col","array_row","batch")
+      obs <- cbind(df_coord, obs)
+    } else {
+      if (!identical(setdiff(c('array_col','array_row','batch'), colnames(obs)), character(0)))
+        obs <- cbind(sp_object@meta.data[,c('array_col','array_row','batch')], obs)
     }
-    colnames(df_coord) <- c("array_col","array_row","batch")
-    obs <- cbind(df_coord, obs)
   }
   # Create anndata object for analysis
   adata <- ann$AnnData(
