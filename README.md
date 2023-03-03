@@ -40,15 +40,16 @@ Please download file: [STopover_v1_windows.exe]()
 ** Python  
 Please refer to yaml file: [Python requirements](https://github.com/bsungwoo/STopover/blob/master/STopover_env.yaml)  
 ** R  
-Please refer to DESCRIPTION file: [R requirements](https://github.com/bsungwoo/STquantool/blob/master/DESCRIPTION)  
+Please refer to DESCRIPTION file: [R requirements](https://github.com/bsungwoo/STopover/blob/master/DESCRIPTION)  
 
 ## Usage
 ### Python Code Example
 Please refer to [README_Python.md](https://github.com/bsungwoo/STopover/blob/master/STopover/README_Python.md)  
 ### R Code Example
-Please refer to vignettes in the package  
+Please refer to vignettes in the package and the below documents  
 ```Plain Text
   library(STopover)
   ??STopover  # Explanation for topological similarity and short examples
   browseVignettes("STopover")  # Browse for the vignettes (Rmd files in vignettes)
 ```
+Link to documents: [STopover_visium](https://rpubs.com/bsungwoo/STopover_visium), [STopover_cosmx](https://rpubs.com/bsungwoo/STopover_cosmx)  
