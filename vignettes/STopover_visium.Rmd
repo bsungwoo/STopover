@@ -1,6 +1,10 @@
 ---
 title: "STopover: Analysis of Visium dataset"
 output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{STopover: Analysis of Visium dataset}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r, include = FALSE}
@@ -195,7 +199,7 @@ readr::write_rds(sp_data_merge_mod, file.path(output_folder_name, 'sp_data_merge
 
 ### 5. STopover analysis: extract cell-cell colocalization patterns
 
-```{r, echo=FALSE}
+```{r, eval=FALSE, echo=FALSE}
 sp_data_merge_mod <- readr::read_rds(file.path('/home/nmadmin/DATA2/STopover_test/Results','sp_data_merge_mod.rds'))
 ```
 
@@ -222,7 +226,7 @@ sp_data_merge_celltype <- STopover::topological_similarity(sp_data_merge_mod,
 readr::write_rds(sp_data_merge_celltype, 'sp_data_merge_celltype.rds')
 ```
 ```{r, echo=FALSE}
-sp_data_merge_celltype <- readr::read_rds('sp_data_merge_celltype.rds')
+sp_data_merge_celltype <- readr::read_rds('/home/nmadmin/DATA2/STopover_test/Results/visium/sp_data_merge_celltype.rds')
 ```
 
 ### 6. Draw cell-cell colocalization heatmap
@@ -309,7 +313,7 @@ sp_data_merge_lr <- STopover::topological_similarity(sp_data_merge_mod,
 readr::write_rds(sp_data_merge_lr, 'sp_data_merge_lr.rds')
 ```
 ```{r, echo=FALSE}
-sp_data_merge_lr <- readr::read_rds('sp_data_merge_lr.rds')
+sp_data_merge_lr <- readr::read_rds('/home/nmadmin/DATA2/STopover_test/Results/visium/sp_data_merge_lr.rds')
 ```
 
 #### Find and visualize differential upregulated LR interaction in TNBC \> ER types

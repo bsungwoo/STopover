@@ -1,6 +1,10 @@
 ---
 title: "STopover: Analysis of CosMx SMI dataset"
 output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{STopover: Analysis of CosMx SMI dataset}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r, include = FALSE}
@@ -288,7 +292,7 @@ sp_data_merge_lr <- STopover::topological_similarity(sp_data_grid,
                                                      assay = "Spatial",
                                                      slot = "data",
                                                      lognorm = F)
-readr::write_rds(sp_data_merge_lr, '/home/nmadmin/DATA2/STopover_test/Results/data_analysis/sp_data_merge_lr.rds')
+readr::write_rds(sp_data_merge_lr, 'sp_data_merge_lr.rds')
 ```
 ```{r, echo=FALSE}
 sp_data_merge_lr <- readr::read_rds('/home/nmadmin/DATA2/STopover_test/Results/data_analysis/sp_data_merge_lr.rds')
