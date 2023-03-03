@@ -61,7 +61,8 @@ convert_to_anndata <- function(sp_object, features=NULL, conda.env.name='STopove
   var <- data.frame(row.names = rownames(sparse_mtx))
 
   # Extract coordinates of the spots or grids
-  if (add_coord){
+  spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","cosmx")
+  if (add_coord & spatial_type=='visium'){
     if (assay!='Spatial'){warning("Coordinates in the assay '",assay,"' will be used.")}
     df_coord <- data.frame()
     for (slide_name in names(sp_object@images)){
