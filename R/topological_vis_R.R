@@ -15,13 +15,14 @@
 #' @param slide_titles title of the slides to visualize in the plot (default = NULL)
 #' @param slide_ncol number of images to visualize in the column (default = 2)
 #' @param title_fontsize fontsize of the figure title (default = 15)
+#' @param legend_loc location of the figure legend (default = 'right')
 #' @param legend_fontsize fontsize of the figure legend (default = 10)
-#' @param add_title_text the text to add in the figure title (default = ')
-#' @param crop_image whether to crop the image (default = T)
+#' @param add_title_text the text to add in the figure title (default = '')
+#' @param crop_image whether to crop the image (default = F)
 #' @param return_plot whether to return the plot as list (default = F)
 #' @param save whether to save the image (default = F)
 #' @param save_path path to save the image (default = '.')
-#' @param save_name_add the text to add in the file name (default = ')
+#' @param save_name_add the text to add in the file name (default = '')
 #' @param dpi dpi to save the image (default = 100)
 #' @param fig_width figure width in ggsave (default = 5)
 #' @param fig_height figure height in ggsave (default = 5)
@@ -31,18 +32,24 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
                               celltype_x = NULL, celltype_y = NULL,
                               conda.env.name = 'STopover',
                               dot_size=1.8, alpha_img=0.8, alpha=0.8, vis_jaccard=T,
-                              subset_by_slide=F, slide_names=names(sp_object@images),slide_titles=NULL,
+                              subset_by_slide=F, slide_names=names(sp_object@images), slide_titles=NULL,
                               slide_ncol=2, # For multiple slides
-                              title_fontsize=15, legend_fontsize=10,
-                              add_title_text='', crop_image=T, return_plot=F,
+                              title_fontsize=15, legend_loc='right', legend_fontsize=10,
+                              add_title_text='', crop_image=F, return_plot=F,
                               save=F, save_path='.', save_name_add='', dpi=100,
                               fig_width=4, fig_height=4){
   # Check the data type
   spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","cosmx")
   cat(paste0("The provided object is considered a ",spatial_type," dataset\n"))
   # Convert the feature name if cell type specific data is provided
-  if (!is.null(celltype_x) & spatial_type=='cosmx'){feat_name_x <- paste0(celltype_x,"_",feat_name_x)}
-  if (!is.null(celltype_y) & spatial_type=='cosmx'){feat_name_y <- paste0(celltype_y,"_",feat_name_y)}
+  if (!is.null(celltype_x) & !is.null(celltype_y) & spatial_type=='cosmx'){
+    feat_name_x <- paste0(celltype_x,"_",feat_name_x)
+    feat_name_y <- paste0(celltype_y,"_",feat_name_y)
+  }
+  if (!is.null(celltype_x) & !is.null(celltype_y) & spatial_type=='visium'){
+    feat_name_x <- paste0(celltype_x,"_",celltype_y,"_",feat_name_x)
+    feat_name_y <- paste0(celltype_x,"_",celltype_y,"_",feat_name_y)
+  }
   # Aggregate all connected components and save overlapping regions separately
   sp_object[['Over']] = factor(((1 * ((sp_object[[paste0('Comb_CC_',feat_name_x)]] != 0) &
                                         (sp_object[[paste0('Comb_CC_',feat_name_y)]] == 0))) +
@@ -62,13 +69,15 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
   }
 
   # Define the 'batch' column according to the slide names: names(sp_object@images)
-  df_image_all <- data.frame()
-  for (slide in names(sp_object@images)){
-    df_image <- data.frame(row.names = rownames(sp_object@images[[slide]]@coordinates))
-    df_image[['batch']] <- slide
-    df_image_all <- rbind(df_image_all, df_image)
+  if (!'batch' %in% colnames(sp_object@meta.data)){
+    df_image_all <- data.frame()
+    for (slide in names(sp_object@images)){
+      df_image <- data.frame(row.names = rownames(sp_object@images[[slide]]@coordinates))
+      df_image[['batch']] <- slide
+      df_image_all <- rbind(df_image_all, df_image)
+    }
+    sp_object <- Seurat::AddMetaData(sp_object, df_image_all)
   }
-  sp_object <- Seurat::AddMetaData(sp_object, df_image_all)
 
   # Subset the slide by the image name: names(sp_object@images)
   slide_list <- 1:length(names(sp_object@images))
@@ -88,7 +97,7 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
   sp_object_mod <- sp_object
   Seurat::Idents(sp_object_mod) <- "Over"
   if (spatial_type=='visium'){
-    sp_object_mod <- subset(sp_object_mod, idents = c(feat_name_x, feat_name_y, "Over"))
+    sp_object_mod <- subset(sp_object_mod, idents = names(color.map))
   }
   # Draw spatial cluster plot for connected component locations
   if (spatial_type=='cosmx'){alpha_img <- 0}
@@ -124,13 +133,15 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
     for (cc_element in comb_cc_loc){
       sp_object_mod@meta.data[[cc_element]] <- as.numeric(as.character(sp_object_mod@meta.data[[cc_element]]))
     }
-    adata_sp <- convert_to_anndata(sp_object_mod, features = comb_cc_loc)
-    J_comp <- reticulate::py_to_r(STopover$jaccard_and_connected_loc_(adata_sp, feat_name_x=feat_name_x, feat_name_y=feat_name_y, J_index=T))
+    if (vis_jaccard){
+      adata_sp <- convert_to_anndata(sp_object_mod, features = comb_cc_loc)
+      J_comp <- reticulate::py_to_r(STopover$jaccard_and_connected_loc_(adata_sp, feat_name_x=feat_name_x, feat_name_y=feat_name_y, J_index=T))
+    }
 
     p[[i]] <- p[[i]] + ggplot2::ggtitle(paste0(slide_titles[[i]],
                                                feat_name_x,' & ',feat_name_y, add_title_text)) +
       ggplot2::theme(plot.title=ggplot2::element_text(size=title_fontsize,hjust=0.5),
-                     legend.title=ggplot2::element_blank(), legend.position='right',
+                     legend.title=ggplot2::element_blank(),
                      legend.text=ggplot2::element_text(size=legend_fontsize,hjust=0.5))
     if (vis_jaccard) {p[[i]] <- p[[i]] + ggplot2::annotate("text", x=Inf, y=Inf,
                                                            label=paste0("J_comp: ",
@@ -141,7 +152,8 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
   if (spatial_type=='visium'){
     if (length(p)<slide_ncol) {slide_ncol <- length(p)}
     slide_nrow <- ((length(p)-1)%/%slide_ncol)+1
-    p_mod <- patchwork::wrap_plots(p, ncol=slide_ncol) + patchwork::plot_layout(guides = "collect")
+    p_mod <- patchwork::wrap_plots(p, ncol=slide_ncol) +
+      patchwork::plot_layout(guides = "collect") & ggplot2::theme(legend.position = legend_loc)
   } else {
     p_mod <- patchwork::wrap_plots(p, ncol=1)
     slide_nrow <- 1; slide_ncol <- 1
@@ -149,7 +161,7 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
   plot(p_mod)
 
   if (save){ggplot2::ggsave(file.path(save_path,
-                                      paste0(paste(c(spatial_type,'loc_CCxy',feat_name_x,feat_name_y),collapse="_"),
+                                      paste0(paste(c(spatial_type,'loc_CCxy',feat_name_x,feat_name_y), collapse="_"),
                                              save_name_add, '.png')),
                             height=fig_height*slide_nrow, width=fig_width*slide_ncol, dpi=dpi, bg = "white",
                             units = "cm", limitsize=F)}
@@ -174,14 +186,15 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
 #' @param slide_title title of the selected slide to visualize in the plot (default = NULL)
 #' @param slide_ncol number of images to visualize in the column (default = 2)
 #' @param title_fontsize fontsize of the figure title (default = 15)
+#' @param legend_loc location of the figure legend (default = 'right')
 #' @param legend_fontsize fontsize of the figure legend (default = 10)
-#' @param add_title_text the text to add in the figure title (default = ')
-#' @param crop_image whether to crop the image (default = T)
+#' @param add_title_text the text to add in the figure title (default = '')
+#' @param crop_image whether to crop the image (default = F)
 #' @param return_plot whether to return the plot as list (default = F)
 #' @param return_sp_object whether to return the sp_object containing top n connected component location saved in metadata (default = F)
 #' @param save whether to save the image (default = F)
 #' @param save_path path to save the image (default = '.')
-#' @param save_name_add the text to add in the file name (default = ')
+#' @param save_name_add the text to add in the file name (default = '')
 #' @param dpi dpi to save the image (default = 100)
 #' @param fig_width figure width in ggsave (default = 5)
 #' @param fig_height figure height in ggsave (default = 5)
@@ -191,11 +204,12 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
                                    celltype_x=NULL, celltype_y=NULL,
                                    top_n=2,
                                    conda.env.name = 'STopover',
-                                   dot_size=1.3, alpha_img=0.8, alpha=0.8, vis_jaccard=T,
-                                   slide_name=names(sp_object@images)[1],
+                                   dot_size=1.8, alpha_img=0.8, alpha=0.8, vis_jaccard=T,
+                                   slide_name=names(sp_object@images)[1], slide_title=NULL,
                                    slide_ncol=2, # For multiple slides
-                                   title_fontsize=15, legend_fontsize=10, slide_title=NULL,
-                                   add_title_text='', crop_image=T, return_plot=F, return_sp_object=F,
+                                   title_fontsize=15, legend_loc = 'right',
+                                   legend_fontsize=10, add_title_text='',
+                                   crop_image=F, return_plot=F, return_sp_object=F,
                                    save=F, save_path = '.', save_name_add='', dpi=100,
                                    fig_width=5, fig_height=5){
   if (length(slide_name) > 1){stop("'slide_name' should be one element of names(sp_object@images)")}
@@ -204,17 +218,25 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
   spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","cosmx")
   cat(paste0("The provided object is considered a ",spatial_type," dataset\n"))
   # Convert the feature name if cell type specific data is provided
-  if (!is.null(celltype_x) & spatial_type=='cosmx'){feat_name_x <- paste0(celltype_x,"_",feat_name_x)}
-  if (!is.null(celltype_y) & spatial_type=='cosmx'){feat_name_y <- paste0(celltype_y,"_",feat_name_y)}
+  if (!is.null(celltype_x) & !is.null(celltype_y) & spatial_type=='cosmx'){
+    feat_name_x <- paste0(celltype_x,"_",feat_name_x)
+    feat_name_y <- paste0(celltype_y,"_",feat_name_y)
+  }
+  if (!is.null(celltype_x) & !is.null(celltype_y) & spatial_type=='visium'){
+    feat_name_x <- paste0(celltype_x,"_",celltype_y,"_",feat_name_x)
+    feat_name_y <- paste0(celltype_x,"_",celltype_y,"_",feat_name_y)
+  }
 
   # Define the 'batch' column according to the slide names: names(sp_object@images)
-  df_image_all <- data.frame()
-  for (slide in names(sp_object@images)){
-    df_image <- data.frame(row.names = rownames(sp_object@images[[slide]]@coordinates))
-    df_image[['batch']] <- slide
-    df_image_all <- rbind(df_image_all, df_image)
+  if (!'batch' %in% colnames(sp_object@meta.data)){
+    df_image_all <- data.frame()
+    for (slide in names(sp_object@images)){
+      df_image <- data.frame(row.names = rownames(sp_object@images[[slide]]@coordinates))
+      df_image[['batch']] <- slide
+      df_image_all <- rbind(df_image_all, df_image)
+    }
+    sp_object <- Seurat::AddMetaData(sp_object, df_image_all)
   }
-  sp_object <- Seurat::AddMetaData(sp_object, df_image_all)
 
   # Subset the slide by the image name: names(sp_object@images)
   Seurat::Idents(sp_object) <- "batch"
@@ -254,13 +276,13 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
     # Subset the object to highlight the top i connected component locations
     sp_object_mod <- sp_object
     Seurat::Idents(sp_object_mod) <- paste0('CCxy_top_',i)
-    if (spatial_type=='visium'){sp_object_mod <- subset(sp_object_mod, idents = c(feat_name_x, feat_name_y, "Over"))}
+    if (spatial_type=='visium'){sp_object_mod <- subset(sp_object_mod, idents = feature_map[names(color.map)])}
 
     # Draw spatial cluster plot for connected component locations
-    p[[i]] <- Seurat::SpatialDimPlot(sp_object_mod, alpha=alpha, image.alpha = alpha_img,
-                                     label=F, crop=crop_image,
-                                     pt.size.factor=dot_size,
-                                     combine=FALSE)[[1]]
+    p[[i]] <- Seurat::SpatialPlot(sp_object_mod, alpha=alpha, image.alpha = alpha_img,
+                                  label=F, crop=crop_image,
+                                  pt.size.factor=dot_size,
+                                  combine=FALSE)[[1]]
     p[[i]] <- p[[i]] + ggplot2::ggtitle(paste0(ifelse(is.null(slide_title), paste0(slide_name,'\n'),
                                                       ifelse(slide_title=='','',paste0(slide_title,'\n'))),
                                                feat_name_x,' & ',feat_name_y, add_title_text,": ",
@@ -278,7 +300,8 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
   # Draw plot
   if (length(p)<slide_ncol) {slide_ncol <- length(p)}
   slide_nrow <- ((length(p)-1)%/%slide_ncol)+1
-  p_mod <- patchwork::wrap_plots(p, ncol=slide_ncol) + patchwork::plot_layout(guides = "collect")
+  p_mod <- patchwork::wrap_plots(p, ncol=slide_ncol) +
+    patchwork::plot_layout(guides = "collect") & ggplot2::theme(legend.position = legend_loc)
   plot(p_mod)
 
   if (save){ggplot2::ggsave(file.path(save_path,
@@ -292,5 +315,163 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
       return(list(p_mod, sp_object))
     }
     else return (p_mod)
+  }
+}
+
+
+#' Visualizing upregulated LR interactions and their corresponding GO terms using a heatmap
+#' @description Spatial LR interaction profiles are estimated by STopover and differentially upregulated LR interactions in 'comp_group' compared to 'ref_group' are selected (threshold: Jcomp>J_comp_cutoff & fold change of Jcomp>J_comp_cutoff). The enrichment analysis is performed for the genes in LR pairs and the top 10 enriched GO terms with the lowest adjusted p-values were selected (threshold: p.adjust<padjust_cutoff). LR pairs in which either ligand or receptor gene intersected with the genes composing the top GO terms were listed. The upregulated functional terms, the intersecting LR pairs, and fold change of Jcomp are visualized in a heatmap.
+#' @param sp_object spatial data (Seurat object) to be used
+#' @param ref_group vector containing slide name(s) corresponding to the group that are considered as a baseline (should be among names(sp_object@images))
+#' @param comp_group vector containing slide name(s) corresponding to the group in which upregulated LR paris are tested (should be among names(sp_object@images))
+#' @param logFC_cutoff log fold change cutoff of J_comp for the differentially upregulated LR pairs in 'comp_group' compared to 'ref_group' (default = 1)
+#' @param J_comp_cutoff J_comp cutoff in the comp_group (default = 0.2)
+#' @param go_species species of the given dataset (default = "human")
+#' @param ontology_cat category of GO terms to show in the heatmap (default ="BP")
+#' @param padjust_method method for adjusting p-values during overrepresentation tests to identify significant GO terms (default ="BH")
+#' @param padjust_cutoff adjusted p-value cutoff to select the GO terms (default = 0.05)
+#' @param top_n the top GO terms to show in the heatmap (default=10)
+#' @param heatmap_max the maximum value to show in the colorbar (default=10)
+#' @param title_fontsize the title fontsize in the heatmap (default = 12)
+#' @param xaxis_title_fontsize the x axis label size in the heatmap (default = 12)
+#' @param yaxis_title_fontsize the y axis label size in the heatmap (default = 12)
+#' @param angle_col the angle of the column label in the heatmap (refer to the pheatmap 'angle_col') (default = 45)
+#' @param colorbar_palette the vector of colors to be used in the colormap (select among the grDevices::hcl.pals())
+#' @param legend_loc location of the figure legend (default = 'right')
+#' @param save_plot whether to save the heatmap (default = F)
+#' @param save_path the path to save the heatmap (default = '.')
+#' @param save_name the name of the heatmap to save (default = 'heatmap_GO_LR_int.png')
+#' @param fig_width the width of the heatmap to save (default = 21)
+#' @param fig_height the height of the heatmap to save (default = 10)
+#' @param dpi the dpi of the heatmap to save (default = 150)
+#' @param return_results return a dataframe showing the list of top upregulated LR interaction and a heatmap
+#' @return a list of dataframe showing the list of top differentially increased LR interaction in comp_group compared to ref_group and a heatmap
+#' @export
+vis_diff_inc_lr_pairs <- function(sp_object, ref_group, comp_group,
+                                  logFC_cutoff=1, J_comp_cutoff=0.2,
+                                  go_species=c("human","mouse"),
+                                  ontology_cat=c("BP","CC","MF","all"),
+                                  padjust_method = "BH", padjust_cutoff=0.05,
+                                  top_n = 10, heatmap_max=10,
+                                  title_fontsize=12,
+                                  xaxis_title_fontsize=10,
+                                  yaxis_title_fontsize=10,
+                                  angle_col=45,
+                                  colorbar_palette=rownames(RColorBrewer::brewer.pal.info),
+                                  legend_loc='right',legend_fontsize=10,
+                                  save_plot=F, save_path='.',
+                                  save_name='heatmap_GO_LR_int',
+                                  fig_width=21, fig_height=10, dpi=150,
+                                  return_results=T){
+  # Check the feasibility of the given inputs
+  if (!identical(setdiff(ref_group, names(sp_object@images)),character(0))){stop("'ref_group' should be among names(sp_object@images)")}
+  if (!identical(setdiff(comp_group, names(sp_object@images)),character(0))){stop("'comp_group' should be among names(sp_object@images)")}
+  go_species <- match.arg(go_species)
+  ontology_cat <- match.arg(ontology_cat)
+  colorbar_palette <-  match.arg(colorbar_palette)
+  ## Define group match vector
+  ref_group_match <- rep("ref", length(ref_group))
+  comp_group_match <- rep("comp", length(comp_group))
+  names(ref_group_match) <- ref_group
+  names(comp_group_match) <- comp_group
+  group_match <- c(ref_group_match, comp_group_match)
+  ## Extract LR database for the given species
+  ref_df_ <- STopover::return_celltalkdb(lr_db_species = go_species)[c('lr_pair','ligand_gene_symbol','receptor_gene_symbol')]
+  ref_df <- do.call("rbind", replicate(length(names(sp_object@images)), ref_df_, simplify = FALSE))
+  ref_df <- cbind(data.frame(Slide =  as.character(rep(names(sp_object@images), each = dim(ref_df_)[1]))),
+                  ref_df)
+  colnames(ref_df) <- c("batch","lr_pair","Feat_1","Feat_2")
+
+  ## Comparison between ref_group and comp_group
+  df_top_diff_ref <- sp_object@misc %>% data.frame(.) %>%
+    dplyr::mutate(lr_pair = paste(Feat_1,Feat_2,sep= "_")) %>%
+    dplyr::left_join(ref_df, ., by=c("lr_pair","Feat_1","Feat_2","batch")) %>%
+    dplyr::mutate(J_comp = ifelse(is.na(J_comp), 0, J_comp)) %>%
+    dplyr::mutate(Group = group_match[batch]) %>%
+    dplyr::group_by(Group, lr_pair, Feat_1, Feat_2) %>%
+    dplyr::summarise(Mean = mean(J_comp), .groups="keep")
+
+  df_top_diff_comp <- df_top_diff_ref %>%
+    dplyr::group_by(Group) %>%
+    dplyr::mutate(logFC = log2(Mean / filter(., Group == "ref") %>% pull(Mean))) %>%
+    dplyr::filter(Group=="comp") %>%
+    dplyr::filter(logFC>logFC_cutoff, Mean>J_comp_cutoff) %>%
+    dplyr::arrange(desc(logFC))
+
+  require(clusterProfiler)
+  feat_interest <- unique(c(df_top_diff_comp %>% dplyr::pull("Feat_1"),
+                            df_top_diff_comp %>% dplyr::pull("Feat_2")))
+
+  if (!identical(feat_interest, character(0))){
+    if (go_species=="human"){
+      require(org.Hs.eg.db)
+      sym2ent <- AnnotationDbi::mapIds(org.Hs.eg.db, feat_interest, "ENTREZID", "SYMBOL")
+      GO_result <- enrichGO(gene          = sym2ent,
+                            OrgDb         = org.Hs.eg.db,
+                            ont           = ontology_cat,
+                            pAdjustMethod = padjust_method,
+                            pvalueCutoff  = padjust_cutoff,
+                            qvalueCutoff  = 0.2, readable = TRUE)
+    } else if (go_species=="mouse"){
+      require(org.Mm.eg.db)
+      sym2ent <- AnnotationDbi::mapIds(org.Mm.eg.db, feat_interest, "ENTREZID", "SYMBOL")
+      GO_result <- enrichGO(gene          = sym2ent,
+                            OrgDb         = org.Mm.eg.db,
+                            ont           = ontology_cat,
+                            pAdjustMethod = padjust_method,
+                            pvalueCutoff  = padjust_cutoff,
+                            qvalueCutoff  = 0.2, readable = TRUE)
+    }
+    df <- GO_result@result %>% dplyr::filter(p.adjust < padjust_cutoff)
+    df[['GeneRatio']] <- sapply(df[['GeneRatio']], function(x) eval(parse(text=x)))
+    df <- df %>% dplyr::slice(1:top_n) %>% dplyr::arrange(desc(GeneRatio))
+    lr_pair_match <- data.frame()
+    for (idx in 1:length(df$geneID)){
+      gene_list <- ifelse(grepl(df$geneID[idx],pattern="/"),strsplit(df$geneID[idx], split="/")[[1]],df$geneID[idx])
+      df_lr_tmp <- data.frame()
+      for (gene in gene_list){
+        lr_list_tmp <- df_top_diff_comp %>% dplyr::filter(Feat_1==gene|Feat_2==gene) %>% dplyr::pull(lr_pair)
+        df_lr_tmp <- data.frame(GO_terms = df[idx, "Description"], lr_pair = lr_list_tmp)
+        lr_pair_match <- rbind(lr_pair_match, df_lr_tmp)
+      }
+    }
+    lr_pair_match_ <- lr_pair_match %>% dplyr::distinct(.) %>%
+      left_join(., df_top_diff_comp, by="lr_pair") %>%
+      dplyr::select(GO_terms, lr_pair, logFC) %>%
+      dplyr::arrange(desc(logFC)) %>%
+      dplyr::mutate(logFC = ifelse(logFC>heatmap_max, heatmap_max, logFC))
+    # Make pivot table with the dataset
+    df_summ <- lr_pair_match_ %>% tidyr::pivot_wider(names_from = lr_pair, values_from = logFC)
+    lr_pair_match_[['lr_pair']] <- factor(lr_pair_match_[['lr_pair']], levels = colnames(df_summ)[-1])
+    lr_pair_match_[['GO_terms']] <- factor(lr_pair_match_[['GO_terms']], levels = rev(df_summ$GO_terms))
+    # Draw the plot
+    out <- ggplot2::ggplot(lr_pair_match_, ggplot2::aes(x = lr_pair, y = GO_terms, fill = logFC)) +
+      ggplot2::geom_tile(width = 0.95, height = 0.95) +
+      ggplot2::coord_fixed() +
+      ggplot2::scale_fill_distiller(palette = colorbar_palette, type="seq", limits=c(0,heatmap_max)) +
+      ggplot2::scale_y_discrete(labels = function(x) stringr::str_wrap(x,  width = 40)) +
+      ggplot2::theme(panel.border = ggplot2::element_blank(),
+                     panel.grid.major = ggplot2::element_blank(),
+                     panel.grid.minor = ggplot2::element_blank(),
+                     panel.background = ggplot2::element_rect(fill = "grey",
+                                                              colour = "grey"),
+                     plot.title=ggplot2::element_text(size=title_fontsize,hjust=0.5),
+                     axis.title.x=ggplot2::element_blank(),
+                     axis.title.y=ggplot2::element_blank(),
+                     axis.text.x=ggplot2::element_text(size=xaxis_title_fontsize,angle=angle_col,hjust=1),
+                     axis.text.y=ggplot2::element_text(size=yaxis_title_fontsize),
+                     legend.position=legend_loc,
+                     legend.text=ggplot2::element_text(size=legend_fontsize,hjust=0.5))
+    if (save_plot) {
+      plot(out)
+      ggsave(file.path(save_path, paste0(paste(c(save_name,ref_group,comp_group),collapse="_"),'.png')),
+             height=fig_height, width=fig_width, dpi=dpi, bg = "white",
+             units = "cm", limitsize=F)
+    }
+    if (return_results){
+      return(list(df_top_diff_comp, out))
+    }
+  } else {
+    cat("None of the features were remained after filtering\n")
   }
 }

@@ -28,6 +28,11 @@ Imports:
       Seurat (>= 4.1.0),
       hdf5r,
       dplyr (>= 1.0.9),
+      tidyr,
       clusterProfiler (>= 4.2.2),
       org.Mm.eg.db,
-      org.Hs.eg.db
+      org.Hs.eg.db,
+      rmarkdown (>= 2.20)
+Suggests: 
+    knitr
+VignetteBuilder: knitr

@@ -86,7 +86,7 @@ convert_to_anndata <- function(sp_object, features=NULL, conda.env.name='STopove
 #' Load CosMx SMI file as Seurat object (as a Slideseq class)
 #' @description Convert Seurat object for spatial transcriptomic data to anndata
 #' @param sp_load_path path to CosMx SMI data directory or .h5ad Anndata object (default = '.')
-#' @param sc_object single-cell reference anndata for cell type annotation of CosMx SMI data (default = NULL)
+#' @param sc_object single-cell reference anndata/path to reference "*h5ad" file/Seurat object for cell type annotation of CosMx SMI data (default = NULL)
 #' \itemize{
 #'    \item If NULL, then Leiden cluster numbers will be used to annotate CosMx SMI data
 #' }
@@ -105,7 +105,7 @@ convert_to_anndata <- function(sp_object, features=NULL, conda.env.name='STopove
 #' @param meta_ycoord_colname column name for global x, y coordinates in cell-level metadata file (default = 'CenterY_global_px')
 #' @param x_bins number of bins to divide the CosMx SMI data (for grid-based aggregation) (default = 100)
 #' @param y_bins number of bins to divide the CosMx SMI data (for grid-based aggregation) (default = 100)
-#' @return Seurat object that contains grid-based or cell-level log-normalized count matrix in 'counts & data' slots, coordinates in '@images$image', and transcript information in '@assays$Spatial@misc' (only for grid-based data)
+#' @return list of Seurat objects for grid-based and cell-level data, sequentially. The objects contains grid-based or cell-level log-normalized count matrix in 'counts & data' slots, coordinates in '@images$image', and transcript information in '@assays$Spatial@misc' (only for grid-based data)
 #' @export
 preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='STopover',
                              sc_celltype_colname = 'celltype', sc_norm_total=1e3,
@@ -125,27 +125,51 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
   STopover <- reticulate::import('STopover', convert = FALSE)
 
   # Check format of the single-cell dataset if it exists
-  if (!is.null(sc_object)){
-    if (!sc_celltype_colname %in% colnames(sc_object@meta.data)){stop("'sc_celltype_colname' not among the metadata column names")}
-    ## Convert Seurat single-cell object to sparse matrix format
-    adata_sc <- convert_to_anndata(sc_object, assay='RNA', slot='data', add_coord=F)
+  if (typeof(sc_object)=="character"){
+    cosmx_output_dir <- file.path(getwd(),"cosmx_output")
+    if (!file.exists(cosmx_output_dir)) dir.create(cosmx_output_dir)
+    STopover_cosmx_dir <- system.file("preprocess_cosmx_R.py", package="STopover")
+    string_output <- system(paste0("python ", STopover_cosmx_dir,
+                                   " --sp_load_path",sp_load_path," --sc_load_path",sc_object,
+                                   " --sc_celltype_colname ",sc_celltype_colname,
+                                   " --sc_norm_total ",sc_norm_total,
+                                   " --tx_file_name ",tx_file_name,
+                                   " --cell_exprmat_file_name ",cell_exprmat_file_name,
+                                   " --cell_metadata_file_name",cell_metadata_file_name,
+                                   " --fov_colname",fov_colname,
+                                   " --cell_id_colname",cell_id_colname,
+                                   " --tx_xcoord_colname",tx_xcoord_colname,
+                                   " --tx_ycoord_colname",tx_ycoord_colname,
+                                   " --transcript_colname",transcript_colname,
+                                   " --meta_xcoord_colname",meta_xcoord_colname,
+                                   " --meta_ycoord_colname",meta_ycoord_colname,
+                                   " --x_bins",x_bins," --y_bins",y_bins,
+                                   " --save_path",cosmx_output_dir), intern = T)
+    cat(paste0(string_output,"\n"))
   } else {
-    adata_sc <- NULL
+    if (typeof(sc_object)=="environment"|is.null(sc_object)){
+      adata_sc <- sc_object
+    } else {
+      if (!sc_celltype_colname %in% colnames(sc_object@meta.data)){stop("'sc_celltype_colname' not among the metadata column names")}
+      cat("Converting Seurat object to anndata\n")
+      ## Convert Seurat single-cell object to sparse matrix format
+      adata_sc <- convert_to_anndata(sc_object, assay='RNA', slot='counts', add_coord=F)
+    }
+    cat("Reading CosMx SMI data: annotating cells and creating grid-based data\n")
+    adata_sp_all <- STopover$STopover_cosmx(sp_load_path=sp_load_path, sc_adata=adata_sc,
+                                            sc_celltype_colname = sc_celltype_colname,
+                                            sc_norm_total=sc_norm_total,
+                                            tx_file_name = tx_file_name,
+                                            cell_exprmat_file_name=cell_exprmat_file_name,
+                                            cell_metadata_file_name=cell_metadata_file_name,
+                                            fov_colname = fov_colname, cell_id_colname=cell_id_colname,
+                                            tx_xcoord_colname=tx_xcoord_colname,
+                                            tx_ycoord_colname=tx_ycoord_colname,
+                                            transcript_colname=transcript_colname,
+                                            meta_xcoord_colname=meta_xcoord_colname,
+                                            meta_ycoord_colname=meta_ycoord_colname,
+                                            x_bins=as.integer(x_bins), y_bins=as.integer(y_bins))
   }
-  cat("Reading CosMx SMI data: annotating cells and creating grid-based data\n")
-  adata_sp_all <- STopover$STopover_cosmx(sp_load_path=sp_load_path, sc_adata=adata_sc,
-                                          sc_celltype_colname = sc_celltype_colname,
-                                          sc_norm_total=sc_norm_total,
-                                          tx_file_name = tx_file_name,
-                                          cell_exprmat_file_name=cell_exprmat_file_name,
-                                          cell_metadata_file_name=cell_metadata_file_name,
-                                          fov_colname = fov_colname, cell_id_colname=cell_id_colname,
-                                          tx_xcoord_colname=tx_xcoord_colname,
-                                          tx_ycoord_colname=tx_ycoord_colname,
-                                          transcript_colname=transcript_colname,
-                                          meta_xcoord_colname=meta_xcoord_colname,
-                                          meta_ycoord_colname=meta_ycoord_colname,
-                                          x_bins=as.integer(x_bins), y_bins=as.integer(y_bins))
 
   # Create Seurat object for grid-based and cell-level cosmx data
   cat("Creating Seurat object for grid-based and cell-level CosMx data\n")
@@ -163,8 +187,8 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
                           col=reticulate::py_to_r(adata$obs['array_col']),
                           stringsAsFactors=F)
     # Invert the top-bottom of the coordinate
-    df_coord['row'] = max(df_coord['row']) - df_coord['row']
-    rownames(df_coord) = reticulate::py_to_r(adata$obs_names$values)
+    df_coord['row'] <- max(df_coord['row']) - df_coord['row']
+    rownames(df_coord) <- reticulate::py_to_r(adata$obs_names$values)
     if (idx==2) {
       df_celltype <- data.frame(celltype = factor(reticulate::py_to_r(adata$obs[sc_celltype_colname]$astype('object'))))
       rownames(df_celltype) = reticulate::py_to_r(adata$obs_names$values)
@@ -197,12 +221,12 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
 #' }
 #' @return spatial data with cell type-specific count information in each grid
 #' @export
-celltype_specific_object <- function(sp_object, cell_types, conda.env.name='STopover',
-                                     fov_colname = 'fov', cell_id_colname='cell_ID',
-                                     celltype_colname='celltype', transcript_colname='target',
-                                     sc_norm_total=1e3, return_mode='seurat'){
+celltype_specific_cosmx <- function(sp_object, cell_types, conda.env.name='STopover',
+                                    fov_colname = 'fov', cell_id_colname='cell_ID',
+                                    celltype_colname='celltype', transcript_colname='target',
+                                    sc_norm_total=1e3, return_mode='seurat'){
   if (class(sp_object@images$image)[1]!="SlideSeq") {stop("'sp_object' should be cosmx spatial data object")}
-  ifelse(return_mode %in% c('anndata','seurat'),'',stop("'return mode' should be either 'anndata' or 'seurat'"))
+  ifelse(return_mode %in% c('anndata','seurat'),NULL,stop("'return mode' should be either 'anndata' or 'seurat'"))
 
   # Install and load environment
   install_load_env(conda.env.name)

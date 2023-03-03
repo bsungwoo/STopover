@@ -8,7 +8,8 @@ save_path: path to save file
 lognorm: whether to lognormalize the count matrix saved in adata.X  
 #### CosMx  
 x_bins, y_bins: number of bins to divide the CosMx SMI data (for grid-based aggregation)   
-sc_adata: single-cell reference anndata for cell type annotation of CosMx SMI data  
+sc_adata: single-cell reference anndata for cell type annotation of CosMx SMI data
+-> If the path to "*.h5ad" file is provided, then it will be used as a reference single-cell data
 sc_celltype_colname: column name for cell type annotation information in metadata of single-cell (.obs)  
 sc_norm_total: scaling factor for the total count normalization per cell  
 tx_file_name: CosMx file for transcript count  
