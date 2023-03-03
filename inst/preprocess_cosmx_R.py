@@ -42,4 +42,4 @@ if __name__ == "__main__":
                                   save_path=args.save_path)
                                    
     adata_sp_all.save_connected_loc_data(save_format='h5ad', 
-                                         filename = file.path(args.save_path, "preprocess_cosmx.h5ad"))
+                                         filename = os.path.join(args.save_path, "preprocess_cosmx.h5ad"))
