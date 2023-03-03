@@ -1,0 +1,384 @@
+---
+title: "STopover: Analysis of Visium dataset"
+output: rmarkdown::html_vignette
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  root.dir = "/home/nmadmin/DATA2/STopover"
+)
+```
+
+```{r, eval = FALSE}
+# Install packages
+install.packages(c("Seurat","dplyr","tidyr","readr","pheatmap"))
+
+# Install Bioconductor packages
+if (!require("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("clusterProfiler")
+BiocManager::install("org.Mm.eg.db")
+BiocManager::install("org.Hs.eg.db")
+
+# Install CellDART
+devtools::install_github("mexchy1000/CellDART", build_vignettes = T, force = T)
+
+# Install STopover
+devtools::install_github("bsungwoo/STopover", build_vignettes = T, force = T)
+```
+
+```{r install, eval=FALSE}
+library(STopover)
+library(CellDART)
+library(Seurat)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(pheatmap)
+```
+
+```{r, eval=FALSE}
+# Make output folder
+output_folder_name <- 'Results'
+if (!file.exists(output_folder_name)){
+  dir.create(output_folder_name)
+}
+
+fig_dir <- file.path(output_folder_name, 'figures')
+if (!file.exists(fig_dir)){
+  dir.create(fig_dir)
+}
+```
+
+### 1. Load and preprocess single-cell datasets
+
+##### Reference: Wu, S.Z. et al. A single-cell and spatially resolved atlas of human breast cancers. Nat Genet. 2021 Sep;53(9):1334-1347.
+
+##### <https://singlecell.broadinstitute.org/single_cell/study/SCP1039>
+
+```{r, eval = FALSE}
+# Patient name for single-cell data
+patient_list_sc <- c('CID4290A','CID4535','CID4465','CID44971')
+tissue_type <- c("ER_1","ER_2","TNBC_1","TNBC_2")
+
+# Load single-cell count matrix and metadata
+sc_metadata <- read.csv('./Whole_miniatlas_meta.csv')
+sc_metadata <- sc_metadata[-c(1),]
+rownames(sc_metadata) <- sc_metadata$NAME
+sc_metadata <- sc_metadata[-c(1,3)]
+sc_metadata$nCount_RNA <- as.numeric(sc_metadata$nCount_RNA)
+sc_metadata$nFeature_RNA <- as.numeric(sc_metadata$nFeature_RNA)
+
+# Reverse log transform count matrix to get total normalized count
+sc_data <- CreateSeuratObject(counts = expm1(expression_matrix))
+# Add metadata and log-normalize
+sc_data <- AddMetaData(sc_data, sc_metadata)
+sc_data <- NormalizeData(sc_data, normalization.method = "LogNormalize", scale.factor = 1e4)
+# Save single-cell Seurat object
+readr::write_rds(sc_data, 'sc_data.rds')
+```
+
+### 2. Load and preprocess spatial datasets
+
+##### <https://singlecell.broadinstitute.org/single_cell/study/SCP1039>
+
+```{r, eval = FALSE}
+# Patient name for spatial data
+patient_list_sp <- c('CID4290','CID4535','CID4465','CID44971')
+tissue_type <- c("ER_1","ER_2","TNBC_1","TNBC_2")
+
+for (i in 1:length(patient_list_sp)){
+  # Read count matrix
+  breast_data <- Seurat::ReadMtx(paste0('./filtered_count_matrices/',patient_list_sp[i],
+                                       '_filtered_count_matrix/matrix.mtx.gz'),
+                                paste0('./filtered_count_matrices/',patient_list_sp[i],
+                                       '_filtered_count_matrix/barcodes.tsv.gz'),
+                                paste0('./filtered_count_matrices/',patient_list_sp[i],
+                                       '_filtered_count_matrix/features.tsv.gz'),
+                                feature.column = 1)
+  breast_data <- Seurat::CreateSeuratObject(counts = breast_data, assay = "Spatial")
+  # Read Visium images and coordinates
+  breast_image <- Seurat::Read10X_Image(paste0('./spatial/',
+                                               patient_list_sp[i],'_spatial/'))
+  breast_image <- breast_image[Seurat::Cells(x = breast_data)]
+  DefaultAssay(object = breast_image) <- 'Spatial'
+  breast_data[[patient_list_sp[i]]] <- breast_image
+  breast_data$orig.ident <- patient_list_sp[i]
+  
+  # Add metadata to the Seurat spatial data
+  metadata <- read.csv(paste0('./metadata/',patient_list_sp[i],
+                              '_metadata.csv'), header = T)
+  rownames(metadata) <- metadata$X
+  metadata <- metadata[,-(1)]
+  breast_data <- AddMetaData(breast_data, metadata)
+  breast_data$orig.ident <- factor(breast_data$orig.ident, levels=patient_list_sp[i])
+  
+  # Normalize the data and save
+  breast_data <- NormalizeData(breast_data,
+                               normalization.method = "LogNormalize",
+                               scale.factor = 1e4)
+  readr::write_rds(breast_data, file.path(output_folder_name, paste0('sp_data_',patient_list_sp[i],'.rds')))
+}
+```
+
+### 3. Run CellDART analysis: predict spatial cell fraction
+
+```{r, eval = FALSE}
+# Load single-cell data (if needed)
+sc_data <- readr::read_rds('sc_data.rds')
+
+for (i in 1:length(patient_list_sp)){
+  # Load spatial data (if needed)
+  sp_data <- readr::read_rds(paste0('sp_data_',patient_list_sp[i],'.rds'))
+  
+  # Subset single-cell data to contain only the data obtained from the same patient
+  sc_data_sel <- sc_data
+  Idents(sc_data_sel) <- sc_data_sel$Patient
+  sc_data_sel <- subset(sc_data_sel, idents = patient_list_sc[i])
+  
+  # Set the pseudospot number as the 5 times the number of spatial spots
+  npseudo <- 5*dim(sp_data)[2]
+  sp_data_cellf <- CellDART::pred_cellf_celldart(sp_data=sp_data,
+                                                 sc_data=sc_data_sel,
+                                                 outdir = output_folder_name,
+                                                 env.select = "conda",
+                                                 env.name = "CellDART",
+                                                 gpu = TRUE,
+                                                 metadata_celltype = "celltype_major",
+                                                 num_markers = 20,
+                                                 seed_num = 0,
+                                                 nmix = 10,
+                                                 npseudo = 20000,
+                                                 alpha = 0.6,
+                                                 alpha_lr = 5,
+                                                 emb_dim = 64,
+                                                 batch_size = 512,
+                                                 n_iterations = 3000,
+                                                 init_train_epoch = 10)
+  
+  ## Save Seurat object with cell fraction
+  readr::write_rds(sp_data_cellf, file.path(output_folder_name,
+                                            paste0('sp_data_cellf_',patient_list_sp[i],'.rds')))
+}
+```
+
+### 4. Merge the Seurat objects with predicted cell fraction
+
+```{r, eval = FALSE}
+# Load the spatial data with predicted cell fraction and save as a list
+sp_data_list <- lapply(patient_list_sp, function(x) {
+  readr::read_rds(file.path(output_folder_name, 
+                            paste0('sp_data_cellf_',x,'.rds')))})
+
+# Include the spots that are located inside of the tissue
+for (idx in 1:length(sp_data_list)){
+  in_tissue_spots <- intersect(rownames(sp_data_list[[idx]]@images[[1]]@coordinates),
+                               colnames(sp_data_list[[idx]]))
+  sp_data_sub <- subset(sp_data_list[[idx]], cell=in_tissue_spots)
+  sp_data_list[[idx]] <- sp_data_sub
+}
+
+# Merge the spatial Seurat objects
+sp_data_merge <- merge(sp_data_list[[1]], sp_data_list[2:4])
+sp_data_merge_mod <- sp_data_merge
+
+# Remove the '_cellf' from the metadata columns (represents predicted cell fraction)
+colnames(sp_data_merge_mod@meta.data) <- sapply(colnames(sp_data_merge_mod@meta.data),
+                                                function(x) strsplit(x, split='_cellf')[[1]])
+# Fill in NA values with 0
+sp_data_merge_mod@meta.data[is.na(sp_data_merge_mod@meta.data)] <- 0
+# save the Seurat object
+readr::write_rds(sp_data_merge_mod, file.path(output_folder_name, 'sp_data_merge_mod.rds'))
+```
+
+### 5. STopover analysis: extract cell-cell colocalization patterns
+
+```{r, echo=FALSE, eval=FALSE}
+sp_data_merge_mod <- readr::read_rds(file.path('/home/nmadmin/DATA2/STopover/Results','sp_data_merge_mod.rds'))
+```
+
+```{r, eval=FALSE}
+# Load cell type names saved in the medatata of single-cell data
+celltype_names <- c('Normal.Epithelial','T.cells','Cancer.Epithelial','PVL',
+                    'Endothelial','CAFs','B.cells','Myeloid','Plasmablasts')
+
+# Define cell type pairs as calculated between single-cell and spatial data
+feat_pairs <- data.frame(A="Cancer.Epithelial", B=celltype_names)
+
+# Fun Stopover analysis between cancer epithelial cells and other cell types
+sp_data_merge_celltype <- STopover::topological_similarity(sp_data_merge_mod, 
+                                                           feat_pairs,
+                                                           use_lr_db = F,
+                                                           lr_db_species = "human",
+                                                           min_size = 20,
+                                                           fwhm = 2.5,
+                                                           thres_per = 30,
+                                                           assay = "Spatial",
+                                                           slot = "data",
+                                                           lognorm = F)
+
+readr::write_rds(sp_data_merge_celltype, 'sp_data_merge_celltype.rds')
+```
+### 6. Draw cell-cell colocalization heatmap
+
+```{r, eval=FALSE}
+tissue_type_ <- c("ER","ER","TNBC","TNBC")
+
+# Load global overlap score calculated between cancer epithelial and other cell types
+df <- sp_data_merge_celltype@misc %>% 
+  dplyr::select(batch, Feat_2, J_comp) %>% dplyr::filter(Feat_2!="Cancer.Epithelial") %>%
+  tidyr::pivot_wider(names_from = batch, values_from = J_comp) %>%
+  tibble::column_to_rownames(var = "Feat_2")
+# Change column names (add tissue subtype information)
+colnames(df) <- paste0(colnames(df), ": ", tissue_type_)
+# Fill NA values with 0
+df[is.na(df)] = 0
+
+# Color choices
+grDevices::hcl.pals()
+```
+
+```{r, eval=FALSE}
+# Draw heatmap with pheatmap
+out <- pheatmap::pheatmap(t(df), cluster_rows=T, show_rownames=T,
+                          cluster_cols=T, angle_col=45, fontsize=15,
+                          color = grDevices::hcl.colors(100, "Inferno"), 
+                          na_col = "grey70",
+                          breaks = seq(0, 0.3, by = 0.01*0.3),
+                          clustering_method = 'average',
+                          clustering_distance_rows = "correlation",
+                          clustering_distance_cols = "correlation")
+```
+
+### 7. Visualize colocalized domain bewteen the cell type pairs
+
+#### Visualize all interacting locations for the cell type pair
+
+```{r, eval=FALSE, fig.width=6, fig.height=5}
+tissue_type <- c("ER","ER","TNBC","TNBC")
+patient_list_sp <- c('CID4290','CID4535','CID4465','CID44971')
+slide_name <- paste0(patient_list_sp, ": ", tissue_type)
+
+STopover::vis_all_connected(sp_data_merge_celltype, 
+                            feat_name_x = "Cancer.Epithelial", 
+                            feat_name_y = "Myeloid",
+                            slide_titles = slide_name,
+                            title_fontsize = 10,
+                            legend_fontsize = 11,
+                            save = T, slide_ncol = 2, dot_size = 1.6,
+                            save_path = fig_dir,
+                            save_name_add = paste0("_celltype"),
+                            fig_width = 4, fig_height = 4, dpi = 150)
+```
+
+#### Visualize the top 2 interaction locations for the cell type pair
+
+```{r, eval=FALSE, fig.width=8, fig.height=3.5}
+STopover::vis_jaccard_top_n_pair(sp_data_merge_celltype, 
+                                 feat_name_x = "Cancer.Epithelial", 
+                                 feat_name_y = "Myeloid",
+                                 top_n = 2,
+                                 slide_name = "CID4465",
+                                 title_fontsize = 10,
+                                 legend_fontsize = 12,
+                                 save = T, slide_ncol = 2, dot_size = 1.6,
+                                 save_path = fig_dir,
+                                 save_name_add = paste0("_celltype"),
+                                 fig_width = 9, fig_height = 9, dpi = 150)
+
+```
+
+### 8. STopover analysis: extract dominant spatial LR interaction
+
+```{r, eval=FALSE}
+sp_data_merge_lr <- STopover::topological_similarity(sp_data_merge_mod,
+                                                     use_lr_db = T,
+                                                     lr_db_species = "human",
+                                                     min_size = 20,
+                                                     fwhm = 2.5,
+                                                     thres_per = 30,
+                                                     assay = "Spatial",
+                                                     slot = "data",
+                                                     lognorm = F)
+readr::write_rds(sp_data_merge_lr, 'sp_data_merge_lr.rds')
+```
+
+#### Find and visualize differential upregulated LR interaction in TNBC \> ER types
+
+##### Visualizing upregulated LR interactions and their corresponding GO terms using a heatmap
+
+```{r, eval=FALSE}
+tissue_type <- list("ER","ER","TNBC","TNBC")
+patient_list_sp <- c('CID4290','CID4535','CID4465','CID44971')
+
+result_list <- STopover::vis_diff_inc_lr_pairs(sp_data_merge_lr, 
+                                               ref_group=c('CID4290','CID4535'), 
+                                               comp_group=c('CID4465','CID44971'),
+                                               logFC_cutoff=1, J_comp_cutoff=0.2,
+                                               go_species="human",
+                                               ontology_cat="BP",
+                                               padjust_method = "BH", padjust_cutoff=0.05,
+                                               top_n = 10, heatmap_max=5,
+                                               title_fontsize=12,
+                                               xaxis_title_fontsize=10,
+                                               yaxis_title_fontsize=10,
+                                               angle_col=45,
+                                               colorbar_palette="RdPu",
+                                               legend_loc='right',legend_fontsize=10,
+                                               save_plot=F, save_path='.',
+                                               save_name='heatmap_GO_LR_int',
+                                               fig_width=21, fig_height=10, dpi=150,
+                                               return_results=T)
+```
+
+```{r, eval=FALSE}
+df_diff_TNBC <- result_list[[1]]
+plot_diff_TNBC <- result_list[[2]]
+```
+
+```{r, eval=FALSE}
+# Extract the to upregulated LR pairs in TNBC compared to ER+ tissues
+df_diff_TNBC
+```
+
+```{r, eval=FALSE}
+# Plot heatmap
+plot_diff_TNBC
+```
+
+#### Visualize all interacting locations for the top LR pair
+
+```{r, eval=FALSE, fig.width=6, fig.height=5}
+tissue_type <- c("ER","ER","TNBC","TNBC")
+patient_list_sp <- c('CID4290','CID4535','CID4465','CID44971')
+slide_name <- paste0(patient_list_sp, ": ", tissue_type)
+
+STopover::vis_all_connected(sp_data_merge_lr, 
+                            feat_name_x = "IL18", 
+                            feat_name_y = "IL1RL2",
+                            slide_titles = slide_name,
+                            title_fontsize = 10,
+                            legend_fontsize = 11,
+                            save = T, slide_ncol = 2, dot_size = 1.6,
+                            save_path = fig_dir,
+                            save_name_add = paste0("_celltype"),
+                            fig_width = 4, fig_height = 4, dpi = 150)
+```
+
+#### Visualize the top 2 interaction locations for the top LR pair
+
+```{r, eval=FALSE, fig.width=8, fig.height=3.5}
+STopover::vis_jaccard_top_n_pair(sp_data_merge_lr, 
+                                 feat_name_x = "IL18", 
+                                 feat_name_y = "IL1RL2",
+                                 top_n = 2,
+                                 slide_name = "CID4465",
+                                 title_fontsize = 10,
+                                 legend_fontsize = 12,
+                                 save = T, slide_ncol = 2, dot_size = 1.6,
+                                 save_path = fig_dir,
+                                 save_name_add = paste0("_celltype"),
+                                 fig_width = 9, fig_height = 9, dpi = 150)
+```
