@@ -131,22 +131,27 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
     if (!file.exists(cosmx_output_dir)) dir.create(cosmx_output_dir)
     STopover_cosmx_dir <- system.file("preprocess_cosmx_R.py", package="STopover")
     string_output <- system(paste0("python ", STopover_cosmx_dir,
-                                   " --sp_load_path",sp_load_path," --sc_load_path",sc_object,
+                                   " --sp_load_path ",sp_load_path,
+                                   " --sc_load_path ",sc_object,
                                    " --sc_celltype_colname ",sc_celltype_colname,
                                    " --sc_norm_total ",sc_norm_total,
                                    " --tx_file_name ",tx_file_name,
                                    " --cell_exprmat_file_name ",cell_exprmat_file_name,
-                                   " --cell_metadata_file_name",cell_metadata_file_name,
-                                   " --fov_colname",fov_colname,
-                                   " --cell_id_colname",cell_id_colname,
-                                   " --tx_xcoord_colname",tx_xcoord_colname,
-                                   " --tx_ycoord_colname",tx_ycoord_colname,
-                                   " --transcript_colname",transcript_colname,
-                                   " --meta_xcoord_colname",meta_xcoord_colname,
-                                   " --meta_ycoord_colname",meta_ycoord_colname,
-                                   " --x_bins",x_bins," --y_bins",y_bins,
-                                   " --save_path",cosmx_output_dir), intern = T)
+                                   " --cell_metadata_file_name ",cell_metadata_file_name,
+                                   " --fov_colname ",fov_colname,
+                                   " --cell_id_colname ",cell_id_colname,
+                                   " --tx_xcoord_colname ",tx_xcoord_colname,
+                                   " --tx_ycoord_colname ",tx_ycoord_colname,
+                                   " --transcript_colname ",transcript_colname,
+                                   " --meta_xcoord_colname ",meta_xcoord_colname,
+                                   " --meta_ycoord_colname ",meta_ycoord_colname,
+                                   " --x_bins ",x_bins," --y_bins ",y_bins,
+                                   " --save_path ",cosmx_output_dir), intern = T)
     cat(paste0(string_output,"\n"))
+
+    ## Import scanpy
+    sc <- reticulate::import('scanpy', convert = FALSE)
+    adata_sp_all <- sc$read_h5ad(file.path(cosmx_output_dir, 'preprocess_cosmx.h5ad'))
   } else {
     if (typeof(sc_object)=="environment"|is.null(sc_object)){
       adata_sc <- sc_object
