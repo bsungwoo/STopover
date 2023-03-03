@@ -34,7 +34,7 @@ Tool to capture spatial colocalization and interaction in the TME using topologi
   devtools::install_github("bsungwoo/STopover", build_vignettes = T, force = T)
 ```
 ### 3. Standalone app (packaged with [pyinstaller](https://github.com/pyinstaller/pyinstaller))  
-Please download file: [STopover_v1_windows.exe]()  
+Please download file: [STopover_v1_windows.exe](https://github.com/bsungwoo/STopover/releases/download/v1.1.0/STopover_1.1.0_windows.exe)  
 
 ## Key packages
 ** Python  
