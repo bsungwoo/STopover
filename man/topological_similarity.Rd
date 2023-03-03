@@ -16,7 +16,7 @@ topological_similarity(
   assay = "Spatial",
   slot = "data",
   lognorm = F,
-  J_result_name = "result",
+  return_result_df = T,
   num_workers = NULL
 )
 }
@@ -52,7 +52,7 @@ topological_similarity(
 
 \item{lognorm}{whether to lognormalize the sparse matrix in the slot before calculating topological similarity (default = F)}
 
-\item{J_result_name}{the name of the jaccard index data file name (default = 'result')}
+\item{return_result_df}{whether to return the composite Jaccard index between the given feature pairs in 'sp_object@misc' (default = T)}
 
 \item{num_workers}{number of the workers for the multiprocessing (default = NULL)
 \itemize{

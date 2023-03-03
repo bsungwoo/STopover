@@ -125,6 +125,7 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
   STopover <- reticulate::import('STopover', convert = FALSE)
 
   # Check format of the single-cell dataset if it exists
+  cat("Reading CosMx SMI data: annotating cells and creating grid-based data\n")
   if (typeof(sc_object)=="character"){
     cosmx_output_dir <- file.path(getwd(),"cosmx_output")
     if (!file.exists(cosmx_output_dir)) dir.create(cosmx_output_dir)
@@ -155,7 +156,6 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
       ## Convert Seurat single-cell object to sparse matrix format
       adata_sc <- convert_to_anndata(sc_object, assay='RNA', slot='counts', add_coord=F)
     }
-    cat("Reading CosMx SMI data: annotating cells and creating grid-based data\n")
     adata_sp_all <- STopover$STopover_cosmx(sp_load_path=sp_load_path, sc_adata=adata_sc,
                                             sc_celltype_colname = sc_celltype_colname,
                                             sc_norm_total=sc_norm_total,

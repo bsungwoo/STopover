@@ -20,9 +20,10 @@ vis_all_connected(
   slide_titles = NULL,
   slide_ncol = 2,
   title_fontsize = 15,
+  legend_loc = "right",
   legend_fontsize = 10,
   add_title_text = "",
-  crop_image = T,
+  crop_image = F,
   return_plot = F,
   save = F,
   save_path = ".",
@@ -63,11 +64,13 @@ vis_all_connected(
 
 \item{title_fontsize}{fontsize of the figure title (default = 15)}
 
+\item{legend_loc}{location of the figure legend (default = 'right')}
+
 \item{legend_fontsize}{fontsize of the figure legend (default = 10)}
 
-\item{add_title_text}{the text to add in the figure title (default = ')}
+\item{add_title_text}{the text to add in the figure title (default = '')}
 
-\item{crop_image}{whether to crop the image (default = T)}
+\item{crop_image}{whether to crop the image (default = F)}
 
 \item{return_plot}{whether to return the plot as list (default = F)}
 
@@ -75,7 +78,7 @@ vis_all_connected(
 
 \item{save_path}{path to save the image (default = '.')}
 
-\item{save_name_add}{the text to add in the file name (default = ')}
+\item{save_name_add}{the text to add in the file name (default = '')}
 
 \item{dpi}{dpi to save the image (default = 100)}
 

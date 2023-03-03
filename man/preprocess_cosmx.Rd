@@ -27,7 +27,7 @@ preprocess_cosmx(
 \arguments{
 \item{sp_load_path}{path to CosMx SMI data directory or .h5ad Anndata object (default = '.')}
 
-\item{sc_object}{single-cell reference anndata for cell type annotation of CosMx SMI data (default = NULL)
+\item{sc_object}{single-cell reference anndata/path to reference "*h5ad" file/Seurat object for cell type annotation of CosMx SMI data (default = NULL)
 \itemize{
 \item If NULL, then Leiden cluster numbers will be used to annotate CosMx SMI data
 }}
@@ -63,7 +63,7 @@ preprocess_cosmx(
 \item{y_bins}{number of bins to divide the CosMx SMI data (for grid-based aggregation) (default = 100)}
 }
 \value{
-Seurat object that contains grid-based or cell-level log-normalized count matrix in 'counts & data' slots, coordinates in '@images$image', and transcript information in '@assays$Spatial@misc' (only for grid-based data)
+list of Seurat objects for grid-based and cell-level data, sequentially. The objects contains grid-based or cell-level log-normalized count matrix in 'counts & data' slots, coordinates in '@images$image', and transcript information in '@assays$Spatial@misc' (only for grid-based data)
 }
 \description{
 Convert Seurat object for spatial transcriptomic data to anndata

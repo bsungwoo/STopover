@@ -12,17 +12,18 @@ vis_jaccard_top_n_pair(
   celltype_y = NULL,
   top_n = 2,
   conda.env.name = "STopover",
-  dot_size = 1.3,
+  dot_size = 1.8,
   alpha_img = 0.8,
   alpha = 0.8,
   vis_jaccard = T,
   slide_name = names(sp_object@images)[1],
+  slide_title = NULL,
   slide_ncol = 2,
   title_fontsize = 15,
+  legend_loc = "right",
   legend_fontsize = 10,
-  slide_title = NULL,
   add_title_text = "",
-  crop_image = T,
+  crop_image = F,
   return_plot = F,
   return_sp_object = F,
   save = F,
@@ -58,17 +59,19 @@ vis_jaccard_top_n_pair(
 
 \item{slide_name}{name of one slide to select (among 'names(sp_object@images)') (default = names(sp_object@images))}
 
+\item{slide_title}{title of the selected slide to visualize in the plot (default = NULL)}
+
 \item{slide_ncol}{number of images to visualize in the column (default = 2)}
 
 \item{title_fontsize}{fontsize of the figure title (default = 15)}
 
+\item{legend_loc}{location of the figure legend (default = 'right')}
+
 \item{legend_fontsize}{fontsize of the figure legend (default = 10)}
 
-\item{slide_title}{title of the selected slide to visualize in the plot (default = NULL)}
+\item{add_title_text}{the text to add in the figure title (default = '')}
 
-\item{add_title_text}{the text to add in the figure title (default = ')}
-
-\item{crop_image}{whether to crop the image (default = T)}
+\item{crop_image}{whether to crop the image (default = F)}
 
 \item{return_plot}{whether to return the plot as list (default = F)}
 
@@ -78,7 +81,7 @@ vis_jaccard_top_n_pair(
 
 \item{save_path}{path to save the image (default = '.')}
 
-\item{save_name_add}{the text to add in the file name (default = ')}
+\item{save_name_add}{the text to add in the file name (default = '')}
 
 \item{dpi}{dpi to save the image (default = 100)}
 
