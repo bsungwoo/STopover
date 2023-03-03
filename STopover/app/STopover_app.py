@@ -11,7 +11,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 from ..STopover_class import *
 from .STopover_ui import Ui_Dialog
-
+# from multiprocessing import freeze_support
 
 class StreamOutput(QObject):
     '''
@@ -63,6 +63,7 @@ class STopoverApp(QMainWindow, Ui_Dialog):
         self.comboBox_feat_x.setMaxVisibleItems(10)
         self.comboBox_feat_y.setMaxVisibleItems(10)
         self.comboBox_ref.setMaxVisibleItems(10)
+        self.doubleSpinBox_cpu_no.setValue(os.cpu_count())
 
         self.pushButton_visdir.clicked.connect(lambda: self.open_files('visium', 'dir'))
         self.pushButton_visfile.clicked.connect(lambda: self.open_files('visium', 'file'))
@@ -144,7 +145,8 @@ class STopoverApp(QMainWindow, Ui_Dialog):
     
     @run_thread
     def topological_sim_(self, object, feat_pairs, use_lr_db, lr_db_species, error_output=""):
-        return object.topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species)
+        return object.topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species, 
+                                             num_workers=int(self.doubleSpinBox_cpu_no.value()), progress_bar=True)
 
     @run_thread
     def save_connected_loc_data_(self, object, save_format, filename, print_output="Finished", error_output=""):
@@ -238,7 +240,7 @@ class STopoverApp(QMainWindow, Ui_Dialog):
         if (self.textEdit_ref.toPlainText() != "") and (self.textEdit_ref.toPlainText() is not None):
             self.sc_adata = sc.read_h5ad(self.textEdit_ref.toPlainText())
             self.comboBox_ref.addItems(list(self.sc_adata.obs.columns))
-        self.extract_j_comp_result(info_output="J_comp table cannot be updated\n Possibly the data is missing")
+        self.extract_j_comp_result(info_output="J_comp table cannot be updated\nPossibly the data is missing")
         self.textEdit_J_result.setText(self.df_j_comp.to_string())
         print("Info updated")
 
@@ -303,7 +305,7 @@ class STopoverApp(QMainWindow, Ui_Dialog):
             self.topological_sim_(self.stopover_class, feat_pairs=self.df_feat, 
                                   use_lr_db=self.checkBox.isChecked(), 
                                   lr_db_species=self.comboBox_spec.currentText(),
-                                  error_output="Failed to calculate topological similarity\n Possibly none of the first or second features in the pairs are found")
+                                  error_output="Failed to calculate topological similarity: possible causes\n1. None of the first or second features in the pairs are found\n2. Out of memory or CPU\n-> Change the feature list or decrease the 'CPU No'")
         else: self.show_error_message("Data files are not loaded yet")
 
     @draw_on_canvas
@@ -358,4 +360,5 @@ def main():
 
 
 if __name__ == "__main__": 
+    # freeze_support()
     main()
