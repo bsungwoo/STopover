@@ -240,9 +240,10 @@ topological_similarity_celltype_pair <- function(sp_object, celltype_x='',cellty
 
     # Saving CC location data into the metadata of spatial Seurat object
     cc_loc_df <- reticulate::py_to_r(adata_xy$obs)
-    cc_loc_names <- grep(colnames(cc_loc_df), pattern = "Comb_CC_", value=T)
+    cc_loc_names <- c(grep(colnames(cc_loc_df), pattern = "Comb_CC_", value=T), "array_col", "array_row")
     cc_loc_df <- cc_loc_df[,cc_loc_names]
     sp_object_xy <- Seurat::AddMetaData(sp_object_xy, cc_loc_df)
+    sp_object_xy[['batch']] <- "image"
     # Saving jaccard index result into the @misc of spatial Seurat object
     if (return_result_df) sp_object_xy@misc <- reticulate::py_to_r(adata_xy$uns[[paste(c('J','result',0),collapse="_")]])
   }

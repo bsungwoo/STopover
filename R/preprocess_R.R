@@ -242,7 +242,7 @@ celltype_specific_cosmx <- function(sp_object, cell_types, conda.env.name='STopo
                                     celltype_colname='celltype', transcript_colname='target',
                                     sc_norm_total=1e3, return_mode='seurat'){
   if (class(sp_object@images$image)[1]!="SlideSeq") {stop("'sp_object' should be cosmx spatial data object")}
-  ifelse(return_mode %in% c('anndata','seurat'),NULL,stop("'return mode' should be either 'anndata' or 'seurat'"))
+  ifelse(return_mode %in% c('anndata','seurat'),"",stop("'return mode' should be either 'anndata' or 'seurat'"))
 
   # Install and load environment
   install_load_env(conda.env.name)
@@ -279,7 +279,11 @@ celltype_specific_cosmx <- function(sp_object, cell_types, conda.env.name='STopo
                             col=reticulate::py_to_r(grid_count_celltype_list[[(idx-1)]]$obs['array_col']),
                             stringsAsFactors=F)
       rownames(df_coord) = reticulate::py_to_r(grid_count_celltype_list[[(idx-1)]]$obs_names$values)
-      grid_count_celltype_list_[[idx]]@images$image = methods::new(Class = 'SlideSeq', assay = "Spatial", key = "image_", coordinates = df_coord)
+      grid_count_celltype_list_[[idx]] <- Seurat::AddMetaData(grid_count_celltype_list_[[idx]],
+                                                              reticulate::py_to_r(grid_count_celltype_list[[(idx-1)]]$obs))
+      grid_count_celltype_list_[[idx]][['batch']] <- "image"
+      grid_count_celltype_list_[[idx]]@images$image = methods::new(Class = 'SlideSeq', assay = "Spatial",
+                                                                   key = "image_", coordinates = df_coord)
     }
     return(grid_count_celltype_list_)
   } else {

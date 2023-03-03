@@ -16,17 +16,12 @@ vis_spatial_cosmx <- function(sp_object, feature, plot_title=feature, title_font
                               color_dis=c("#A2E1CA","#FBBC05","#4285F4","#34A853"),
                               color_cont="RdPu",vmin=NULL, vmax=NULL, legend_loc='right',
                               legend_fontsize=12) {
-  if (!identical(setdiff(c("array_col","array_row",feature), colnames(sp_object@meta.data)), character(0))){
-    stop("'array_col', 'array_row', or 'feature' not found among column names of metadata")
+  if (!identical(setdiff(c("array_col","array_row",feature),
+                         c(colnames(sp_object@meta.data),rownames(sp_object))), character(0))){
+    stop("'array_col', 'array_row', or 'feature' not found among column names of metadata or gene names")
   }
-  df <- sp_object@meta.data[,c("array_col","array_row",feature)]
-  if (!is.null(levels(sp_object@meta.data[[feature]]))){
-    eval(parse(text=paste0("
-    p <- ggplot2::ggplot(df, ggplot2::aes(x = array_col, y = array_row, fill =",
-                           feature,")) + ggplot2::theme_minimal() +
-      ggplot2::geom_tile() + ggplot2::ggtitle(plot_title) +
-      ggplot2::coord_fixed() + ggplot2::scale_fill_manual(values = color_dis)")))
-  } else {
+  df <- Seurat::FetchData(sp_object, vars = c("array_col","array_row",feature))
+  if (is.null(levels(df[[feature]]))){
     if (!color_cont %in% rownames(RColorBrewer::brewer.pal.info)){
       stop(paste0("'color_cont' should be among: ",
                   paste(rownames(RColorBrewer::brewer.pal.info), collapse = ", ")))
@@ -37,7 +32,7 @@ vis_spatial_cosmx <- function(sp_object, feature, plot_title=feature, title_font
       if (is.null(vmin)) {
         vmin <- min(df[[feature]])
       } else{
-          if (vmin > min(df[[feature]])) df[df[feature]<vmin,][feature] <- vmin
+        if (vmin > min(df[[feature]])) df[df[feature]<vmin,][feature] <- vmin
       }
     } else if (!is.null(vmin)) {
       if (vmin > min(df[[feature]])) df[df[feature]<vmin,][feature] <- vmin
@@ -45,11 +40,17 @@ vis_spatial_cosmx <- function(sp_object, feature, plot_title=feature, title_font
     }
     # Draw plot
     eval(parse(text=paste0("
-    p <- ggplot2::ggplot(df, ggplot2::aes(x = array_col, y = array_row, fill =",
-                           feature,")) + ggplot2::theme_minimal() +
+    p <- ggplot2::ggplot(df, ggplot2::aes(x = array_col, y = array_row, fill =`",
+                           feature,"`)) + ggplot2::theme_minimal() +
       ggplot2::geom_tile() + ggplot2::ggtitle(plot_title) +
       ggplot2::coord_fixed() + ggplot2::scale_fill_distiller(palette = color_cont, ",
                            "type='seq', limits=c(vmin,vmax))")))
+  } else {
+    eval(parse(text=paste0("
+    p <- ggplot2::ggplot(df, ggplot2::aes(x = array_col, y = array_row, fill =`",
+                           feature,"`)) + ggplot2::theme_minimal() +
+      ggplot2::geom_tile() + ggplot2::ggtitle(plot_title) +
+      ggplot2::coord_fixed() + ggplot2::scale_fill_manual(values = color_dis)")))
   }
   p <- p +
     ggplot2::theme(panel.border = ggplot2::element_blank(),
