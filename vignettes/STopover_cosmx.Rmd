@@ -29,7 +29,7 @@ devtools::install_github("mexchy1000/CellDART", build_vignettes = T, force = T)
 devtools::install_github("bsungwoo/STopover", build_vignettes = T, force = T)
 ```
 
-```{r install, eval=FALSE}
+```{r install}
 library(STopover)
 library(Seurat)
 library(dplyr)
@@ -38,7 +38,7 @@ library(readr)
 library(pheatmap)
 ```
 
-```{r, eval=FALSE}
+```{r}
 # Make output folder
 output_folder_name <- 'Results'
 if (!file.exists(output_folder_name)){
@@ -156,7 +156,7 @@ readr::write_rds(sp_data_list, 'sp_lung_cancer_list.rds')
 ```
 
 ```{r, echo=FALSE, eval=FALSE}
-sp_data_list <- readr::read_rds('/home/nmadmin/DATA2/STopover/vignettes/sp_lung_cancer_list.rds')
+sp_data_list <- readr::read_rds('/home/nmadmin/DATA2/STopover_test/Results/data_analysis/sp_lung_cancer_list.rds')
 ```
 
 ```{r, eval=FALSE}
@@ -205,15 +205,15 @@ sp_data_grid_celltype <- STopover::topological_similarity(sp_data_grid,
                                                           lognorm = F)
 readr::write_rds(sp_data_grid_celltype, 'sp_data_merge_celltype.rds')
 ```
-```{r, echo=FALSE, eval=FALSE}
-sp_data_grid_celltype <- readr::read_rds('/home/nmadmin/DATA2/STopover/vignettes/sp_data_grid_celltype.rds')
+```{r, echo=FALSE}
+sp_data_grid_celltype <- readr::read_rds('/home/nmadmin/DATA2/STopover_test/Results/data_analysis/sp_data_merge_celltype.rds')
 ```
 
 ### 5. Draw cell-cell colocalization heatmap
 
-```{r, eval=FALSE}
+```{r}
 # Load global overlap score calculated between cancer epithelial and other cell types
-df <- sp_data_grid_celltype@misc %>% 
+df <- sp_data_grid_celltype@misc %>%
   dplyr::select(Feat_1, Feat_2, J_comp) %>%
   tidyr::pivot_wider(names_from = Feat_1, values_from = J_comp) %>%
   tibble::column_to_rownames(var = "Feat_2")
@@ -224,7 +224,7 @@ df[is.na(df)] = 0
 grDevices::hcl.pals()
 ```
 
-```{r, eval=FALSE}
+```{r, fig.width=8, fig.height=8}
 # Draw heatmap with pheatmap
 out <- pheatmap::pheatmap(t(df), cluster_rows=T, show_rownames=T,
                           cluster_cols=T, angle_col=45, fontsize=5,
@@ -238,7 +238,7 @@ out <- pheatmap::pheatmap(t(df), cluster_rows=T, show_rownames=T,
 
 ### 6. Visualize colocalized domain bewteen the cell type pairs
 #### Visualize spatial distribution of cell types
-```{r, eval=FALSE}
+```{r, fig.width=8, fig.height=3.5}
 p1 <- STopover::vis_spatial_cosmx(sp_data_grid_celltype, "tS2", color_cont = "RdPu")
 p2 <- STopover::vis_spatial_cosmx(sp_data_grid_celltype, "MAST", color_cont = "RdPu")
 p1 + p2
@@ -246,7 +246,7 @@ p1 + p2
 
 #### Visualize all interacting locations for the cell type pair
 
-```{r, eval=FALSE, fig.width=6, fig.height=5}
+```{r, fig.width=6, fig.height=5}
 STopover::vis_all_connected(sp_data_grid_celltype, 
                             feat_name_x = "tS2", 
                             feat_name_y = "MAST",
@@ -261,7 +261,7 @@ STopover::vis_all_connected(sp_data_grid_celltype,
 
 #### Visualize the top 2 interaction locations for the cell type pair
 
-```{r, eval=FALSE, fig.width=8, fig.height=3.5}
+```{r, fig.width=8, fig.height=3.5}
 STopover::vis_jaccard_top_n_pair(sp_data_grid_celltype, 
                                  feat_name_x = "tS2", 
                                  feat_name_y = "MAST",
@@ -288,13 +288,13 @@ sp_data_merge_lr <- STopover::topological_similarity(sp_data_grid,
                                                      assay = "Spatial",
                                                      slot = "data",
                                                      lognorm = F)
-readr::write_rds(sp_data_merge_lr, 'sp_data_merge_lr.rds')
+readr::write_rds(sp_data_merge_lr, '/home/nmadmin/DATA2/STopover_test/Results/data_analysis/sp_data_merge_lr.rds')
 ```
-```{r, eval=FALSE, echo=FALSE}
-sp_data_merge_lr <- readr::read_rds('/home/nmadmin/DATA2/STopover/vignettes/sp_data_merge_lr.rds')
+```{r, echo=FALSE}
+sp_data_merge_lr <- readr::read_rds('/home/nmadmin/DATA2/STopover_test/Results/data_analysis/sp_data_merge_lr.rds')
 ```
 #### Visualize spatial gene expression pattern
-```{r, eval=FALSE}
+```{r, fig.width=8, fig.height=3.5}
 p1 <- STopover::vis_spatial_cosmx(sp_data_merge_lr, "CD274", color_cont = "RdPu")
 p2 <- STopover::vis_spatial_cosmx(sp_data_merge_lr, "PDCD1", color_cont = "RdPu")
 p1 + p2
@@ -302,7 +302,7 @@ p1 + p2
 
 #### Visualize all interacting locations for the top LR pair
 
-```{r, eval=FALSE, fig.width=6, fig.height=5}
+```{r, fig.width=6, fig.height=5}
 STopover::vis_all_connected(sp_data_merge_lr, 
                             feat_name_x = "CD274", 
                             feat_name_y = "PDCD1",
@@ -317,12 +317,12 @@ STopover::vis_all_connected(sp_data_merge_lr,
 
 #### Visualize the top 2 interaction locations for the top LR pair
 
-```{r, eval=FALSE, fig.width=8, fig.height=3.5}
+```{r, fig.width=8, fig.height=3.5}
 STopover::vis_jaccard_top_n_pair(sp_data_merge_lr, 
                                  feat_name_x = "CD274", 
                                  feat_name_y = "PDCD1",
                                  top_n = 2,
-                                 slide_name = "Lung CosMx SMI",
+                                 slide_title = "Lung CosMx SMI",
                                  title_fontsize = 10,
                                  legend_fontsize = 12,
                                  save = T, slide_ncol = 2, dot_size = 1.6,
@@ -349,12 +349,13 @@ sp_celltype_spec_lr <- STopover::topological_similarity_celltype_pair(sp_data_gr
                                                                       return_result_df=T)
 readr::write_rds(sp_celltype_spec_lr, 'sp_celltype_spec_lr.rds')
 ```
-```{r, eval=FALSE, echo=FALSE}
-sp_celltype_spec_lr <- readr::read_rds('/home/nmadmin/DATA2/STopover/vignettes/sp_celltype_spec_lr.rds')
+
+```{r, echo=FALSE}
+sp_celltype_spec_lr <- readr::read_rds('/home/nmadmin/DATA2/STopover_test/Results/data_analysis/sp_celltype_spec_lr.rds')
 ```
 
 #### Visualize tS2-Cytotoxic CD8+ specific spatial gene expression pattern
-```{r, eval=FALSE}
+```{r, fig.width=8, fig.height=3.5}
 p1 <- STopover::vis_spatial_cosmx(sp_celltype_spec_lr, "tS2-CD274", 
                                   plot_title = "tS2: CD274", color_cont = "RdPu")
 p2 <- STopover::vis_spatial_cosmx(sp_celltype_spec_lr, "Cytotoxic.CD8..T-CD274", 
@@ -364,7 +365,7 @@ p1 + p2
 
 #### Visualize all interacting locations for the tS2-Cytotoxic CD8+ specific top LR pair
 
-```{r, eval=FALSE, fig.width=6, fig.height=5}
+```{r, fig.width=6, fig.height=5}
 STopover::vis_all_connected(sp_celltype_spec_lr, 
                             feat_name_x = "CD274", 
                             feat_name_y = "PDCD1",
@@ -381,7 +382,7 @@ STopover::vis_all_connected(sp_celltype_spec_lr,
 
 #### Visualize the top 2 interaction locations for the tS2-Cytotoxic CD8+ specific top LR pair
 
-```{r, eval=FALSE, fig.width=8, fig.height=3.5}
+```{r, fig.width=8, fig.height=3.5}
 STopover::vis_jaccard_top_n_pair(sp_celltype_spec_lr, 
                                  feat_name_x = "CD274", 
                                  feat_name_y = "PDCD1",

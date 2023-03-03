@@ -29,7 +29,7 @@ devtools::install_github("mexchy1000/CellDART", build_vignettes = T, force = T)
 devtools::install_github("bsungwoo/STopover", build_vignettes = T, force = T)
 ```
 
-```{r install, eval=FALSE}
+```{r install}
 library(STopover)
 library(CellDART)
 library(Seurat)
@@ -39,7 +39,7 @@ library(readr)
 library(pheatmap)
 ```
 
-```{r, eval=FALSE}
+```{r}
 # Make output folder
 output_folder_name <- 'Results'
 if (!file.exists(output_folder_name)){
@@ -195,8 +195,8 @@ readr::write_rds(sp_data_merge_mod, file.path(output_folder_name, 'sp_data_merge
 
 ### 5. STopover analysis: extract cell-cell colocalization patterns
 
-```{r, echo=FALSE, eval=FALSE}
-sp_data_merge_mod <- readr::read_rds(file.path('/home/nmadmin/DATA2/STopover/Results','sp_data_merge_mod.rds'))
+```{r, echo=FALSE}
+sp_data_merge_mod <- readr::read_rds(file.path('/home/nmadmin/DATA2/STopover_test/Results','sp_data_merge_mod.rds'))
 ```
 
 ```{r, eval=FALSE}
@@ -221,9 +221,13 @@ sp_data_merge_celltype <- STopover::topological_similarity(sp_data_merge_mod,
 
 readr::write_rds(sp_data_merge_celltype, 'sp_data_merge_celltype.rds')
 ```
+```{r, echo=FALSE}
+sp_data_merge_celltype <- readr::read_rds('sp_data_merge_celltype.rds')
+```
+
 ### 6. Draw cell-cell colocalization heatmap
 
-```{r, eval=FALSE}
+```{r}
 tissue_type_ <- c("ER","ER","TNBC","TNBC")
 
 # Load global overlap score calculated between cancer epithelial and other cell types
@@ -240,7 +244,7 @@ df[is.na(df)] = 0
 grDevices::hcl.pals()
 ```
 
-```{r, eval=FALSE}
+```{r, fig.width=8, fig.height=8}
 # Draw heatmap with pheatmap
 out <- pheatmap::pheatmap(t(df), cluster_rows=T, show_rownames=T,
                           cluster_cols=T, angle_col=45, fontsize=15,
@@ -256,7 +260,7 @@ out <- pheatmap::pheatmap(t(df), cluster_rows=T, show_rownames=T,
 
 #### Visualize all interacting locations for the cell type pair
 
-```{r, eval=FALSE, fig.width=6, fig.height=5}
+```{r, fig.width=6, fig.height=5}
 tissue_type <- c("ER","ER","TNBC","TNBC")
 patient_list_sp <- c('CID4290','CID4535','CID4465','CID44971')
 slide_name <- paste0(patient_list_sp, ": ", tissue_type)
@@ -275,7 +279,7 @@ STopover::vis_all_connected(sp_data_merge_celltype,
 
 #### Visualize the top 2 interaction locations for the cell type pair
 
-```{r, eval=FALSE, fig.width=8, fig.height=3.5}
+```{r, fig.width=8, fig.height=3.5}
 STopover::vis_jaccard_top_n_pair(sp_data_merge_celltype, 
                                  feat_name_x = "Cancer.Epithelial", 
                                  feat_name_y = "Myeloid",
@@ -304,12 +308,15 @@ sp_data_merge_lr <- STopover::topological_similarity(sp_data_merge_mod,
                                                      lognorm = F)
 readr::write_rds(sp_data_merge_lr, 'sp_data_merge_lr.rds')
 ```
+```{r, echo=FALSE}
+sp_data_merge_lr <- readr::read_rds('sp_data_merge_lr.rds')
+```
 
 #### Find and visualize differential upregulated LR interaction in TNBC \> ER types
 
 ##### Visualizing upregulated LR interactions and their corresponding GO terms using a heatmap
 
-```{r, eval=FALSE}
+```{r}
 tissue_type <- list("ER","ER","TNBC","TNBC")
 patient_list_sp <- c('CID4290','CID4535','CID4465','CID44971')
 
@@ -333,24 +340,24 @@ result_list <- STopover::vis_diff_inc_lr_pairs(sp_data_merge_lr,
                                                return_results=T)
 ```
 
-```{r, eval=FALSE}
+```{r}
 df_diff_TNBC <- result_list[[1]]
 plot_diff_TNBC <- result_list[[2]]
 ```
 
-```{r, eval=FALSE}
+```{r}
 # Extract the to upregulated LR pairs in TNBC compared to ER+ tissues
 df_diff_TNBC
 ```
 
-```{r, eval=FALSE}
+```{r, fig.width=8, fig.height=6}
 # Plot heatmap
 plot_diff_TNBC
 ```
 
 #### Visualize all interacting locations for the top LR pair
 
-```{r, eval=FALSE, fig.width=6, fig.height=5}
+```{r, fig.width=6, fig.height=5}
 tissue_type <- c("ER","ER","TNBC","TNBC")
 patient_list_sp <- c('CID4290','CID4535','CID4465','CID44971')
 slide_name <- paste0(patient_list_sp, ": ", tissue_type)
@@ -369,7 +376,7 @@ STopover::vis_all_connected(sp_data_merge_lr,
 
 #### Visualize the top 2 interaction locations for the top LR pair
 
-```{r, eval=FALSE, fig.width=8, fig.height=3.5}
+```{r, fig.width=8, fig.height=3.5}
 STopover::vis_jaccard_top_n_pair(sp_data_merge_lr, 
                                  feat_name_x = "IL18", 
                                  feat_name_y = "IL1RL2",
