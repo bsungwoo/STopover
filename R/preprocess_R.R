@@ -126,7 +126,7 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
 
   # Check format of the single-cell dataset if it exists
   cat("Reading CosMx SMI data: annotating cells and creating grid-based data\n")
-  if (typeof(sc_object)=="character"){
+  if (typeof(sc_object)=="character") {
     cosmx_output_dir <- file.path(getwd(),"cosmx_output")
     if (!file.exists(cosmx_output_dir)) dir.create(cosmx_output_dir)
     STopover_cosmx_dir <- system.file("preprocess_cosmx_R.py", package="STopover")
@@ -151,7 +151,8 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
 
     ## Import scanpy
     sc <- reticulate::import('scanpy', convert = FALSE)
-    adata_sp_all <- sc$read_h5ad(file.path(cosmx_output_dir, 'preprocess_cosmx.h5ad'))
+    adata_sp_all <- sc$read_h5ad(file.path(cosmx_output_dir, 'preprocess_cosmx_adata.h5ad'))
+    adata_sp_cell <- sc$read_h5ad(file.path(cosmx_output_dir, 'preprocess_cosmx_adata_cell_uns.h5ad'))
   } else {
     if (typeof(sc_object)=="environment"|is.null(sc_object)){
       adata_sc <- sc_object
@@ -180,8 +181,12 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
   cat("Creating Seurat object for grid-based and cell-level CosMx data\n")
   sp_object_list <- list()
   for (idx in 1:2){
-    if (idx==2) {adata <- adata_sp_all$uns['adata_cell']}
-    else {adata <- adata_sp_all}
+    if (idx==2) {
+      if (typeof(sc_object)=="character") adata <- adata_sp_cell
+      else adata <- adata_sp_all$uns['adata_cell']
+    } else {
+      adata <- adata_sp_all
+    }
     sparse_mtx <- reticulate::py_to_r(adata$X$T)
     colnames(sparse_mtx) <- reticulate::py_to_r(adata$obs_names$values)
     rownames(sparse_mtx) <- reticulate::py_to_r(adata$var_names$values)
