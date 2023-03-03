@@ -476,10 +476,10 @@ vis_diff_inc_lr_pairs <- function(sp_object, ref_group, comp_group,
 
   df_top_diff_comp <- df_top_diff_ref %>%
     dplyr::group_by(Group) %>%
-    dplyr::mutate(logFC = log2(Mean / filter(., Group == "ref") %>% pull(Mean))) %>%
+    dplyr::mutate(logFC = log2(Mean / dplyr::filter(., Group == "ref") %>% dplyr::pull(Mean))) %>%
     dplyr::filter(Group=="comp") %>%
     dplyr::filter(logFC>logFC_cutoff, Mean>J_comp_cutoff) %>%
-    dplyr::arrange(desc(logFC))
+    dplyr::arrange(dplyr::desc(logFC))
 
   require(clusterProfiler)
   feat_interest <- unique(c(df_top_diff_comp %>% dplyr::pull("Feat_1"),
@@ -489,25 +489,25 @@ vis_diff_inc_lr_pairs <- function(sp_object, ref_group, comp_group,
     if (go_species=="human"){
       require(org.Hs.eg.db)
       sym2ent <- AnnotationDbi::mapIds(org.Hs.eg.db, feat_interest, "ENTREZID", "SYMBOL")
-      GO_result <- enrichGO(gene          = sym2ent,
-                            OrgDb         = org.Hs.eg.db,
-                            ont           = ontology_cat,
-                            pAdjustMethod = padjust_method,
-                            pvalueCutoff  = padjust_cutoff,
-                            qvalueCutoff  = 0.2, readable = TRUE)
+      GO_result <- clusterProfiler::enrichGO(gene          = sym2ent,
+                                             OrgDb         = org.Hs.eg.db,
+                                             ont           = ontology_cat,
+                                             pAdjustMethod = padjust_method,
+                                             pvalueCutoff  = padjust_cutoff,
+                                             qvalueCutoff  = 0.2, readable = TRUE)
     } else if (go_species=="mouse"){
       require(org.Mm.eg.db)
       sym2ent <- AnnotationDbi::mapIds(org.Mm.eg.db, feat_interest, "ENTREZID", "SYMBOL")
-      GO_result <- enrichGO(gene          = sym2ent,
-                            OrgDb         = org.Mm.eg.db,
-                            ont           = ontology_cat,
-                            pAdjustMethod = padjust_method,
-                            pvalueCutoff  = padjust_cutoff,
-                            qvalueCutoff  = 0.2, readable = TRUE)
+      GO_result <- clusterProfiler::enrichGO(gene          = sym2ent,
+                                             OrgDb         = org.Mm.eg.db,
+                                             ont           = ontology_cat,
+                                             pAdjustMethod = padjust_method,
+                                             pvalueCutoff  = padjust_cutoff,
+                                             qvalueCutoff  = 0.2, readable = TRUE)
     }
     df <- GO_result@result %>% dplyr::filter(p.adjust < padjust_cutoff)
     df[['GeneRatio']] <- sapply(df[['GeneRatio']], function(x) eval(parse(text=x)))
-    df <- df %>% dplyr::slice(1:top_n) %>% dplyr::arrange(desc(GeneRatio))
+    df <- df %>% dplyr::slice(1:top_n) %>% dplyr::arrange(dplyr::desc(GeneRatio))
     lr_pair_match <- data.frame()
     for (idx in 1:length(df$geneID)){
       gene_list <- ifelse(grepl(df$geneID[idx],pattern="/"),strsplit(df$geneID[idx], split="/")[[1]],df$geneID[idx])
@@ -519,9 +519,9 @@ vis_diff_inc_lr_pairs <- function(sp_object, ref_group, comp_group,
       }
     }
     lr_pair_match_ <- lr_pair_match %>% dplyr::distinct(.) %>%
-      left_join(., df_top_diff_comp, by="lr_pair") %>%
+      dplyr::left_join(., df_top_diff_comp, by="lr_pair") %>%
       dplyr::select(GO_terms, lr_pair, logFC) %>%
-      dplyr::arrange(desc(logFC)) %>%
+      dplyr::arrange(dplyr::desc(logFC)) %>%
       dplyr::mutate(logFC = ifelse(logFC>heatmap_max, heatmap_max, logFC))
     # Make pivot table with the dataset
     df_summ <- lr_pair_match_ %>% tidyr::pivot_wider(names_from = lr_pair, values_from = logFC)
@@ -547,9 +547,9 @@ vis_diff_inc_lr_pairs <- function(sp_object, ref_group, comp_group,
                      legend.text=ggplot2::element_text(size=legend_fontsize,hjust=0.5))
     if (save_plot) {
       plot(out)
-      ggsave(file.path(save_path, paste0(paste(c(save_name,ref_group,comp_group),collapse="_"),'.png')),
-             height=fig_height, width=fig_width, dpi=dpi, bg = "white",
-             units = "cm", limitsize=F)
+      ggplot2::ggsave(file.path(save_path, paste0(paste(c(save_name,ref_group,comp_group),collapse="_"),'.png')),
+                      height=fig_height, width=fig_width, dpi=dpi, bg = "white",
+                      units = "cm", limitsize=F)
     }
     if (return_results){
       return(list(df_top_diff_comp, out))
