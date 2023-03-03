@@ -17,16 +17,16 @@ def annotate_cosmx(sp_adata, sc_adata=None, sc_norm_total=1e3,
                    sc_celltype_colname = 'celltype', fov_colname = 'fov', cell_id_colname='cell_ID', return_df=True):
     '''
     ## Annotate cells composing CosMx SMI data
-    
+
     ### Input
     sp_adata: CosMx SMI anndata with raw count matrix in .X
     sc_adata: single-cell reference anndata with raw count matrix in .X (cell type annotation of CosMx SMI data)
     sc_celltype_colname: column name for cell annotation of single-cell data (in .obs)
     return_format: whether to return cell annotation dataframe ('dataframe') or anndata file ('adata')
-    
+
     ### Output
     sp_adata: spatial anndata for cell-level CosMx expression data with cell annotation
-    return_df: whether to return pandas dataframe that summarizes cell type for each cell 
+    return_df: whether to return pandas dataframe that summarizes cell type for each cell
     '''
     # Normalize, log transform and scale spatial data
     sc.pp.normalize_total(sp_adata, target_sum=sc_norm_total, inplace=True)
@@ -36,29 +36,30 @@ def annotate_cosmx(sp_adata, sc_adata=None, sc_norm_total=1e3,
 
     if sc_adata is not None:
         # Normalize single-cell data
-        sc_adata.var_names_make_unique()
-        sc.pp.normalize_total(sc_adata, target_sum=1e4, inplace=True)
+        sc_adata_ = sc_adata.copy()
+        sc_adata_.var_names_make_unique()
+        sc.pp.normalize_total(sc_adata_, target_sum=1e4, inplace=True)
         # Log transform and scale single-cell data
-        sc.pp.log1p(sc_adata)
-        sc_adata.raw = sc_adata
+        sc.pp.log1p(sc_adata_)
+        # sc_adata_.raw = sc_adata_
         # Find intersecting genes
-        inter_var_names = sc_adata.var_names.intersection(sp_adata.var_names)
-        sc_adata = sc_adata[:, inter_var_names]
+        inter_var_names = sc_adata_.var_names.intersection(sp_adata.var_names)
+        sc_adata_ = sc_adata_[:, inter_var_names]
         sp_adata = sp_adata[:, inter_var_names]
 
         # Perform PCA and find neighbords and umap embedding
-        sc.pp.pca(sc_adata)
-        sc.pp.neighbors(sc_adata)
-        sc.tl.umap(sc_adata)
+        sc.pp.pca(sc_adata_)
+        sc.pp.neighbors(sc_adata_)
+        sc.tl.umap(sc_adata_)
         # Fill nan values and designate as categorical variable
-        sc_adata.obs[sc_celltype_colname] = sc_adata.obs[sc_celltype_colname].astype(object).fillna('nan')
-        sc_adata.obs[sc_celltype_colname] = sc_adata.obs[sc_celltype_colname].astype('category')
+        sc_adata_.obs[sc_celltype_colname] = sc_adata_.obs[sc_celltype_colname].astype(object).fillna('nan')
+        sc_adata_.obs[sc_celltype_colname] = sc_adata_.obs[sc_celltype_colname].astype('category')
 
-        # Scale single-cell and spatial data 
-        sc.pp.scale(sc_adata, max_value=10)
+        # Scale single-cell and spatial data
+        sc.pp.scale(sc_adata_, max_value=10)
         sc.pp.scale(sp_adata, max_value=10)
         # Perform cell label transfer from single-cell to CosMx data
-        sc.tl.ingest(sp_adata, sc_adata, obs=sc_celltype_colname, embedding_method='umap')
+        sc.tl.ingest(sp_adata, sc_adata_, obs=sc_celltype_colname, embedding_method='umap')
     else:
         # Find highly variable genes in spatial data
         sc.pp.highly_variable_genes(sp_adata, flavor="seurat", n_top_genes=2000)
@@ -72,14 +73,14 @@ def annotate_cosmx(sp_adata, sc_adata=None, sc_norm_total=1e3,
         # Data frame containing annotated cell types in CosMx SMI data
         df_celltype = sp_adata.obs.loc[:,[sc_celltype_colname,
                                           fov_colname,cell_id_colname]].set_index([fov_colname,cell_id_colname])
-        return sp_adata.raw.to_adata(), df_celltype 
+        return sp_adata.raw.to_adata(), df_celltype
     else:
         return sp_adata.raw.to_adata()
 
 
 
 def read_cosmx(load_path, sc_adata=None, sc_celltype_colname = 'celltype', sc_norm_total=1e3,
-               tx_file_name = 'tx_file.csv', cell_exprmat_file_name='exprMat_file.csv', cell_metadata_file_name='metadata_file.csv', 
+               tx_file_name = 'tx_file.csv', cell_exprmat_file_name='exprMat_file.csv', cell_metadata_file_name='metadata_file.csv',
                fov_colname = 'fov', cell_id_colname='cell_ID', tx_xcoord_colname='x_global_px', tx_ycoord_colname='y_global_px', transcript_colname='target',
                meta_xcoord_colname='CenterX_global_px', meta_ycoord_colname='CenterY_global_px',
                x_bins=100, y_bins=100):
@@ -88,6 +89,7 @@ def read_cosmx(load_path, sc_adata=None, sc_celltype_colname = 'celltype', sc_no
     ### Input
     load_path: path to load the CosMx SMI files
     sc_adata: single-cell reference anndata for cell type annotation of CosMx SMI data
+        -> raw count matrix should be saved in .X
         -> If None, then leiden cluster numbers will be used to annotate CosMx SMI data
     sc_celltype_colname: column name for cell type annotation information in metadata of single-cell (.obs)
     sc_norm_total: scaling factor for the total count normalization per cell
@@ -107,7 +109,7 @@ def read_cosmx(load_path, sc_adata=None, sc_celltype_colname = 'celltype', sc_no
     else:
         if sc_celltype_colname not in sc_adata.obs.columns:
             print("Cell type annotation (sc_celltype_colname) not found in sc_adata.obs")
-        
+
     ## Read transcript information file
     start_time = time.time()
     tx_coord_all = csv.read_csv(os.path.join(load_path, tx_file_name)).to_pandas().loc[:,[fov_colname,cell_id_colname,
@@ -145,14 +147,14 @@ def read_cosmx(load_path, sc_adata=None, sc_celltype_colname = 'celltype', sc_no
     ## Generate AnnData for the problem
     # Load expression matrix
     exp_mat = csv.read_csv(os.path.join(load_path, cell_exprmat_file_name)).to_pandas()
-    exp_mat = exp_mat[exp_mat[fov_colname] != 0].set_index([fov_colname,cell_id_colname])
+    exp_mat = exp_mat[exp_mat[cell_id_colname] != 0].set_index([fov_colname,cell_id_colname])
     # Generate cell barcodes for CosMx SMI data
     cell_names_expmat = exp_mat.index.to_frame()
     cell_names_expmat = (cell_names_expmat[fov_colname].astype(str) + '_' + cell_names_expmat[cell_id_colname].astype(str)).to_numpy()
     # Load CosMx SMI cell metadata
-    cell_meta = csv.read_csv(os.path.join(load_path, cell_metadata_file_name)).to_pandas().loc[:,[meta_xcoord_colname, meta_ycoord_colname]]
-    cell_meta.columns = ['array_col', 'array_row']
-    cell_meta = pd.concat([cell_meta, exp_mat.index.to_frame().reset_index(drop=True)], axis=1)
+    cell_meta = csv.read_csv(os.path.join(load_path, cell_metadata_file_name)).to_pandas().loc[:,[fov_colname,cell_id_colname,meta_xcoord_colname,meta_ycoord_colname]]
+    cell_meta.columns = [fov_colname,cell_id_colname,'array_col','array_row']
+    cell_meta = pd.merge(cell_meta, exp_mat.index.to_frame().reset_index(drop=True), on=[fov_colname,cell_id_colname], how='inner')
     # Generate CosMx SMI spatial anndata file
     sp_adata_cell = an(X = sparse.csr_matrix(exp_mat, dtype=np.float32), obs=cell_meta)
     sp_adata_cell.var_names = var_names
@@ -163,7 +165,7 @@ def read_cosmx(load_path, sc_adata=None, sc_celltype_colname = 'celltype', sc_no
 
     ## Annotation of cell-level CosMx SMI data
     sp_adata_cell, df_celltype = annotate_cosmx(sp_adata_cell, sc_adata, sc_norm_total=sc_norm_total,
-                                                sc_celltype_colname = sc_celltype_colname, 
+                                                sc_celltype_colname = sc_celltype_colname,
                                                 fov_colname = fov_colname, cell_id_colname=cell_id_colname, return_df=True)
     print("End of annotating CosMx cell-level anndata: %.2f seconds" % (time.time()-start_time))
 
@@ -190,7 +192,7 @@ def read_cosmx(load_path, sc_adata=None, sc_celltype_colname = 'celltype', sc_no
 
 
 
-def celltype_specific_mat(sp_adata, tx_info_name='tx_by_cell_grid', celltype_colname=None, cell_types=[''], 
+def celltype_specific_mat(sp_adata, tx_info_name='tx_by_cell_grid', celltype_colname=None, cell_types=[''],
                           transcript_colname='target', sc_norm_total=1e3):
     '''
     ## Return cell type specific transcript count matrix
@@ -207,14 +209,14 @@ def celltype_specific_mat(sp_adata, tx_info_name='tx_by_cell_grid', celltype_col
     '''
     if tx_info_name not in sp_adata.uns.keys():
         raise ValueError("'sp_adata.uns' should contain 'tx_info_name' which explains transcript information by cells and grids")
-    
+
     tx_by_cell_grid = sp_adata.uns[tx_info_name]
     if celltype_colname not in tx_by_cell_grid.columns:
         raise ValueError("'celltype_colname' should be among the column names of dataframe: 'tx_info_name'")
     # Boolean pandas series for the celltype inclusion
-    if not (set(cell_types) <= set(tx_by_cell_grid[celltype_colname].cat.categories)): 
+    if not (set(cell_types) <= set(tx_by_cell_grid[celltype_colname].cat.categories)):
         raise ValueError("Some of the cell types in 'cell_types' are not found in the sp_data")
-    
+
     # Subset the transcript information by cell type
     grid_adata_celltype_list = []
     for celltype in cell_types:
@@ -229,7 +231,7 @@ def celltype_specific_mat(sp_adata, tx_info_name='tx_by_cell_grid', celltype_col
         # Log transformation of grid based count and make sparse matrix
         grid_tx_count_celltype_ = (sc_norm_total*sparse.csr_matrix(grid_tx_count_celltype, dtype=np.float32)).log1p()
         # Create anndata for cell type specific count matrix
-        grid_adata_celltype = an(X=grid_tx_count_celltype_, obs=sp_adata.obs)
+        grid_adata_celltype = an(X=grid_tx_count_celltype_, obs=sp_adata.obs[['array_col','array_row']])
         grid_adata_celltype.var_names = grid_tx_count_celltype.columns.to_frame()[transcript_colname].to_numpy()
         grid_adata_celltype_list.append(grid_adata_celltype)
 
