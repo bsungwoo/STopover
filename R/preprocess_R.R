@@ -206,7 +206,7 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
       Seurat::Idents(sp_object_list[[idx]]) <- sc_celltype_colname
     } else {
       sp_object_list[[idx]] <- Seurat::AddMetaData(sp_object_list[[idx]], reticulate::py_to_r(adata$obs))
-      sp_object_list[[idx]][['batch']] <- "image"
+      if (typeof(sc_object)!="character") sp_object_list[[idx]][['batch']] <- "image"
       sp_object_list[[idx]]@assays$Spatial@misc <- reticulate::py_to_r(adata$uns['tx_by_cell_grid'])
     }
     sp_object_list[[idx]]@images$image = methods::new(Class = 'SlideSeq', assay = "Spatial", key = "image_", coordinates = df_coord)
