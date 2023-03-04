@@ -45,6 +45,8 @@ Please refer to DESCRIPTION file: [R requirements](https://github.com/bsungwoo/S
 ## Usage
 ### Python Code Example
 Please refer to [README_Python.md](https://github.com/bsungwoo/STopover/blob/master/STopover/README_Python.md)  
+Please refer to [STopover_visium](https://github.com/bsungwoo/STopover/blob/master/Visium_sample.ipynb), [STopover_cosmx](https://github.com/bsungwoo/STopover/blob/master/SMI_sample.ipynb)  
+
 ### R Code Example
-Please refer the below documents  
+Please refer to the below documents  
 Link to documents: [STopover_visium](https://rpubs.com/bsungwoo/STopover_visium), [STopover_cosmx](https://rpubs.com/bsungwoo/STopover_cosmx)  
