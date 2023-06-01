@@ -11,8 +11,6 @@ Tool to capture spatial colocalization and interaction in the TME using topologi
   conda activate STopover
   pip install git+https://github.com/bsungwoo/STopover.git
   pip install jupyter
-  # Install compatible version of ipywidgets with parmap (~=1.6.0)
-  pip install ipywidgets~=7.7.0
   python -m ipykernel install --user --name STopover --display-name STopover
 ```
 #### Run GUI for STopover (PyQt)
