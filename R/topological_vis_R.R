@@ -510,7 +510,8 @@ vis_diff_inc_lr_pairs <- function(sp_object, ref_group, comp_group,
     df <- df %>% dplyr::slice(1:top_n) %>% dplyr::arrange(dplyr::desc(GeneRatio))
     lr_pair_match <- data.frame()
     for (idx in 1:length(df$geneID)){
-      gene_list <- ifelse(grepl(df$geneID[idx],pattern="/"),strsplit(df$geneID[idx], split="/")[[1]],df$geneID[idx])
+      if (grepl(df$geneID[idx],pattern="/")) {gene_list <- strsplit(df$geneID[idx], split="/")[[1]]}
+      else {gene_list <- df$geneID[idx]}
       df_lr_tmp <- data.frame()
       for (gene in gene_list){
         lr_list_tmp <- df_top_diff_comp %>% dplyr::filter(Feat_1==gene|Feat_2==gene) %>% dplyr::pull(lr_pair)
