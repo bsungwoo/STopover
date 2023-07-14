@@ -46,6 +46,9 @@ class STopover_visium(AnnData):
                 adata_mod = sc.read_h5ad(sp_load_path)
                 try: min_size, fwhm, thres_per = adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per']
                 except: adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'] = min_size, fwhm, thres_per
+                # Save Jcount value
+                J_result_num = [int(key_names.split("_")[2]) for key_names in adata_mod.uns.keys() if key_names.startswith("J_result_")]
+                if len(J_result_num) > 0: J_count = max(J_result_num) + 1
             except: 
                 try:
                     adata_mod = sc.read_visium(sp_load_path)
@@ -353,6 +356,9 @@ class STopover_cosmx(STopover_visium):
                     adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'], adata_mod.uns['x_bins'], \
                         adata_mod.uns['y_bins'], adata_mod.uns['sc_norm_total'], adata_mod.uns['sc_celltype_colname'], adata_mod.uns['transcript_colname']
                 except: pass
+                # Save Jcount value
+                J_result_num = [int(key_names.split("_")[2]) for key_names in adata_mod.uns.keys() if key_names.startswith("J_result_")]
+                if len(J_result_num) > 0: J_count = max(J_result_num) + 1
             except:
                 if isinstance(sc_adata, str):
                     try: sc_adata = sc.read_h5ad(sc_adata)
@@ -382,11 +388,6 @@ class STopover_cosmx(STopover_visium):
 
         self.x_bins = x_bins
         self.y_bins = y_bins
-        self.min_size = min_size
-        self.fwhm = fwhm
-        self.thres_per = thres_per
-        self.save_path = save_path
-        self.J_count = J_count
         self.sc_celltype_colname = sc_celltype_colname
         self.transcript_colname = transcript_colname
         self.sc_norm_total = sc_norm_total
