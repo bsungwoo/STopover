@@ -17,7 +17,7 @@ simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 
 def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
-                                  top_n = 5, ncol = 4, spot_size=1, alpha_img=0.8, alpha = 0.8, 
+                                  top_n = 5, jaccard_type='default', ncol = 4, spot_size=1, alpha_img=0.8, alpha = 0.8, 
                                   fig_size = (5,5), batch_colname='batch', batch_name='0', batch_library_dict=None,
                                   image_res = 'hires', adjust_image = True, border = 500, 
                                   title_fontsize=20, legend_fontsize=None, title = '', return_axis=False,
@@ -27,7 +27,8 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
     ### Input
     data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
     feat_name_x, feat_name_y: name of the feature x and y
-    top_n: the number of the top connected component pairs withthe  highest Jaccard similarity index
+    top_n: the number of the top connected component pairs with the highest Jaccard similarity index
+    jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
     ncol: number of columns to visualize top n CCs
     spot_size: size of the spot visualized on the tissue
     alpha_img: transparency of the tissue, alpha: transparency of the colored spot
@@ -77,8 +78,8 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
         batch_library_dict = dict({'0': library_keys[0]})
 
     # Calculate top n connected component location
-    data_mod, J_top_n = jaccard_top_n_connected_loc_(data_mod, CCx=None, CCy=None, 
-                                                     feat_name_x=feat_name_x, feat_name_y=feat_name_y, top_n = top_n)
+    data_mod, J_top_n = jaccard_top_n_connected_loc_(data_mod, CCx=None, CCy=None, feat_name_x=feat_name_x, feat_name_y=feat_name_y, 
+                                                     top_n = top_n, jaccard_type=jaccard_type)
 
     # Adjust the image to contain the whole slide image
     if adjust_image:
@@ -126,7 +127,7 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
 
 
 def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
-                             spot_size=1, alpha_img=0.8, alpha = 0.8, vis_jaccard=True,
+                             spot_size=1, alpha_img=0.8, alpha = 0.8, vis_jaccard=True, jaccard_type='default',
                              fig_size=(5,5), batch_colname='batch', batch_name='0', batch_library_dict=None,
                              image_res = 'hires', adjust_image = True, border = 500, 
                              title_fontsize=20, legend_fontsize=None, title = 'Locations of', 
@@ -141,6 +142,7 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
     spot_size: size of the spot visualized on the tissue
     alpha_img: transparency of the tissue, alpha: transparency of the colored spot
     vis_jaccard: whether to visualize jaccard index on right corner of the plot
+    jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
 
     fig_size: size of the drawn figure
     batch_colname: column name to categorize the batch in .obs
@@ -193,8 +195,8 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
             (2 * ((cc_loc_x_df == 0) & (cc_loc_y_df != 0))) + \
             (3 * ((cc_loc_x_df != 0) & (cc_loc_y_df != 0)))).astype('category')
     # Calculate J_comp between the two feature pairs
-    J_comp = jaccard_and_connected_loc_(data_mod_x, feat_name_x=feat_name_x, feat_name_y=feat_name_y, J_index=True,
-                                        return_mode='jaccard', return_sep_loc=False)
+    Jcomp = jaccard_and_connected_loc_(data_mod_x, feat_name_x=feat_name_x, feat_name_y=feat_name_y, J_comp=True,
+                                        jaccard_type=jaccard_type, return_mode='jaccard', return_sep_loc=False)
     # Remove the spots not included in the top connected components
     data_mod_x = data_mod_x[data_mod_x.obs['Over'] != 0, :].copy()
             
@@ -222,7 +224,7 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
                   palette = colormap, size=spot_size, alpha_img = alpha_img,
                   alpha = alpha, legend_loc = None, ax = axs, show = False, crop_coord = crop_coord_list)
     axs.set_title(feat_name_x+' & '+feat_name_y+title, fontsize = title_fontsize)
-    if vis_jaccard: axs.add_artist(offsetbox.AnchoredText(f'J_comp = {J_comp:.3f}', loc='upper right', bbox_to_anchor=(1, 1), bbox_transform=axs.transAxes,
+    if vis_jaccard: axs.add_artist(offsetbox.AnchoredText(f'J_comp = {Jcomp:.3f}', loc='upper right', bbox_to_anchor=(1, 1), bbox_transform=axs.transAxes,
                                                           frameon=False, prop=dict(size = fig_size[1]*2.5)))
     
     # Add legend to the figure
@@ -334,7 +336,7 @@ def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alph
 
 
 def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
-                                 top_n = 5, ncol=4, dot_size=None, alpha = 0.8, 
+                                 top_n = 5, jaccard_type='default', ncol=4, dot_size=None, alpha = 0.8, 
                                  fig_size = (5,5), title_fontsize = 20, legend_fontsize = None,
                                  title = '', return_axis=False,
                                  save = False, path = os.getcwd(), save_name_add = '', dpi=150):
@@ -344,7 +346,8 @@ def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
     ### Input
     data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
     feat_name_x, feat_name_y: name of the feature x and y
-    top_n: the number of the top connected component pairs withthe  highest Jaccard similarity index
+    top_n: the number of the top connected component pairs with the highest Jaccard similarity index
+    jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
     ncol: number of columns to visualize the top n CCs
     dot_size: size of the spot visualized on the tissue
     alpha: transparency of the colored spot
@@ -373,8 +376,8 @@ def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
     fig, axs = plt.subplots(xsize, ysize, tight_layout=True, squeeze=False)
 
     # Calculate top n connected component location
-    data_mod, J_top_n = jaccard_top_n_connected_loc_(data, CCx=None, CCy=None, 
-                                                     feat_name_x=feat_name_x, feat_name_y=feat_name_y, top_n = top_n)
+    data_mod, J_top_n = jaccard_top_n_connected_loc_(data, CCx=None, CCy=None, feat_name_x=feat_name_x, feat_name_y=feat_name_y, 
+                                                     top_n = top_n, jaccard_type=jaccard_type)
 
     # Define the colormap with three different colors: for CC locations of feature x, feature_y and intersecting regions
     colorlist = ["#A2E1CA","#FBBC05","#4285F4","#34A853"]
@@ -411,7 +414,7 @@ def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
 
 
 def vis_all_connected_cosmx(data, feat_name_x='', feat_name_y='',
-                            dot_size=None, alpha = 0.8, vis_jaccard=True,
+                            dot_size=None, alpha = 0.8, vis_jaccard=True, jaccard_type='default',
                             fig_size=(5,5), title_fontsize = 20, legend_fontsize = None, 
                             title = 'Locations of', return_axis=False, axis = None,
                             save = False, path = os.getcwd(), save_name_add = '', dpi = 150):
@@ -424,6 +427,7 @@ def vis_all_connected_cosmx(data, feat_name_x='', feat_name_y='',
     dot_size: size of the spot visualized on the tissue
     alpha: transparency of the colored spot
     vis_jaccard: whether to visualize jaccard index on right corner of the plot
+    jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
 
     fig_size: size of the drawn figure
     title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
@@ -480,9 +484,9 @@ def vis_all_connected_cosmx(data, feat_name_x='', feat_name_y='',
     axs.set_title(feat_name_x+' & '+feat_name_y+title, fontsize = title_fontsize)
 
     if vis_jaccard: 
-        J_comp = jaccard_and_connected_loc_(data_mod, feat_name_x=feat_name_x, feat_name_y=feat_name_y, J_index=True,
-                                            return_mode='jaccard', return_sep_loc=False)
-        axs.add_artist(offsetbox.AnchoredText(f'J_comp = {J_comp:.3f}', loc='upper left', bbox_to_anchor=(1, 1), bbox_transform=axs.transAxes,
+        Jcomp = jaccard_and_connected_loc_(data_mod, feat_name_x=feat_name_x, feat_name_y=feat_name_y, J_comp=True,
+                                            jaccard_type=jaccard_type, return_mode='jaccard', return_sep_loc=False)
+        axs.add_artist(offsetbox.AnchoredText(f'J_comp = {Jcomp:.3f}', loc='upper left', bbox_to_anchor=(1, 1), bbox_transform=axs.transAxes,
                                               frameon=False, prop=dict(size = fig_size[1]*2.5)))
 
     if (axis is None) and save:

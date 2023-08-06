@@ -13,7 +13,8 @@ from .jaccard import jaccard_composite
 
 
 def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list=None, group_name='batch',
-                           fwhm=2.5, min_size=5, thres_per=30, num_workers=os.cpu_count(), progress_bar=True):
+                           fwhm=2.5, min_size=5, thres_per=30, jaccard_type='default',
+                           num_workers=os.cpu_count(), progress_bar=True):
     '''
     ## Calculate Jaccard index for given feature pairs and return dataframe
         -> if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
@@ -36,6 +37,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     fwhm: full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent spots/grids
     min_size: minimum size of a connected component
     thres_per: lower percentile value threshold to remove the connected components
+    jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
     num_workers: number of workers to use for multiprocessing
     progress_bar: whether to show the progress bar during multiprocessing
 
@@ -53,8 +55,9 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     if df_feat.shape[1] != 2:
         raise ValueError("'feat_pairs' should be list format: [('A','B'),('C','D')] or equivalent pandas dataframe")
 
-    # Check the format of the data type
+    # Check the format of the data and jaccard output type
     if spatial_type not in ['visium', 'cosmx']: raise ValueError("'spatial_type' should be either 'visium' or 'cosmx'")
+    if jaccard_type not in ['default', 'weighted']: raise ValueError("'jaccard_type' should be either 'default' or 'weighted'")
 
     # Add group name if no group name is provided
     if group_list is None:
@@ -232,7 +235,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
         else:
             # Reconstruct combined feature list for each group
             comb_feat_list = pd.concat([df_subset['Feat_1'], df_subset['Feat_2']],
-                                            axis=0, ignore_index=True).drop_duplicates().tolist()
+                                       axis=0, ignore_index=True).drop_duplicates().tolist()
             # Assign column names and index
             df_cc_loc.columns = ['Comb_CC_'+str(i) for i in comb_feat_list]
             df_cc_loc.index = data[data.obs[group_name]==group_list[num]].obs.index
@@ -242,23 +245,35 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
             if obs_tf_x != obs_tf_y:
                 CCx_loc_mat = arr_cc_loc[:,:len(comb_feat_list_x)][:,df_subset['Index_1'].iloc[index]]
                 CCy_loc_mat = arr_cc_loc[:,len(comb_feat_list_x):][:,df_subset['Index_2'].iloc[index]]
+                if jaccard_type!="default":
+                    feat_x_val= val_list[num][:,:len(comb_feat_list_x)][:,df_subset['Index_1'].iloc[index]].reshape((-1,1))
+                    feat_y_val= val_list[num][:,len(comb_feat_list_x):][:,df_subset['Index_2'].iloc[index]].reshape((-1,1))
             else:
                 CCx_loc_mat = arr_cc_loc[:,df_subset['Index_1'].iloc[index]]
                 CCy_loc_mat = arr_cc_loc[:,df_subset['Index_2'].iloc[index]]
-            CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat))
+                if jaccard_type!="default":
+                    feat_x_val = val_list[num][:,df_subset['Index_1'].iloc[index]].reshape((-1,1))
+                    feat_y_val = val_list[num][:,df_subset['Index_2'].iloc[index]].reshape((-1,1))
+            if jaccard_type=="default": CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat))
+            else: CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,feat_x_val,feat_y_val))
 
     # Get the output for connected component location and save
     data_mod = data.copy()
     output_cc_loc = pd.concat(output_cc_loc, axis=0).fillna(0).astype(int).astype('category')
-    data_mod.obs = data_mod.obs.join(output_cc_loc, lsuffix='_prev')
+    # Check if there is overlapping columns
+    import re
+    pattern = re.compile("^.*_prev[0-9]+$")
+    data_count = [int(i.split("_prev")[1]) for i in data_mod.obs.columns if pattern.match(i)]
+    if len(data_count) > 0: data_count = sorted(data_count)[-1] + 1
+    else: data_count = 1
+    # Add the connected component location information to the .obs
+    data_mod.obs = data_mod.obs.join(output_cc_loc, lsuffix='_prev'+str(data_count))
 
     # Get the output for jaccard
     output_j = parmap.starmap(jaccard_composite, CCxy_loc_mat_list,
                               pm_pbar=progress_bar, pm_processes=min(os.cpu_count(), num_workers))
-
     # Create dataframe for J metrics
     output_j = pd.DataFrame(output_j, columns=['J_comp'])
-
     # Create dataframe with pairwise topological similarity measures
     df_top_total = pd.concat([df_top_total.iloc[:,:-2], output_j], axis=1)
 
