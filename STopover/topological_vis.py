@@ -241,9 +241,9 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
 
 
 
-def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alpha = 0.8, vmax=None, vmin=None, sort_labels=True,
-                       fig_size = (5,5), title_fontsize = 20, legend_fontsize = None, title = None, 
-                       return_axis=False, figure = None, axis = None, save = False, path = os.getcwd(), save_name_add = '', dpi=150):
+def vis_spatial_imageST_(data, feat_name='', colorlist = None, dot_size=None, alpha = 0.8, vmax=None, vmin=None, sort_labels=True,
+                         fig_size = (5,5), title_fontsize = 20, legend_fontsize = None, title = None, 
+                         return_axis=False, figure = None, axis = None, save = False, path = os.getcwd(), save_name_add = '', dpi=150):
     '''
     ## Visualizing spatial distribution of features in CosMx dataset
     ### Input
@@ -335,11 +335,11 @@ def vis_spatial_cosmx_(data, feat_name='', colorlist = None, dot_size=None, alph
 
 
 
-def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
-                                 top_n = 5, jaccard_type='default', ncol=4, dot_size=None, alpha = 0.8, 
-                                 fig_size = (5,5), title_fontsize = 20, legend_fontsize = None,
-                                 title = '', return_axis=False,
-                                 save = False, path = os.getcwd(), save_name_add = '', dpi=150):
+def vis_jaccard_top_n_pair_imageST(data, feat_name_x='', feat_name_y='',
+                                   top_n = 5, jaccard_type='default', ncol=4, dot_size=None, alpha = 0.8, 
+                                   fig_size = (5,5), title_fontsize = 20, legend_fontsize = None,
+                                   title = '', return_axis=False,
+                                   save = False, path = os.getcwd(), save_name_add = '', dpi=150):
     '''
     ## Visualizing top n connected component x and y showing maximum Jaccard index in CosMx dataset
     -> Overlapping conected component locations in green, exclusive locations for x and y in red and blue, respectively
@@ -413,11 +413,11 @@ def vis_jaccard_top_n_pair_cosmx(data, feat_name_x='', feat_name_y='',
 
 
 
-def vis_all_connected_cosmx(data, feat_name_x='', feat_name_y='',
-                            dot_size=None, alpha = 0.8, vis_jaccard=True, jaccard_type='default',
-                            fig_size=(5,5), title_fontsize = 20, legend_fontsize = None, 
-                            title = 'Locations of', return_axis=False, axis = None,
-                            save = False, path = os.getcwd(), save_name_add = '', dpi = 150):
+def vis_all_connected_imageST(data, feat_name_x='', feat_name_y='',
+                              dot_size=None, alpha = 0.8, vis_jaccard=True, jaccard_type='default',
+                              fig_size=(5,5), title_fontsize = 20, legend_fontsize = None, 
+                              title = 'Locations of', return_axis=False, axis = None,
+                              save = False, path = os.getcwd(), save_name_add = '', dpi = 150):
     '''
     ## Visualizing all connected components x and y on tissue in CosMx dataset
     -> Overlapping conected component locations in green, exclusive locations for x and y in red and blue, respectively
