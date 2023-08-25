@@ -17,18 +17,18 @@ def annotate_ST(sp_adata, sc_adata=None, sc_norm_total=1e3,
                    sc_celltype_colname = 'celltype', annot_method='ingest',
                    cell_id = ['fov','cell_ID'], return_df=True):
     '''
-    ## Annotate cells composing CosMx SMI data
+    ## Annotate cells composing image-based ST SMI data
 
     ### Input
-    sp_adata: CosMx SMI anndata with raw count matrix in .X
-    sc_adata: single-cell reference anndata with raw count matrix in .X (cell type annotation of CosMx SMI data)
+    sp_adata: image-based ST anndata with raw count matrix in .X
+    sc_adata: single-cell reference anndata with raw count matrix in .X (cell type annotation of image-based ST data)
     sc_celltype_colname: column name for cell annotation of single-cell data (in .obs)
     annot_method: cell type annotation methods: either 'ingest' or 'tacco' (default='ingest')
     cell_id: list of column names that represents cell ids in sp_adata.obs
     return_df: whether to return pandas dataframe that summarizes cell type for each cell
 
     ### Output
-    sp_adata: spatial anndata for cell-level CosMx expression data with cell annotation
+    sp_adata: spatial anndata for cell-level image-based ST expression data with cell annotation
     df_celltype: pandas dataframe that summarizes cell type for each cell
     '''
     # Check feasibility of the variable
@@ -38,7 +38,7 @@ def annotate_ST(sp_adata, sc_adata=None, sc_norm_total=1e3,
     # Normalize, log transform and scale spatial data
     sp_adata_orig = sp_adata.copy()
     sc.pp.normalize_total(sp_adata, target_sum=sc_norm_total, inplace=True)
-    # Log transform and scale spatial data (CosMx)
+    # Log transform and scale spatial data (image-based ST)
     sc.pp.log1p(sp_adata)
     sp_adata.raw = sp_adata.copy()
 
@@ -55,7 +55,7 @@ def annotate_ST(sp_adata, sc_adata=None, sc_norm_total=1e3,
             # Find intersecting genes
             inter_var_names = sc_adata_.var_names.intersection(sp_adata.var_names)
             sc_adata_ = sc_adata_[:, inter_var_names].copy()
-            sp_adata_ = sp_adata[:, inter_var_names].copy()
+            sp_adata = sp_adata[:, inter_var_names].copy()
 
             # Perform PCA and find neighbords and umap embedding
             sc.pp.pca(sc_adata_)
@@ -66,10 +66,10 @@ def annotate_ST(sp_adata, sc_adata=None, sc_norm_total=1e3,
             sc_adata_.obs[sc_celltype_colname] = sc_adata_.obs[sc_celltype_colname].astype('category')
 
             # Scale single-cell and spatial data
-            sc.pp.scale(sc_adata_, max_value=10)
-            sc.pp.scale(sp_adata_, max_value=10)
-            # Perform cell label transfer from single-cell to CosMx data
-            sc.tl.ingest(sp_adata_, sc_adata_, obs=sc_celltype_colname, embedding_method='umap')
+            sc.pp.scale(sc_adata, max_value=10)
+            sc.pp.scale(sp_adata, max_value=10)
+            # Perform cell label transfer from single-cell to image-based ST data
+            sc.tl.ingest(sp_adata, sc_adata_, obs=sc_celltype_colname, embedding_method='umap')
         elif annot_method=="tacco":
             import tacco as tc
             # Find intersecting genes
@@ -79,7 +79,7 @@ def annotate_ST(sp_adata, sc_adata=None, sc_norm_total=1e3,
             print("_"*60)
             df_annot = tc.tl.annotate(sp_adata_orig, sc_adata_orig, annotation_key=sc_celltype_colname)
             sp_adata.obs[sc_celltype_colname] = np.array(df_annot.columns)[np.argmax(df_annot.to_numpy(), axis = 1)]
-            print("_"*60)   
+            print("_"*60)
     else:
         # Find highly variable genes in spatial data
         sc.pp.highly_variable_genes(sp_adata, flavor="seurat", n_top_genes=2000)
@@ -91,7 +91,7 @@ def annotate_ST(sp_adata, sc_adata=None, sc_norm_total=1e3,
         sc.tl.leiden(sp_adata, key_added=sc_celltype_colname)
 
     if return_df:
-        # Data frame containing annotated cell types in CosMx SMI data
+        # Data frame containing annotated cell types in image-based ST data
         df_celltype = sp_adata.obs.loc[:,[sc_celltype_colname]+cell_id].set_index(cell_id)
         return sp_adata.raw.to_adata(), df_celltype
     else:
@@ -129,7 +129,7 @@ def read_imageST(load_path, sc_adata=None, sc_celltype_colname = 'celltype',
     sp_adata_cell: cell-based log-normalized count anndata
     '''
     # Check data feasibility
-    if sc_adata is None: print("Reference single-cell data not provided: leiden clustering of CosMx dataset will be used for annotation")
+    if sc_adata is None: print("Reference single-cell data not provided: leiden clustering of image-based ST data will be used for annotation")
     else:
         if sc_celltype_colname not in sc_adata.obs.columns:
             print("Cell type annotation (sc_celltype_colname) not found in sc_adata.obs")
@@ -153,7 +153,7 @@ def read_imageST(load_path, sc_adata=None, sc_celltype_colname = 'celltype',
     # Subset the expression matrix to remove data not included in a cell and from negative probes
     if ST_type=="cosmx": 
         exp_mat = exp_mat[exp_mat[cell_id_colname] != 0].loc[:, ~exp_mat.columns.str.contains('NegPrb')].set_index(cell_id)
-        # Generate cell barcodes for CosMx SMI data
+        # Generate cell barcodes for image-based ST data
         cell_names_expmat = exp_mat.index.to_frame()
         cell_names_expmat = (cell_names_expmat[fov_colname].astype(str) + '_' + cell_names_expmat[cell_id_colname].astype(str)).to_numpy()
         # Load image-based ST SMI cell metadata
@@ -182,13 +182,13 @@ def read_imageST(load_path, sc_adata=None, sc_celltype_colname = 'celltype',
     # Remove cells with total transcript count below min_counts and number of expressed genes (>0) below min_genes
     sc.pp.filter_cells(sp_adata_cell, min_counts=min_counts)
     sc.pp.filter_cells(sp_adata_cell, min_genes=min_genes)
-    print("End of creating CosMx cell-level anndata: %.2f seconds" % (time.time()-start_time))
+    print("End of creating image-based ST cell-level anndata: %.2f seconds" % (time.time()-start_time))
 
-    ## Annotation of cell-level CosMx SMI data
+    ## Annotation of cell-level image-based ST data
     sp_adata_cell, df_celltype = annotate_ST(sp_adata_cell, sc_adata, sc_norm_total=sc_norm_total, 
                                              sc_celltype_colname = sc_celltype_colname, annot_method=annot_method,
                                              cell_id = cell_id, return_df=True)
-    print("End of annotating CosMx cell-level anndata: %.2f seconds" % (time.time()-start_time))
+    print("End of annotating image-based ST cell-level anndata: %.2f seconds" % (time.time()-start_time))
 
     if grid_method == "transcript":
         ## Read transcript information file
@@ -196,7 +196,7 @@ def read_imageST(load_path, sc_adata=None, sc_celltype_colname = 'celltype',
         # Remove transcript data not included in a cell and from negative probes
         if ST_type == "cosmx": tx_coord_all = tx_coord_all[(tx_coord_all[cell_id_colname] != 0) & (~tx_coord_all[transcript_colname].str.contains("NegPrb"))]
 
-        ## Grid-based aggregation of CosMx: divide coordinates by x_bins and y_bins and aggregate
+        ## Grid-based aggregation of image-based ST: divide coordinates by x_bins and y_bins and aggregate
         # Find the x and y coordinate arrays
         x_coord = tx_coord_all[[tx_xcoord_colname]].to_numpy()
         y_coord = tx_coord_all[[tx_ycoord_colname]].to_numpy()
@@ -232,10 +232,10 @@ def read_imageST(load_path, sc_adata=None, sc_celltype_colname = 'celltype',
         grid_index = grid_celltype.index.to_frame()
         grid_celltype.index = grid_index['array_col'].astype(str) + '_' + grid_index['array_row'].astype(str)
         # Modify metadata to contain cell type information in each grid
-        grid_metadata = grid_metadata.join(grid_celltype, how='inner')
+        grid_metadata = grid_metadata.join(grid_celltype, how='left').fillna(0)
         print("End of generating grid-based cell type abundance metadata: %.2f seconds" % (time.time()-start_time))
     else:
-        ## Grid-based aggregation of CosMx: divide coordinates by x_bins and y_bins and aggregate
+        ## Grid-based aggregation of image-based ST: divide coordinates by x_bins and y_bins and aggregate
         # Find the x and y coordinate arrays
         x_coord = sp_adata_cell.obs[['array_col']].to_numpy()
         y_coord = sp_adata_cell.obs[['array_row']].to_numpy()
@@ -272,14 +272,14 @@ def read_imageST(load_path, sc_adata=None, sc_celltype_colname = 'celltype',
         grid_index = grid_celltype.index.to_frame()
         grid_celltype.index = grid_index['grid_array_col'].astype(str) + '_' + grid_index['grid_array_row'].astype(str)
         # Modify metadata to contain cell type information in each grid
-        grid_metadata = grid_metadata.join(grid_celltype, how='inner')
+        grid_metadata = grid_metadata.join(grid_celltype, how='left').fillna(0)
         print("End of generating grid-based cell type abundance metadata: %.2f seconds" % (time.time()-start_time))
 
-    ## Generating grid-based CosMx SMI spatial anndata
+    ## Generating grid-based image-based ST anndata
     sp_adata_grid = an(X = grid_tx_count, obs=grid_metadata)
     sp_adata_grid.var_names = var_names
     sp_adata_grid.uns['tx_by_cell_grid'] = tx_by_cell_grid.reset_index()
-    print("End of generating grid-based CosMx spatial anndata: %.2f seconds" % (time.time()-start_time))
+    print("End of generating grid-based image-based ST anndata: %.2f seconds" % (time.time()-start_time))
 
     return sp_adata_grid, sp_adata_cell
 

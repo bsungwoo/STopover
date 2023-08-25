@@ -27,7 +27,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
         -> (C and D) should be same data format: all in metadata (.obs.columns) or all in gene names(.var.index)
         -> If the data format is not same the majority of the data format will be automatically searched
         -> and the rest of the features with different format will be removed from the pairs
-    spatial_type: type of the spatial data (should be either 'visium' or 'cosmx')
+    spatial_type: type of the spatial data (should be either 'visium' or 'imageST')
 
     group_name:
         the column name for the groups saved in metadata(.obs)
@@ -56,7 +56,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
         raise ValueError("'feat_pairs' should be list format: [('A','B'),('C','D')] or equivalent pandas dataframe")
 
     # Check the format of the data and jaccard output type
-    if spatial_type not in ['visium', 'cosmx']: raise ValueError("'spatial_type' should be either 'visium' or 'cosmx'")
+    if spatial_type not in ['visium', 'imageST']: raise ValueError("'spatial_type' should be either 'visium' or 'imageST'")
     if jaccard_type not in ['default', 'weighted']: raise ValueError("'jaccard_type' should be either 'default' or 'weighted'")
 
     # Add group name if no group name is provided

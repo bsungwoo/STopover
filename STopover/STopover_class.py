@@ -2,7 +2,7 @@ import os
 import scanpy as sc
 from anndata import AnnData
 
-from .cosmx_utils import *
+from .imageST_utils import *
 from .topological_sim import topological_sim_pairs_
 from .topological_comp import save_connected_loc_data_
 from .jaccard import jaccard_and_connected_loc_
@@ -330,20 +330,20 @@ class STopover_imageST(STopover_visium):
     sp_adata: Anndata object for image-based ST data with count matrix ('raw') in .X
     sp_load_path: path to image-based ST data directory or .h5ad Anndata object
 
-    sc_adata: single-cell reference anndata for cell type annotation of CosMx SMI data
+    sc_adata: single-cell reference anndata for cell type annotation of image-based ST data
         -> raw count matrix should be saved in .X
         -> If .h5ad file directory is provided, it will load the h5ad file
-        -> If None, then leiden cluster numbers will be used to annotate CosMx SMI data
+        -> If None, then leiden cluster numbers will be used to annotate umage-based ST data
     sc_celltype_colname: column name for cell type annotation information in metadata of single-cell (.obs)
     ST_type: type of the ST data to be read: cosmx, xenium, merfish (default: 'cosmx')
     grid_method: type of the method to assign transcript to grid, either transcript coordinate based method and cell coordinate based method (default='transcript')
     sc_norm_total: scaling factor for the total count normalization per cell
 
-    tx_file_name, cell_exprmat_file_name, cell_metadata_file_name: CosMx file for transcript count, cell-level expression matrix, cell-level metadata
+    tx_file_name, cell_exprmat_file_name, cell_metadata_file_name: image-based ST file for transcript count, cell-level expression matrix, cell-level metadata
     fov_colname, cell_id_colname: column name for barcodes corresponding to fov and cell ID
     tx_xcoord_colname, tx_ycoord_colname, transcript_colname: column name for global x, y coordinates of the transcript and transcript name
     meta_xcoord_colname, meta_ycoord_colname: column name for global x, y coordinates in cell-level metadata file
-    x_bins, y_bins: number of bins to divide the CosMx SMI data (for grid-based aggregation)
+    x_bins, y_bins: number of bins to divide the image-based ST data (for grid-based aggregation)
 
     min_size: minimum size of a connected component
     fwhm: full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent grid
@@ -386,7 +386,7 @@ class STopover_imageST(STopover_visium):
                 J_result_num = [int(key_names.split("_")[2]) for key_names in adata_mod.uns.keys() if key_names.startswith("J_result_")]
                 if len(J_result_num) > 0: J_count = max(J_result_num) + 1
             except:
-                print("Failed\nReading CosMx data files in 'sp_load_path'")
+                print("Failed\nReading image-based ST data files in 'sp_load_path'")
                 if isinstance(sc_adata, str):
                     try: sc_adata = sc.read_h5ad(sc_adata)
                     except: 
@@ -420,7 +420,7 @@ class STopover_imageST(STopover_visium):
         self.transcript_colname = transcript_colname
         self.sc_norm_total = sc_norm_total
         self.min_counts, self.min_genes= min_counts, min_genes
-        self.spatial_type = 'cosmx'
+        self.spatial_type = 'imageST'
 
 
     def reinitalize(self,sp_adata, lognorm=False, sc_celltype_colname=None, sc_norm_total=None, x_bins=None, y_bins=None, 
@@ -463,7 +463,7 @@ class STopover_imageST(STopover_visium):
     def topological_similarity_celltype_pair(self, celltype_x='', celltype_y='', feat_pairs=None, use_lr_db=False, lr_db_species='human', db_name='CellTalk',
                                              group_name='batch', group_list=None, J_result_name='result', num_workers=os.cpu_count(), progress_bar=True):
         '''
-        ## Calculate Jaccard index between the two cell type-specific expression anndata of CosMx data
+        ## Calculate Jaccard index between the two cell type-specific expression anndata of image-based ST data
         ### Input
         celltype_x: name of the cell type x (should be among the column names of .obs)
         celltype_y: name of the cell type y (should be among the column names of .obs)
@@ -514,7 +514,7 @@ class STopover_imageST(STopover_visium):
                           fig_size = (10,10), title_fontsize = 20, legend_fontsize = None, title = None, 
                           return_axis=False, figure = None, axis = None, save = False, save_name_add = '', dpi=150):
         '''
-        ## Visualizing spatial distribution of features in CosMx dataset
+        ## Visualizing spatial distribution of features in image-based ST dataset
         ### Input
         data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
         feat_name: name of the feature to visualize
@@ -549,7 +549,7 @@ class STopover_imageST(STopover_visium):
                                title = '', return_axis=False,
                                save = False, save_name_add = '', dpi=150):
         '''
-        ## Visualizing top n connected component x and y showing maximum Jaccard index in CosMx dataset
+        ## Visualizing top n connected component x and y showing maximum Jaccard index in image-based ST dataset
         -> Overlapping conected component locations in green, exclusive locations for x and y in red and blue, respectively
         ### Input
         data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
@@ -585,7 +585,7 @@ class STopover_imageST(STopover_visium):
                           title = '', return_axis = False, axis = None,
                           save = False, save_name_add = '', dpi = 150):
         '''
-        ## Visualizing all connected components x and y on tissue in CosMx dataset
+        ## Visualizing all connected components x and y on tissue image-based ST dataset
         -> Overlapping conected component locations in green, exclusive locations for x and y in red and blue, respectively
         ### Input  
         data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
