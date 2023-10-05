@@ -96,9 +96,16 @@ class STopover_visium(AnnData):
         ### Output
         CellTalk or CellChat database as pandas dataframe
         '''
-        assert lr_db_species in ['human', 'mouse'], "'lr_db_species' should be either 'human' or 'mouse'"
-        assert db_name in ['CellTalk','CellChat'], "'db_name should be either 'celltalk' or 'cellchat'"
-        if db_name=="CellTalk": 
+        if lr_db_species not in ['human','mouse','rat']: 
+            raise ValueError("'lr_db_species' should be either 'human', 'mouse', or, 'rat'")
+        if db_name in ['CellTalk','CellChat']:
+            if lr_db_species=="rat": raise NotImplementedError("'lr_db_species' can only be 'human' or 'mouse'")
+        elif db_name != "Omnipath": raise ValueError("'db_name should be either 'Omnipath', 'CellTalk' or 'CellChat'")
+
+        if db_name=="Omnipath":
+            lr_db = pkg_resources.resource_stream(__name__, 'data/interaction_input_Omnipath_'+lr_db_species+'.csv')
+            feat_pairs = pd.read_csv(lr_db)
+        elif db_name=="CellTalk": 
             lr_db = pkg_resources.resource_stream(__name__, 'data/CellTalkDB_'+lr_db_species+'_lr_pair.txt')
             feat_pairs = pd.read_csv(lr_db, delimiter='\t')
         elif db_name=="CellChat":
@@ -122,8 +129,8 @@ class STopover_visium(AnnData):
             -> (C and D) should be same data format: all in metadata (.obs.columns) or all in gene names(.var.index)
             -> If the data format is not same the majority of the data format will be automatically searched
             -> and the rest of the features with different format will be removed from the pairs
-        use_lr_db: whether to use list of features in CellTalkDB L-R database (default = False)
-        lr_db_species: select species to utilize in CellTalkDB database (default = 'human')
+        use_lr_db: whether to use list of features in L-R database (default = False)
+        lr_db_species: select species to utilize in L-R database (default = 'human')
         db_name: name of the ligand-receptor database to use: either 'CellTalk' or 'CellChat' (default = 'CellTalk')
 
         group_name:
@@ -143,7 +150,15 @@ class STopover_visium(AnnData):
         '''
         if use_lr_db:
             feat_pairs = self.return_lr_db(lr_db_species=lr_db_species, db_name=db_name)
-            if db_name=="CellTalk": feat_pairs = feat_pairs[['ligand_gene_symbol','receptor_gene_symbol']]
+            if db_name=="Omnipath": 
+                feat_pairs = feat_pairs[['source_genesymbol','target_genesymbol']]
+                feat_pairs['source_genesymbol'] = feat_pairs['source_genesymbol'].str.split('_')
+                feat_pairs['target_genesymbol'] = feat_pairs['target_genesymbol'].str.split('_')
+                feat_pairs = feat_pairs.explode('source_genesymbol', ignore_index=True)
+                feat_pairs = feat_pairs.explode('target_genesymbol', ignore_index=True)
+                feat_pairs = feat_pairs.drop_duplicates(subset = ['source_genesymbol', 'target_genesymbol'], 
+                                                        keep = 'first').reset_index(drop = True)
+            elif db_name=="CellTalk": feat_pairs = feat_pairs[['ligand_gene_symbol','receptor_gene_symbol']]
             elif db_name=="CellChat":
                 # Modify the dataframe to contain only the ligand and receptor pairs
                 df = feat_pairs.assign(
@@ -155,7 +170,7 @@ class STopover_visium(AnnData):
                 feat_pairs = pd.concat([df.loc[:,['ligand_gene_symbol','receptor1']].rename(columns={'receptor1':'receptor_gene_symbol'}),
                                         df[df['receptor2'].notna()].loc[:,['ligand_gene_symbol','receptor2']].rename(columns={'receptor2':'receptor_gene_symbol'})], 
                                         axis = 0).reset_index(drop=True)
-            print("Using "+db_name+"DB ligand-receptor dataset")
+            print("Using "+db_name+" ligand-receptor dataset")
         
         df, adata = topological_sim_pairs_(data=self, feat_pairs=feat_pairs, spatial_type=self.spatial_type, group_list=group_list, group_name=group_name,
                                             fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per, jaccard_type=jaccard_type,
@@ -480,6 +495,12 @@ class STopover_imageST(STopover_visium):
                                     save_path=self.save_path, J_count=self.J_count)
         if use_lr_db:
             feat_pairs = self.return_lr_db(lr_db_species=lr_db_species, db_name=db_name)
+            if db_name=="Omnipath":
+                feat_pairs = feat_pairs[['source_genesymbol','target_genesymbol']]
+                feat_pairs['source_genesymbol'] = feat_pairs['source_genesymbol'].str.split('_')
+                feat_pairs['target_genesymbol'] = feat_pairs['target_genesymbol'].str.split('_')
+                feat_pairs = feat_pairs.explode('source_genesymbol', ignore_index=True)
+                feat_pairs = feat_pairs.explode('target_genesymbol', ignore_index=True)
             if db_name=="CellTalk": 
                 feat_pairs = feat_pairs[['ligand_gene_symbol','receptor_gene_symbol']]
             elif db_name=="CellChat":
@@ -495,7 +516,7 @@ class STopover_imageST(STopover_visium):
                                         axis = 0).reset_index(drop=True)
             use_lr_db = False
             print("Calculating topological similarity between genes in '%s' and '%s'" % (celltype_x, celltype_y))
-            print("Using "+db_name+"DB ligand-receptor dataset")
+            print("Using "+db_name+" ligand-receptor dataset")
         else: 
             if isinstance(feat_pairs, list): feat_pairs = pd.DataFrame(feat_pairs)
 
