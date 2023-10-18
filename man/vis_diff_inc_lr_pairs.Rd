@@ -11,6 +11,7 @@ vis_diff_inc_lr_pairs(
   logFC_cutoff = 1,
   J_comp_cutoff = 0.2,
   go_species = c("human", "mouse"),
+  db_name = "CellTalk",
   ontology_cat = c("BP", "CC", "MF", "all"),
   padjust_method = "BH",
   padjust_cutoff = 0.05,
@@ -80,6 +81,8 @@ vis_diff_inc_lr_pairs(
 \item{dpi}{the dpi of the heatmap to save (default = 150)}
 
 \item{return_results}{return a dataframe showing the list of top upregulated LR interaction and a heatmap}
+
+\item{db_name:}{name of the ligand-receptor database to use: either 'CellTalk', 'CellChat', or 'Omnipath' (default = 'CellTalk')}
 }
 \value{
 a list of dataframe showing the list of top differentially increased LR interaction in comp_group compared to ref_group and a heatmap

@@ -48,7 +48,7 @@ vis_all_connected(
 
 \item{dot_size}{size of the spot/grid visualized on the tissue (default =  1.8)}
 
-\item{alpha_img}{transparency of the background image (not available for cosmx data) (default = 0.8)}
+\item{alpha_img}{transparency of the background image (not available for imageST data) (default = 0.8)}
 
 \item{alpha}{transparency of the colored spot (default = 0.8)}
 

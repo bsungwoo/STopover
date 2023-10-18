@@ -212,7 +212,7 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
     }
     if (vis_jaccard){
       adata_sp <- convert_to_anndata(sp_object_mod, features = comb_cc_loc)
-      J_comp <- reticulate::py_to_r(STopover$jaccard_and_connected_loc_(adata_sp, feat_name_x=feat_name_x, feat_name_y=feat_name_y, J_index=T))
+      J_comp <- reticulate::py_to_r(STopover$jaccard_and_connected_loc_(adata_sp, feat_name_x=feat_name_x, feat_name_y=feat_name_y, return_mode='jaccard', return_sep_loc=F))
     }
 
     p[[i]] <- p[[i]] + ggplot2::ggtitle(paste0(slide_titles[[i]],
