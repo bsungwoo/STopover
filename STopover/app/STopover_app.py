@@ -115,7 +115,7 @@ class STopoverApp(QMainWindow, Ui_Dialog):
         return decorated_func
     
     def thread_result(self, output):
-        if isinstance(output[0], STopover_cosmx) or isinstance(output[0], STopover_visium): 
+        if isinstance(output[0], STopover_imageST) or isinstance(output[0], STopover_visium): 
             self.stopover_class = output[0]
         elif isinstance(output[0], str):
             if output[1] == "error_output": self.show_error_message(output[0])
@@ -133,13 +133,13 @@ class STopoverApp(QMainWindow, Ui_Dialog):
         return object
 
     @run_thread
-    def STopover_cosmx_(self, sp_load_path, sc_adata, sc_celltype_colname, tx_file_name, cell_exprmat_file_name, 
-                        cell_metadata_file_name, min_size, fwhm, thres_per, save_path, print_output="Finished", error_output=""):
-        object = STopover_cosmx(sp_load_path=sp_load_path, sc_adata=sc_adata, 
-                                sc_celltype_colname=sc_celltype_colname, tx_file_name=tx_file_name, 
-                                cell_exprmat_file_name=cell_exprmat_file_name, 
-                                cell_metadata_file_name=cell_metadata_file_name,
-                                min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path)
+    def STopover_imageST_(self, sp_load_path, sc_adata, sc_celltype_colname, tx_file_name, cell_exprmat_file_name, 
+                          cell_metadata_file_name, min_size, fwhm, thres_per, save_path, print_output="Finished", error_output=""):
+        object = STopover_imageST(sp_load_path=sp_load_path, sc_adata=sc_adata, 
+                                  sc_celltype_colname=sc_celltype_colname, tx_file_name=tx_file_name, 
+                                  cell_exprmat_file_name=cell_exprmat_file_name, 
+                                  cell_metadata_file_name=cell_metadata_file_name,
+                                  min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path)
         print(print_output)
         return object
     
@@ -289,15 +289,15 @@ class STopoverApp(QMainWindow, Ui_Dialog):
             if len(not_found_element) > 0:
                 self.show_error_message('%s not found in the given directory'% ', '.join(not_found_element))
             else:
-                self.STopover_cosmx_(sp_load_path=self.load_path,
-                                         sc_adata=self.sc_adata, sc_celltype_colname = self.comboBox_ref.currentText(),
-                                         tx_file_name = tx_file_name[0], cell_exprmat_file_name=cell_exprmat_file_name[0], 
-                                         cell_metadata_file_name=cell_metadata_file_name[0], 
-                                         min_size=self.doubleSpinBox_min_size.value(), 
-                                         fwhm=self.doubleSpinBox_fwhm.value(), 
-                                         thres_per=self.doubleSpinBox_per_thres.value(), 
-                                         save_path=self.save_path, print_output="STopover object created for "+self.data_type,
-                                         error_output = "Error in running STopover for "+self.data_type)
+                self.STopover_imageST_(sp_load_path=self.load_path,
+                                      sc_adata=self.sc_adata, sc_celltype_colname = self.comboBox_ref.currentText(),
+                                      tx_file_name = tx_file_name[0], cell_exprmat_file_name=cell_exprmat_file_name[0], 
+                                      cell_metadata_file_name=cell_metadata_file_name[0], 
+                                      min_size=self.doubleSpinBox_min_size.value(), 
+                                      fwhm=self.doubleSpinBox_fwhm.value(), 
+                                      thres_per=self.doubleSpinBox_per_thres.value(), 
+                                      save_path=self.save_path, print_output="STopover object created for "+self.data_type,
+                                      error_output = "Error in running STopover for "+self.data_type)
 
     def run_stopover(self):
         print("Running STopover")
@@ -318,7 +318,7 @@ class STopoverApp(QMainWindow, Ui_Dialog):
         elif self.comboBox_vis_type.currentText() == "Spatial plot":
             print("Drawing spatial plot for feature x")
             if self.data_type=='cosmx':
-                try: self.stopover_class.vis_spatial_cosmx(feat_name=self.comboBox_feat_x.currentText(), fig_size=(6,6))
+                try: self.stopover_class.vis_spatial_imageST(feat_name=self.comboBox_feat_x.currentText(), fig_size=(6,6))
                 except: self.show_error_message("Error in drawing spatial plot for feature x")
             elif self.data_type=='visium':
                 try:

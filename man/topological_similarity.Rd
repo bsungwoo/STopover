@@ -9,6 +9,7 @@ topological_similarity(
   feat_pairs = data.frame(),
   use_lr_db = F,
   lr_db_species = "human",
+  db_name = "CellTalk",
   min_size = 20,
   fwhm = 2.5,
   thres_per = 30,
@@ -37,6 +38,8 @@ topological_similarity(
 \item{use_lr_db}{whether to use list of features in CellTalkDB L-R database (default = F)}
 
 \item{lr_db_species}{select species to utilize in CellTalkDB database (default = 'human')}
+
+\item{db_name}{name of the ligand-receptor database to use: either 'CellTalk', 'CellChat', or 'Omnipath' (default = 'CellTalk')}
 
 \item{min_size}{minimum size of a connected component: number of spots/grids (default = 20)}
 

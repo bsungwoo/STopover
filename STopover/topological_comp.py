@@ -7,15 +7,13 @@ Original matlab code for graph filtration: Hyekyoung Lee
 Translation to python and addition of visualization code: Sungwoo Bae with the help of matlab2python
 
 """
+import os
 import numpy as np
 from numpy.matlib import repmat
 import pandas as pd
 from scipy import sparse
 from scipy.spatial.distance import pdist, squareform
 from anndata import AnnData
-
-import os
-import parmap
             
 from .make_original_dendrogram_cc import make_original_dendrogram_cc
 from .make_smoothed_dendrogram import make_smoothed_dendrogram
@@ -149,7 +147,7 @@ def filter_connected_loc_exp(CC_loc_mat, data=None, feat=None, thres_per=30, ret
             if isinstance(data.X, np.ndarray): feat_data = sparse.csr_matrix(data[:,feat].X)
             elif isinstance(data.X, sparse.spmatrix): feat_data = data[:,feat].X
             else: ValueError("'data.X' should be either numpy ndarray or scipy sparse matrix")
-        else: raise ValueError("'feat_exp' is not found among gene names and metadata")
+        else: raise ValueError("'feat' is not found among gene names and metadata")
     elif isinstance(feat, np.ndarray): feat_data = feat
     else: raise ValueError("'feat' should be either string or numpy ndarray")
 

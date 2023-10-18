@@ -112,35 +112,45 @@ sc_adata$write('sc_lung_cancer_mod.h5ad')
 # Path for the data files
 data_path = './Lung5_Rep1/Lung5_Rep1-Flat_files_and_images'
 
-sp_data_list <- STopover::preprocess_cosmx(sp_load_path=data_path, 
-                                           # sc_object can be Seurat object, anndata object, 
-                                           # or path to the single-cell .h5ad file
-                                           # below example is for path to '*.h5ad' file
-                                           sc_object='sc_lung_cancer_mod.h5ad',
-                                           conda.env.name='STopover',
-                                           sc_celltype_colname = 'Cell_subtype', 
-                                           sc_norm_total=1e3,
-                                           tx_file_name = 'Lung5_Rep1_tx_file.csv',
-                                           cell_exprmat_file_name='Lung5_Rep1_exprMat_file.csv',
-                                           cell_metadata_file_name='Lung5_Rep1_metadata_file.csv',
-                                           fov_colname = 'fov', cell_id_colname='cell_ID',
-                                           tx_xcoord_colname='x_global_px', 
-                                           tx_ycoord_colname='y_global_px',
-                                           transcript_colname='target',
-                                           meta_xcoord_colname='CenterX_global_px',
-                                           meta_ycoord_colname='CenterY_global_px',
-                                           x_bins=100, y_bins=100)
+sp_data_list <- STopover::preprocess_imageST(sp_load_path=data_path, 
+                                             # sc_object can be Seurat object, anndata object, 
+                                             # or path to the single-cell .h5ad file
+                                             # below example is for path to '*.h5ad' file
+                                             sc_object='sc_lung_cancer_mod.h5ad',
+                                             conda.env.name='STopover',
+                                             sc_celltype_colname = 'Cell_subtype', 
+                                             ST_type = 'cosmx',
+                                             grid_method = 'transcript',
+                                             annot_method = 'ingest'
+                                             sc_norm_total = 1e3,
+                                             min_counts = 50,
+                                             min_genes = 0,
+                                             tx_file_name = 'Lung5_Rep1_tx_file.csv',
+                                             cell_exprmat_file_name='Lung5_Rep1_exprMat_file.csv',
+                                             cell_metadata_file_name='Lung5_Rep1_metadata_file.csv',
+                                             fov_colname = 'fov', cell_id_colname='cell_ID',
+                                             tx_xcoord_colname='x_global_px', 
+                                             tx_ycoord_colname='y_global_px',
+                                             transcript_colname='target',
+                                             meta_xcoord_colname='CenterX_global_px',
+                                             meta_ycoord_colname='CenterY_global_px',
+                                             x_bins=100, y_bins=100)
 ```
 
 ```{r, echo = FALSE, eval=FALSE}
 # Path for the data files
 data_path = '/home/nmadmin/DATA2/STopover/Results/Lung5_Rep1/Lung5_Rep1-Flat_files_and_images'
 
-sp_data_list <- STopover::preprocess_cosmx(sp_load_path=data_path, 
+sp_data_list <- STopover::preprocess_imageST(sp_load_path=data_path, 
                                            sc_object='/home/nmadmin/DATA2/STopover/vignettes/sc_lung_cancer_mod.h5ad', 
                                            conda.env.name='STopover',
                                            sc_celltype_colname = 'Cell_subtype', 
-                                           sc_norm_total=1e3,
+                                           ST_type = 'cosmx',
+                                           grid_method = 'transcript',
+                                           annot_method = 'ingest'
+                                           sc_norm_total = 1e3,
+                                           min_counts = 50,
+                                           min_genes = 0,
                                            tx_file_name = 'Lung5_Rep1_tx_file.csv',
                                            cell_exprmat_file_name='Lung5_Rep1_exprMat_file.csv',
                                            cell_metadata_file_name='Lung5_Rep1_metadata_file.csv',
@@ -243,8 +253,8 @@ out <- pheatmap::pheatmap(t(df), cluster_rows=T, show_rownames=T,
 ### 6. Visualize colocalized domain bewteen the cell type pairs
 #### Visualize spatial distribution of cell types
 ```{r, fig.width=8, fig.height=3.5}
-p1 <- STopover::vis_spatial_cosmx(sp_data_grid_celltype, "tS2", color_cont = "RdPu")
-p2 <- STopover::vis_spatial_cosmx(sp_data_grid_celltype, "MAST", color_cont = "RdPu")
+p1 <- STopover::vis_spatial_imageST(sp_data_grid_celltype, "tS2", color_cont = "RdPu")
+p2 <- STopover::vis_spatial_imageST(sp_data_grid_celltype, "MAST", color_cont = "RdPu")
 p1 + p2
 ```
 
@@ -299,8 +309,8 @@ sp_data_merge_lr <- readr::read_rds('/home/nmadmin/DATA2/STopover_test/Results/d
 ```
 #### Visualize spatial gene expression pattern
 ```{r, fig.width=8, fig.height=3.5}
-p1 <- STopover::vis_spatial_cosmx(sp_data_merge_lr, "CD274", color_cont = "RdPu")
-p2 <- STopover::vis_spatial_cosmx(sp_data_merge_lr, "PDCD1", color_cont = "RdPu")
+p1 <- STopover::vis_spatial_imageST(sp_data_merge_lr, "CD274", color_cont = "RdPu")
+p2 <- STopover::vis_spatial_imageST(sp_data_merge_lr, "PDCD1", color_cont = "RdPu")
 p1 + p2
 ```
 
@@ -360,10 +370,10 @@ sp_celltype_spec_lr <- readr::read_rds('/home/nmadmin/DATA2/STopover_test/Result
 
 #### Visualize tS2-Cytotoxic CD8+ specific spatial gene expression pattern
 ```{r, fig.width=8, fig.height=3.5}
-p1 <- STopover::vis_spatial_cosmx(sp_celltype_spec_lr, "tS2-CD274", 
-                                  plot_title = "tS2: CD274", color_cont = "RdPu")
-p2 <- STopover::vis_spatial_cosmx(sp_celltype_spec_lr, "Cytotoxic.CD8..T-CD274", 
-                                  plot_title = "Cytotoxic CD8+ T: CD274", color_cont = "RdPu")
+p1 <- STopover::vis_spatial_imageST(sp_celltype_spec_lr, "tS2-CD274", 
+                                    plot_title = "tS2: CD274", color_cont = "RdPu")
+p2 <- STopover::vis_spatial_imageST(sp_celltype_spec_lr, "Cytotoxic.CD8..T-CD274", 
+                                    plot_title = "Cytotoxic CD8+ T: CD274", color_cont = "RdPu")
 p1 + p2
 ```
 

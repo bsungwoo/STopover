@@ -89,7 +89,7 @@ convert_to_anndata <- function(sp_object, features=NULL, conda.env.name='STopove
 }
 
 
-#' Load CosMx SMI file as Seurat object (as a Slideseq class)
+#' Load Image ST file as Seurat object (as a Slideseq class)
 #' @description Convert Seurat object for spatial transcriptomic data to anndata
 #' @param sp_load_path path to CosMx SMI data directory or .h5ad Anndata object (default = '.')
 #' @param sc_object single-cell reference anndata/path to reference "*h5ad" file/Seurat object for cell type annotation of CosMx SMI data (default = NULL)
@@ -98,7 +98,12 @@ convert_to_anndata <- function(sp_object, features=NULL, conda.env.name='STopove
 #' }
 #' @param conda.env.name name of the conda environment to use for STopover analysis (default = 'STopover')
 #' @param sc_celltype_colname column name for cell type annotation information in metadata of single-cell (default = 'celltype')
+#' @param ST_type: type of the ST data to be read: cosmx, xenium, merfish (default: 'cosmx')
+#' @param grid_method: type of the method to assign transcript to grid, either transcript coordinate based method and cell coordinate based method (default='transcript')
+#' @param annot_method: cell type annotation method to use. Either 'ingest' or 'tacco' (default='ingest')
 #' @param sc_norm_total scaling factor for the total count normalization per cell (default = 1e3)
+#' @param min_counts: minimum number of counts required for a cell to pass filtering (scanpy.pp.filter_cells) (default = 50)
+#' @param min_genes: minimum number of genes expressed required for a cell to pass filtering (scanpy.pp.filter_cells) (default = 0)
 #' @param tx_file_name CosMx file for transcript count (default = 'tx_file.csv')
 #' @param cell_exprmat_file_name CosMx file for cell-level expression matrix (default = 'exprMat_file.csv')
 #' @param cell_metadata_file_name CosMx file for cell-level metadata (default = 'metadata_file.csv')
@@ -109,20 +114,22 @@ convert_to_anndata <- function(sp_object, features=NULL, conda.env.name='STopove
 #' @param transcript_colname column name for the transcript name (default = 'target')
 #' @param meta_xcoord_colname column name for global x, y coordinates in cell-level metadata file (default = 'CenterX_global_px')
 #' @param meta_ycoord_colname column name for global x, y coordinates in cell-level metadata file (default = 'CenterY_global_px')
-#' @param x_bins number of bins to divide the CosMx SMI data (for grid-based aggregation) (default = 100)
-#' @param y_bins number of bins to divide the CosMx SMI data (for grid-based aggregation) (default = 100)
+#' @param x_bins number of bins to divide the image-based ST data (for grid-based aggregation) (default = 100)
+#' @param y_bins number of bins to divide the image-based ST data (for grid-based aggregation) (default = 100)
 #' @return list of Seurat objects for grid-based and cell-level data, sequentially. The objects contains grid-based or cell-level log-normalized count matrix in 'counts & data' slots, coordinates in '@images$image', and transcript information in '@assays$Spatial@misc' (only for grid-based data)
 #' @export
-preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='STopover',
-                             sc_celltype_colname = 'celltype', sc_norm_total=1e3,
-                             tx_file_name = 'tx_file.csv', cell_exprmat_file_name='exprMat_file.csv',
-                             cell_metadata_file_name='metadata_file.csv',
-                             fov_colname = 'fov', cell_id_colname='cell_ID',
-                             tx_xcoord_colname='x_global_px', tx_ycoord_colname='y_global_px',
-                             transcript_colname='target',
-                             meta_xcoord_colname='CenterX_global_px',
-                             meta_ycoord_colname='CenterY_global_px',
-                             x_bins=100, y_bins=100){
+preprocess_imageST <- function(sp_load_path='.', sc_object=NULL, conda.env.name='STopover',
+                               sc_celltype_colname = 'celltype', 
+                               ST_type='cosmx', grid_method = 'transcript', annot_method='ingest', 
+                               sc_norm_total=1e3, min_counts=50, min_genes=0,
+                               tx_file_name = 'tx_file.csv', cell_exprmat_file_name='exprMat_file.csv',
+                               cell_metadata_file_name='metadata_file.csv',
+                               fov_colname = 'fov', cell_id_colname='cell_ID',
+                               tx_xcoord_colname='x_global_px', tx_ycoord_colname='y_global_px',
+                               transcript_colname='target',
+                               meta_xcoord_colname='CenterX_global_px',
+                               meta_ycoord_colname='CenterY_global_px',
+                               x_bins=100, y_bins=100){
   # Install and load environment
   install_load_env(conda.env.name)
   ## Import anndata
@@ -131,16 +138,21 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
   STopover <- reticulate::import('STopover', convert = FALSE)
 
   # Check format of the single-cell dataset if it exists
-  cat("Reading CosMx SMI data: annotating cells and creating grid-based data\n")
+  cat(paste0("Reading ",ST_type," data: annotating cells and creating grid-based data\n"))
   if (typeof(sc_object)=="character") {
-    cosmx_output_dir <- file.path(getwd(),"cosmx_output")
-    if (!file.exists(cosmx_output_dir)) dir.create(cosmx_output_dir)
-    STopover_cosmx_dir <- system.file("preprocess_cosmx_R.py", package="STopover")
-    string_output <- system(paste0("python ", STopover_cosmx_dir,
+    imageST_output_dir <- file.path(getwd(),"imageST_output")
+    if (!file.exists(imageST_output_dir)) dir.create(imageST_output_dir)
+    STopover_imageST_dir <- system.file("preprocess_imageST_R.py", package="STopover")
+    string_output <- system(paste0("python ", STopover_imageST_dir,
                                    " --sp_load_path ",sp_load_path,
                                    " --sc_load_path ",sc_object,
                                    " --sc_celltype_colname ",sc_celltype_colname,
+                                   " --ST_type ",ST_type,
+                                   " --grid_method",grid_method,
+                                   " --annot_method",annot_method,
                                    " --sc_norm_total ",sc_norm_total,
+                                   " --min_counts",min_counts,
+                                   " --min_genes",min_genes,
                                    " --tx_file_name ",tx_file_name,
                                    " --cell_exprmat_file_name ",cell_exprmat_file_name,
                                    " --cell_metadata_file_name ",cell_metadata_file_name,
@@ -152,13 +164,13 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
                                    " --meta_xcoord_colname ",meta_xcoord_colname,
                                    " --meta_ycoord_colname ",meta_ycoord_colname,
                                    " --x_bins ",x_bins," --y_bins ",y_bins,
-                                   " --save_path ",cosmx_output_dir), intern = T)
+                                   " --save_path ",imageST_output_dir), intern = T)
     cat(paste0(string_output,"\n"))
 
     ## Import scanpy
     sc <- reticulate::import('scanpy', convert = FALSE)
-    adata_sp_all <- sc$read_h5ad(file.path(cosmx_output_dir, 'preprocess_cosmx_adata.h5ad'))
-    adata_sp_cell <- sc$read_h5ad(file.path(cosmx_output_dir, 'preprocess_cosmx_adata_cell_uns.h5ad'))
+    adata_sp_all <- sc$read_h5ad(file.path(imageST_output_dir, paste0('preprocess_',ST_type,'_adata.h5ad')))
+    adata_sp_cell <- sc$read_h5ad(file.path(imageST_output_dir, paste0('preprocess_',ST_type,'_adata_cell_uns.h5ad')))
   } else {
     if (typeof(sc_object)=="environment"|is.null(sc_object)){
       adata_sc <- sc_object
@@ -168,23 +180,27 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
       ## Convert Seurat single-cell object to sparse matrix format
       adata_sc <- convert_to_anndata(sc_object, assay='RNA', slot='counts', add_coord=F)
     }
-    adata_sp_all <- STopover$STopover_cosmx(sp_load_path=sp_load_path, sc_adata=adata_sc,
-                                            sc_celltype_colname = sc_celltype_colname,
-                                            sc_norm_total=sc_norm_total,
-                                            tx_file_name = tx_file_name,
-                                            cell_exprmat_file_name=cell_exprmat_file_name,
-                                            cell_metadata_file_name=cell_metadata_file_name,
-                                            fov_colname = fov_colname, cell_id_colname=cell_id_colname,
-                                            tx_xcoord_colname=tx_xcoord_colname,
-                                            tx_ycoord_colname=tx_ycoord_colname,
-                                            transcript_colname=transcript_colname,
-                                            meta_xcoord_colname=meta_xcoord_colname,
-                                            meta_ycoord_colname=meta_ycoord_colname,
-                                            x_bins=as.integer(x_bins), y_bins=as.integer(y_bins))
+    adata_sp_all <- STopover$STopover_imageST(sp_load_path=sp_load_path, sc_adata=adata_sc,
+                                              sc_celltype_colname = sc_celltype_colname,
+                                              ST_type=ST_type,
+                                              grid_method = grid_method, 
+                                              annot_method = annot_method,
+                                              sc_norm_total=sc_norm_total,
+                                              min_counts=min_counts, min_genes=min_genes,
+                                              tx_file_name = tx_file_name,
+                                              cell_exprmat_file_name=cell_exprmat_file_name,
+                                              cell_metadata_file_name=cell_metadata_file_name,
+                                              fov_colname = fov_colname, cell_id_colname=cell_id_colname,
+                                              tx_xcoord_colname=tx_xcoord_colname,
+                                              tx_ycoord_colname=tx_ycoord_colname,
+                                              transcript_colname=transcript_colname,
+                                              meta_xcoord_colname=meta_xcoord_colname,
+                                              meta_ycoord_colname=meta_ycoord_colname,
+                                              x_bins=as.integer(x_bins), y_bins=as.integer(y_bins))
   }
 
   # Create Seurat object for grid-based and cell-level cosmx data
-  cat("Creating Seurat object for grid-based and cell-level CosMx data\n")
+  cat("Creating Seurat object for grid-based and cell-level image-based ST data\n")
   sp_object_list <- list()
   for (idx in 1:2){
     if (idx==2) {
@@ -221,7 +237,7 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
 }
 
 
-#' Extract cell type specific transcript count matrix and create Seurat object in cosmx data
+#' Extract cell type specific transcript count matrix and create Seurat object for image ST data
 #' @param sp_object spatial data (Seurat object) containing CosMx SMI data to be used in calculating cell type-specific count matrix: non-normalized raw data should be in 'counts' slot
 #' @param cell_types the cell types to extract cell type-specific count information
 #' @param conda.env.name name of the conda environment to use for STopover analysis (default = 'STopover')
@@ -237,11 +253,11 @@ preprocess_cosmx <- function(sp_load_path='.', sc_object=NULL, conda.env.name='S
 #' }
 #' @return spatial data with cell type-specific count information in each grid
 #' @export
-celltype_specific_cosmx <- function(sp_object, cell_types, conda.env.name='STopover',
-                                    fov_colname = 'fov', cell_id_colname='cell_ID',
-                                    celltype_colname='celltype', transcript_colname='target',
-                                    sc_norm_total=1e3, return_mode='seurat'){
-  if (class(sp_object@images$image)[1]!="SlideSeq") {stop("'sp_object' should be cosmx spatial data object")}
+celltype_specific_seurat <- function(sp_object, cell_types, conda.env.name='STopover',
+                                     fov_colname = 'fov', cell_id_colname='cell_ID',
+                                     celltype_colname='celltype', transcript_colname='target',
+                                     sc_norm_total=1e3, return_mode='seurat'){
+  if (class(sp_object@images$image)[1]!="SlideSeq") {stop("'sp_object' should be imageST spatial data object")}
   ifelse(return_mode %in% c('anndata','seurat'),"",stop("'return mode' should be either 'anndata' or 'seurat'"))
 
   # Install and load environment
@@ -292,11 +308,12 @@ celltype_specific_cosmx <- function(sp_object, cell_types, conda.env.name='STopo
 }
 
 
-#' Extract CellTalkDB as dataframe
+#' Extract ligand-receptor database as dataframe
 #' @param lr_db_species select species to utilize in CellTalkDB database (default = 'human')
+#' @param db_name: name of the ligand-receptor database to use: either 'CellTalk', 'CellChat', or 'Omnipath' (default = 'CellTalk')
 #' @param conda.env.name name of the conda environment to use for STopover analysis (default = 'STopover')
 #' @export
-return_celltalkdb <- function(lr_db_species='human', conda.env.name='STopover'){
+return_lr_db <- function(lr_db_species='human', db_name='CellTalk', conda.env.name='STopover'){
   # Install and load environment
   install_load_env(conda.env.name)
   ## Import python modules
@@ -305,7 +322,7 @@ return_celltalkdb <- function(lr_db_species='human', conda.env.name='STopover'){
 
   adata_null <- ann$AnnData(X = matrix(0))
   adata_null <- STopover$STopover_visium(sp_adata=adata_null)
-  df <- adata_null$return_celltalkdb(lr_db_species=lr_db_species)
+  df <- adata_null$return_lr_db(lr_db_species=lr_db_species, db_name=db_name)
 
   return(reticulate::py_to_r(df))
 }

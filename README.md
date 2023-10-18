@@ -13,6 +13,11 @@ Tool to capture spatial colocalization and interaction in the TME using topologi
   pip install jupyter
   python -m ipykernel install --user --name STopover --display-name STopover
 ```
+##### If you want to annotate cells in image-based ST using TACCO, please install
+```Plain Text  
+  conda activate STopover
+  pip install tacco
+```
 #### Run GUI for STopover (PyQt)
 ```Plain Text
   conda activate STopover
