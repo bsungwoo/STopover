@@ -131,7 +131,7 @@ class STopover_visium(AnnData):
             -> and the rest of the features with different format will be removed from the pairs
         use_lr_db: whether to use list of features in L-R database (default = False)
         lr_db_species: select species to utilize in L-R database (default = 'human')
-        db_name: name of the ligand-receptor database to use: either 'CellTalk' or 'CellChat' (default = 'CellTalk')
+        db_name: name of the ligand-receptor database to use: either 'CellTalk', 'CellChat', or 'Omnipath' (default = 'CellTalk')
 
         group_name:
             the column name for the groups saved in metadata(.obs)
@@ -352,7 +352,10 @@ class STopover_imageST(STopover_visium):
     sc_celltype_colname: column name for cell type annotation information in metadata of single-cell (.obs)
     ST_type: type of the ST data to be read: cosmx, xenium, merfish (default: 'cosmx')
     grid_method: type of the method to assign transcript to grid, either transcript coordinate based method and cell coordinate based method (default='transcript')
+    annot_method: cell type annotation method to use. Either 'ingest' or 'tacco' (default='ingest')
     sc_norm_total: scaling factor for the total count normalization per cell
+    min_counts: minimum number of counts required for a cell to pass filtering (scanpy.pp.filter_cells) (default = 50)
+    min_genes: minimum number of genes expressed required for a cell to pass filtering (scanpy.pp.filter_cells) (default = 0)
 
     tx_file_name, cell_exprmat_file_name, cell_metadata_file_name: image-based ST file for transcript count, cell-level expression matrix, cell-level metadata
     fov_colname, cell_id_colname: column name for barcodes corresponding to fov and cell ID

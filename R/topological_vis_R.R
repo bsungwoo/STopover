@@ -1,5 +1,5 @@
-#' Visualizing CosMx SMI data on the grid
-#' @description  Visualizing CosMx SMI data with ggplot2
+#' Visualizing imageST data on the grid
+#' @description  Visualizing imageST data with ggplot2
 #' @param sp_object spatial data (Seurat object) to be used
 #' @param feature feature to visualize on the grid
 #' @param plot_title title of the plot (default = feature)
@@ -12,7 +12,7 @@
 #' @param legend_fontsize fontsize of the legend title (default = 12)
 #' @export
 #' @return ggplot object
-vis_spatial_cosmx <- function(sp_object, feature, plot_title=feature, title_fontsize=12,
+vis_spatial_imageST <- function(sp_object, feature, plot_title=feature, title_fontsize=12,
                               color_dis=c("#A2E1CA","#FBBC05","#4285F4","#34A853"),
                               color_cont="RdPu",vmin=NULL, vmax=NULL, legend_loc='right',
                               legend_fontsize=12) {
@@ -77,7 +77,7 @@ vis_spatial_cosmx <- function(sp_object, feature, plot_title=feature, title_font
 #' @param celltype_y cell type corresponding to the second feature if the cell type specific data is provided (default = NULL)
 #' @param conda.env.name name of the conda environment to use for STopover analysis (default = 'STopover')
 #' @param dot_size size of the spot/grid visualized on the tissue (default =  1.8)
-#' @param alpha_img transparency of the background image (not available for cosmx data) (default = 0.8)
+#' @param alpha_img transparency of the background image (not available for imageST data) (default = 0.8)
 #' @param alpha transparency of the colored spot (default = 0.8)
 #' @param vis_jaccard whether to visualize jaccard index on right corner of the plot (default = T)
 #' @param subset_by_slide whether to select the certain slides for the visualization (if there are multiple slides in sp_object) (default = F)
@@ -109,10 +109,10 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
                               save=F, save_path='.', save_name_add='', dpi=100,
                               fig_width=4, fig_height=4){
   # Check the data type
-  spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","cosmx")
+  spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","imageST")
   cat(paste0("The provided object is considered a ",spatial_type," dataset\n"))
   # Convert the feature name if cell type specific data is provided
-  if (!is.null(celltype_x) & !is.null(celltype_y) & spatial_type=='cosmx'){
+  if (!is.null(celltype_x) & !is.null(celltype_y) & spatial_type=='imageST'){
     feat_name_x <- paste0(celltype_x,"_",feat_name_x)
     feat_name_y <- paste0(celltype_y,"_",feat_name_y)
   }
@@ -134,7 +134,7 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
   names(color.map) <- c("Others", feat_name_x, feat_name_y, "Over")
   if (spatial_type=='visium') {
     color.map <- color.map[as.character(setdiff(levels(sp_object@meta.data[['Over']]),"Others"))]
-  } else if (spatial_type=='cosmx') {
+  } else if (spatial_type=='imageST') {
     color.map <- color.map[as.character(levels(sp_object@meta.data[['Over']]))]
   }
 
@@ -170,8 +170,8 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
     sp_object_mod <- subset(sp_object_mod, idents = names(color.map))
   }
   # Draw spatial cluster plot for connected component locations
-  if (spatial_type=='cosmx'){
-    p <- list(vis_spatial_cosmx(sp_object_mod, "Over", color_dis=color.map))
+  if (spatial_type=='imageST'){
+    p <- list(vis_spatial_imageST(sp_object_mod, "Over", color_dis=color.map))
   } else{
     p <- Seurat::SpatialPlot(sp_object_mod, alpha=alpha, image.alpha = alpha_img,
                              label=F, crop=crop_image, cols = color.map,
@@ -256,7 +256,7 @@ vis_all_connected <- function(sp_object, feat_name_x='', feat_name_y='',
 #' @param top_n the number of the top connected component pairs with the highest Jaccard similarity index
 #' @param conda.env.name name of the conda environment to use for STopover analysis (default = 'STopover')
 #' @param dot_size size of the spot/grid visualized on the tissue (default =  1.8)
-#' @param alpha_img transparency of the background image (not available for cosmx data) (default = 0.8)
+#' @param alpha_img transparency of the background image (not available for imageST data) (default = 0.8)
 #' @param alpha transparency of the colored spot (default = 0.8)
 #' @param vis_jaccard whether to visualize jaccard index on right corner of the plot (default = T)
 #' @param slide_name name of one slide to select (among 'names(sp_object@images)') (default = names(sp_object@images))
@@ -292,10 +292,10 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
   if (length(slide_name) > 1){stop("'slide_name' should be one element of names(sp_object@images)")}
   if (!slide_name %in% names(sp_object@images)){stop("'slide_name' should be among names(sp_object@images)")}
   # Check the data type
-  spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","cosmx")
+  spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","imageST")
   cat(paste0("The provided object is considered a ",spatial_type," dataset\n"))
   # Convert the feature name if cell type specific data is provided
-  if (!is.null(celltype_x) & !is.null(celltype_y) & spatial_type=='cosmx'){
+  if (!is.null(celltype_x) & !is.null(celltype_y) & spatial_type=='imageST'){
     feat_name_x <- paste0(celltype_x,"_",feat_name_x)
     feat_name_y <- paste0(celltype_y,"_",feat_name_y)
   }
@@ -337,7 +337,7 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
 
   # Generate plots
   p <- list()
-  if (spatial_type=='cosmx'){alpha_img <- 0}
+  if (spatial_type=='imageST'){alpha_img <- 0}
   for (i in 1:top_n){
     cc_loc_xy <- reticulate::py_to_r(adata_sp_mod$obs[[paste(c("CCxy_top",i,feat_name_x,feat_name_y),collapse = "_")]]$astype('int'))
     sp_object[[paste0('CCxy_top_',i)]] <- factor(cc_loc_xy)
@@ -346,7 +346,7 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
     color.map <- c("0"="#A2E1CA","1"="#FBBC05","2"="#4285F4","3"="#34A853")
     if (spatial_type=='visium') {
       color.map <- color.map[as.character(setdiff(levels(sp_object@meta.data[[paste0('CCxy_top_',i)]]),0))]
-    } else if (spatial_type=='cosmx') {
+    } else if (spatial_type=='imageST') {
       color.map <- color.map[as.character(levels(sp_object@meta.data[[paste0('CCxy_top_',i)]]))]
     }
     feature_map <- c("0"="Others","1"=feat_name_x,"2"=feat_name_y,"3"="Over")
@@ -364,7 +364,7 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
                                     pt.size.factor=dot_size,
                                     combine=FALSE)[[1]]
     } else {
-      p[[i]] <- vis_spatial_cosmx(sp_object_mod, paste0('CCxy_top_',i), color_dis=color.map)
+      p[[i]] <- vis_spatial_imageST(sp_object_mod, paste0('CCxy_top_',i), color_dis=color.map)
     }
     p[[i]] <- p[[i]] + ggplot2::ggtitle(paste0(ifelse(is.null(slide_title), paste0(slide_name,'\n'),
                                                       ifelse(slide_title=='','',paste0(slide_title,'\n'))),
@@ -410,6 +410,7 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
 #' @param logFC_cutoff log fold change cutoff of J_comp for the differentially upregulated LR pairs in 'comp_group' compared to 'ref_group' (default = 1)
 #' @param J_comp_cutoff J_comp cutoff in the comp_group (default = 0.2)
 #' @param go_species species of the given dataset (default = "human")
+#' @param db_name: name of the ligand-receptor database to use: either 'CellTalk', 'CellChat', or 'Omnipath' (default = 'CellTalk')
 #' @param ontology_cat category of GO terms to show in the heatmap (default ="BP")
 #' @param padjust_method method for adjusting p-values during overrepresentation tests to identify significant GO terms (default ="BH")
 #' @param padjust_cutoff adjusted p-value cutoff to select the GO terms (default = 0.05)
@@ -433,6 +434,7 @@ vis_jaccard_top_n_pair <- function(sp_object, feat_name_x='', feat_name_y='',
 vis_diff_inc_lr_pairs <- function(sp_object, ref_group, comp_group,
                                   logFC_cutoff=1, J_comp_cutoff=0.2,
                                   go_species=c("human","mouse"),
+                                  db_name='CellTalk',
                                   ontology_cat=c("BP","CC","MF","all"),
                                   padjust_method = "BH", padjust_cutoff=0.05,
                                   top_n = 10, heatmap_max=10,
@@ -459,7 +461,7 @@ vis_diff_inc_lr_pairs <- function(sp_object, ref_group, comp_group,
   names(comp_group_match) <- comp_group
   group_match <- c(ref_group_match, comp_group_match)
   ## Extract LR database for the given species
-  ref_df_ <- STopover::return_celltalkdb(lr_db_species = go_species)[c('lr_pair','ligand_gene_symbol','receptor_gene_symbol')]
+  ref_df_ <- STopover::return_lr_db(lr_db_species = go_species, db_name=db_name)[c('lr_pair','ligand_gene_symbol','receptor_gene_symbol')]
   ref_df <- do.call("rbind", replicate(length(names(sp_object@images)), ref_df_, simplify = FALSE))
   ref_df <- cbind(data.frame(Slide =  as.character(rep(names(sp_object@images), each = dim(ref_df_)[1]))),
                   ref_df)

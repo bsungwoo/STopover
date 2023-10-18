@@ -13,6 +13,7 @@
 #' }
 #' @param use_lr_db whether to use list of features in CellTalkDB L-R database (default = F)
 #' @param lr_db_species select species to utilize in CellTalkDB database (default = 'human')
+#' @param db_name name of the ligand-receptor database to use: either 'CellTalk', 'CellChat', or 'Omnipath' (default = 'CellTalk')
 #' @param min_size minimum size of a connected component: number of spots/grids (default = 20)
 #' @param fwhm full width half maximum value for the Gaussian smoothing kernel as the multiple of the central distance between the adjacent spots (default = 2.5)
 #' @param thres_per lower percentile value threshold to remove the connected components (default = 30)
@@ -29,6 +30,7 @@
 #' @export
 topological_similarity <- function(sp_object, feat_pairs=data.frame(),
                                    use_lr_db=F, lr_db_species='human',
+                                   db_name='CellTalk',
                                    min_size=20, fwhm=2.5, thres_per=30,
                                    conda.env.name="STopover",
                                    assay='Spatial', slot='data', lognorm=F,
@@ -36,7 +38,7 @@ topological_similarity <- function(sp_object, feat_pairs=data.frame(),
                                    num_workers=NULL){
   # if (dim(feat_pairs)[2]!=2){stop("There should be two columns in 'feat_pairs'")}
   # Check the data type
-  spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","cosmx")
+  spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","imageST")
   cat(paste0("The provided object is considered a ",spatial_type," dataset\n"))
   # Install and load environment
   install_load_env(conda.env.name)
@@ -49,8 +51,8 @@ topological_similarity <- function(sp_object, feat_pairs=data.frame(),
 
   # Preprocess spatial data and run topological analysis
   try({
-    if (spatial_type=="cosmx"){
-      stopover_object <- STopover$STopover_cosmx(sp_adata=adata_sp, min_size=min_size, fwhm=fwhm, thres_per=thres_per)
+    if (spatial_type=="imageST"){
+      stopover_object <- STopover$STopover_imageST(sp_adata=adata_sp, min_size=min_size, fwhm=fwhm, thres_per=thres_per)
     } else {
       stopover_object <- STopover$STopover_visium(sp_adata=adata_sp, min_size=min_size, fwhm=fwhm, thres_per=thres_per, lognorm=lognorm)
     }
@@ -61,11 +63,13 @@ topological_similarity <- function(sp_object, feat_pairs=data.frame(),
       stopover_object$topological_similarity(feat_pairs=feat_pairs,
                                              use_lr_db=use_lr_db,
                                              lr_db_species=lr_db_species,
+                                             db_name=db_name,
                                              group_name='batch', group_list=group_list)
     } else {
       stopover_object$topological_similarity(feat_pairs=feat_pairs,
                                              use_lr_db=use_lr_db,
                                              lr_db_species=lr_db_species,
+                                             db_name=db_name,
                                              group_name='batch', group_list=group_list,
                                              num_workers = num_workers)
     }
@@ -100,6 +104,7 @@ topological_similarity <- function(sp_object, feat_pairs=data.frame(),
 #' }
 #' @param use_lr_db whether to use list of features in CellTalkDB L-R database (default = F)
 #' @param lr_db_species select species to utilize in CellTalkDB database (default = 'human')
+#' @param db_name name of the ligand-receptor database to use: either 'CellTalk', 'CellChat', or 'Omnipath' (default = 'CellTalk')
 #' @param min_size minimum size of a connected component: number of spots/grids (default = 20)
 #' @param fwhm full width half maximum value for the Gaussian smoothing kernel as the multiple of the central distance between the adjacent spots (default = 2.5)
 #' @param thres_per lower percentile value threshold to remove the connected components (default = 30)
@@ -124,6 +129,7 @@ topological_similarity <- function(sp_object, feat_pairs=data.frame(),
 topological_similarity_celltype_pair <- function(sp_object, celltype_x='',celltype_y='',
                                                  feat_pairs=data.frame(),
                                                  use_lr_db=F, lr_db_species='human',
+                                                 db_name='CellTalk',
                                                  min_size=20, fwhm=2.5, thres_per=30,
                                                  conda.env.name='STopover',
                                                  fov_colname = 'fov', cell_id_colname='cell_ID',
@@ -133,7 +139,7 @@ topological_similarity_celltype_pair <- function(sp_object, celltype_x='',cellty
                                                  return_result_df=T,
                                                  num_workers=NULL){
   # Check the data type
-  spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","cosmx")
+  spatial_type <- ifelse(grepl(tolower(class(sp_object@images[[1]])[1]),pattern="visium"),"visium","imageST")
   cat(paste0("Cell type specific topological similarity in ",spatial_type,"\n"))
   cat("--------------------------------------------------------------------------\n")
   # if (dim(feat_pairs)[2]!=2){stop("There should be two columns in 'feat_pairs'")}
@@ -149,6 +155,7 @@ topological_similarity_celltype_pair <- function(sp_object, celltype_x='',cellty
     sp_object_xy <- topological_similarity(sp_object,
                                            feat_pairs=feat_pairs,
                                            use_lr_db = use_lr_db, lr_db_species = lr_db_species,
+                                           db_name=db_name,
                                            min_size=min_size, fwhm=fwhm, thres_per=thres_per,
                                            conda.env.name=conda.env.name,
                                            assay=assay, slot=slot, lognorm=lognorm,
@@ -188,7 +195,7 @@ topological_similarity_celltype_pair <- function(sp_object, celltype_x='',cellty
   } else {
     # Rename the feature pairs
     if (use_lr_db) {
-      feat_pairs <- return_celltalkdb(lr_db_species=lr_db_species, conda.env.name = conda.env.name)
+      feat_pairs <- return_lr_db(lr_db_species=lr_db_species, conda.env.name = conda.env.name)
       feat_pairs <- feat_pairs[,c('ligand_gene_symbol','receptor_gene_symbol')]
       use_lr_db <- F
       cat(paste0("Calculating topological similarity between genes in ",celltype_x," and ",celltype_y,"\n"))
@@ -201,29 +208,31 @@ topological_similarity_celltype_pair <- function(sp_object, celltype_x='',cellty
     feat_pairs[['receptor_gene_symbol']] <- paste0(celltype_y,'_',feat_pairs[['receptor_gene_symbol']])
 
     # Create combined Seurat object for two cell type specific count matrices
-    sp_object_list <- celltype_specific_cosmx(sp_object, c(celltype_x, celltype_y),
-                                              conda.env.name=conda.env.name,
-                                              fov_colname = fov_colname,
-                                              cell_id_colname=cell_id_colname,
-                                              celltype_colname=celltype_colname,
-                                              transcript_colname=transcript_colname,
-                                              sc_norm_total=sc_norm_total,
-                                              return_mode='anndata')
+    sp_object_list <- celltype_specific_seurat(sp_object, c(celltype_x, celltype_y),
+                                               conda.env.name=conda.env.name,
+                                               fov_colname = fov_colname,
+                                               cell_id_colname=cell_id_colname,
+                                               celltype_colname=celltype_colname,
+                                               transcript_colname=transcript_colname,
+                                               sc_norm_total=sc_norm_total,
+                                               return_mode='anndata')
     comb_var_names <- c(paste0(celltype_x,'_',reticulate::py_to_r(sp_object_list[[1]]$var_names$values)),
                         paste0(celltype_y,'_',reticulate::py_to_r(sp_object_list[[2]]$var_names$values)))
     adata_xy <- ann$AnnData(X=scipy$sparse$hstack(c(sp_object_list[[1]]$X, sp_object_list[[2]]$X))$tocsr(),
                             obs=sp_object_list[[1]]$obs)
     adata_xy$var_names <- comb_var_names
-    adata_xy <- STopover$STopover_cosmx(adata_xy, sc_celltype_colname=celltype_colname,
-                                        sc_norm_total=sc_norm_total,
-                                        min_size=min_size, fwhm=fwhm, thres_per=thres_per)
+    adata_xy <- STopover$STopover_imageST(adata_xy, sc_celltype_colname=celltype_colname,
+                                          sc_norm_total=sc_norm_total,
+                                          min_size=min_size, fwhm=fwhm, thres_per=thres_per)
 
     # Calculate topological similarites between the pairs from the two cell types
     if (is.null(num_workers)){
       adata_xy$topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species,
+                                      db_name=db_name,
                                       group_name='batch', group_list=NULL)
     } else {
       adata_xy$topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species,
+                                      db_name=db_name,
                                       group_name='batch', group_list=NULL, num_workers=num_workers)
     }
     sparse_mtx <- reticulate::py_to_r(adata_xy$X$T)
