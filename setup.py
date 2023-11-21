@@ -8,7 +8,7 @@ setup(
     author = "Sungwoo Bae, Hyekyoung Lee, Hongyoon Choi",
     packages = find_packages(include=['STopover', 'STopover.*']),
     include_package_data = True,
-    package_data = {'': ['data/*.txt', 'app/image/*']},
+    package_data = {'': ['data/*.txt','data/*.csv','app/image/*']},
     install_requires = ["scanpy~=1.9","pyqt5~=5.15.7","leidenalg",
                         "pyarrow", "ply", "pytest", "parmap~=1.6"]
 )
