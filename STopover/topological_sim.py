@@ -144,9 +144,11 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
         comb_feat_list = pd.concat([df_tmp.iloc[:,1],
                                     df_tmp.iloc[:,2]], axis=0).drop_duplicates().to_frame().set_index(0)
         comb_feat_list['index'] = range(len(comb_feat_list))
+      
         # Find the index of the feature in Feat_1 and Feat_2 among the comb_feat_list.index
         df_x = comb_feat_list.loc[df_tmp.iloc[:,1].drop_duplicates()]
         df_y = comb_feat_list.loc[df_tmp.iloc[:,2].drop_duplicates()]
+        comb_feat_list_x, comb_feat_list_y = df_x, df_y
         # Combine the dataframe df_x and df_y
         df_xy = pd.concat([df_x, df_y], axis=1)
         df_xy.columns = ['index_x','index_y']
