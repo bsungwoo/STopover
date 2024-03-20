@@ -141,15 +141,22 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
         # Reset the index
         df_tmp = df_tmp.reset_index(drop=True)
 
+        comb_feat_list = pd.concat([df_tmp.iloc[:,1],
+                                    df_tmp.iloc[:,2]], axis=0).drop_duplicates().to_frame().set_index(0)
+        comb_feat_list['index'] = range(len(comb_feat_list))
+        # Find the index of the feature in Feat_1 and Feat_2 among the comb_feat_list.index
+        df_x = comb_feat_list.loc[df_tmp.iloc[:,1].drop_duplicates()]
+        df_y = comb_feat_list.loc[df_tmp.iloc[:,2].drop_duplicates()]
+        # Combine the dataframe df_x and df_y
+        df_xy = pd.concat([df_x, df_y], axis=1)
+        df_xy.columns = ['index_x','index_y']
+
+        # Find the index for the Feature 1 and Feature 2: comb_feat_list as reference
+        df_tmp['Index_1'] = df_xy.loc[df_tmp.iloc[:,1]].reset_index()['index_x'].astype(int)
+        df_tmp['Index_2'] = df_xy.loc[df_tmp.iloc[:,2]].reset_index()['index_y'].astype(int)
+
         # Extract the non-overlapping feat list from group i and save index number corresponding to feature pairs
         if obs_tf_x != obs_tf_y:
-            # In case type of feature x and y is different
-            comb_feat_list_x = df_tmp.iloc[:,1].drop_duplicates().reset_index().set_index(df_feat.columns[0])
-            comb_feat_list_y = df_tmp.iloc[:,2].drop_duplicates().reset_index().set_index(df_feat.columns[1])
-            # Find the index for the combined feature
-            df_tmp['Index_1'] = comb_feat_list_x.loc[df_tmp.iloc[:,1]].reset_index()['index'].astype(int)
-            df_tmp['Index_2'] = comb_feat_list_y.loc[df_tmp.iloc[:,2]].reset_index()['index'].astype(int)
-
             if obs_tf_x:
                 val_x = data_sub.obs[comb_feat_list_x.index].to_numpy()
                 if data_type=='array': val_list.append(np.concatenate((val_x, data_sub[:,comb_feat_list_y.index].X), axis=1))
@@ -161,20 +168,6 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
         else:
             # In case type of feature x and y is same
             # Define combined feature list for feat_1 and feat_2 and remove duplicates
-            comb_feat_list = pd.concat([df_tmp.iloc[:,1],
-                                        df_tmp.iloc[:,2]], axis=0).drop_duplicates().to_frame().set_index(0)
-            comb_feat_list['index'] = range(len(comb_feat_list))
-            # Find the index of the feature in Feat_1 and Feat_2 among the comb_feat_list.index
-            df_x = comb_feat_list.loc[df_tmp.iloc[:,1].drop_duplicates()]
-            df_y = comb_feat_list.loc[df_tmp.iloc[:,2].drop_duplicates()]
-            # Combine the dataframe df_x and df_y
-            df_xy = pd.concat([df_x, df_y], axis=1)
-            df_xy.columns = ['index_x','index_y']
-
-            # Find the index for the Feature 1 and Feature 2: comb_feat_list as reference
-            df_tmp['Index_1'] = df_xy.loc[df_tmp.iloc[:,1]].reset_index()['index_x'].astype(int)
-            df_tmp['Index_2'] = df_xy.loc[df_tmp.iloc[:,2]].reset_index()['index_y'].astype(int)
-
             if obs_tf_x:
                 val_list.append(data_sub.obs[comb_feat_list.index].to_numpy())
             else:
@@ -224,36 +217,20 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
         df_cc_loc = pd.DataFrame(arr_cc_loc)
         feat_num_sum += feat_num
 
-        # Make dataframe representing location of CC when the data type is different between feature x and y
-        if obs_tf_x != obs_tf_y:
-            # Reconstruct combined feature list x and y for each group
-            comb_feat_list_x = df_subset['Feat_1'].drop_duplicates().tolist()
-            comb_feat_list_y = df_subset['Feat_2'].drop_duplicates().tolist()
-            # Assign column names and index
-            df_cc_loc.columns = ['Comb_CC_'+str(i) for i in comb_feat_list_x+comb_feat_list_y]
-            df_cc_loc.index = data[data.obs[group_name]==group_list[num]].obs.index
-        else:
-            # Reconstruct combined feature list for each group
-            comb_feat_list = pd.concat([df_subset['Feat_1'], df_subset['Feat_2']],
-                                       axis=0, ignore_index=True).drop_duplicates().tolist()
-            # Assign column names and index
-            df_cc_loc.columns = ['Comb_CC_'+str(i) for i in comb_feat_list]
-            df_cc_loc.index = data[data.obs[group_name]==group_list[num]].obs.index
+        # Reconstruct combined feature list for each group
+        comb_feat_list = pd.concat([df_subset['Feat_1'], df_subset['Feat_2']],
+                                    axis=0, ignore_index=True).drop_duplicates().tolist()
+        # Assign column names and index
+        df_cc_loc.columns = ['Comb_CC_'+str(i) for i in comb_feat_list]
+        df_cc_loc.index = data[data.obs[group_name]==group_list[num]].obs.index
         output_cc_loc.append(df_cc_loc)
 
         for index in range(len(df_subset)):
-            if obs_tf_x != obs_tf_y:
-                CCx_loc_mat = arr_cc_loc[:,:len(comb_feat_list_x)][:,df_subset['Index_1'].iloc[index]]
-                CCy_loc_mat = arr_cc_loc[:,len(comb_feat_list_x):][:,df_subset['Index_2'].iloc[index]]
-                if jaccard_type!="default":
-                    feat_x_val= val_list[num][:,:len(comb_feat_list_x)][:,df_subset['Index_1'].iloc[index]].reshape((-1,1))
-                    feat_y_val= val_list[num][:,len(comb_feat_list_x):][:,df_subset['Index_2'].iloc[index]].reshape((-1,1))
-            else:
-                CCx_loc_mat = arr_cc_loc[:,df_subset['Index_1'].iloc[index]]
-                CCy_loc_mat = arr_cc_loc[:,df_subset['Index_2'].iloc[index]]
-                if jaccard_type!="default":
-                    feat_x_val = val_list[num][:,df_subset['Index_1'].iloc[index]].reshape((-1,1))
-                    feat_y_val = val_list[num][:,df_subset['Index_2'].iloc[index]].reshape((-1,1))
+            CCx_loc_mat = arr_cc_loc[:,df_subset['Index_1'].iloc[index]]
+            CCy_loc_mat = arr_cc_loc[:,df_subset['Index_2'].iloc[index]]
+            if jaccard_type!="default":
+                feat_x_val = val_list[num][:,df_subset['Index_1'].iloc[index]].reshape((-1,1))
+                feat_y_val = val_list[num][:,df_subset['Index_2'].iloc[index]].reshape((-1,1))
             if jaccard_type=="default": CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat))
             else: CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,feat_x_val,feat_y_val))
 
