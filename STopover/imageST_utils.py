@@ -204,8 +204,10 @@ def read_imageST(load_path, sc_adata=None, sc_celltype_colname = 'celltype',
         x_div_arr = np.linspace(np.min(x_coord), np.max(x_coord), num=x_bins, endpoint=False)[1:]
         y_div_arr = np.linspace(np.min(y_coord), np.max(y_coord), num=y_bins, endpoint=False)[1:]
         # Assigning the grid column and row number to each transcript based on the coordinates by x_div_arr and y_div_arr
-        tx_coord_all['array_col'] = (repmat(x_div_arr.reshape(1,-1), len(x_coord), 1) < repmat(x_coord, 1, len(x_div_arr))).sum(axis=1).astype(int)
-        tx_coord_all['array_row'] = (repmat(y_div_arr.reshape(1,-1), len(y_coord), 1) < repmat(y_coord, 1, len(y_div_arr))).sum(axis=1).astype(int)
+        # tx_coord_all['array_col'] = (repmat(x_div_arr.reshape(1,-1), len(x_coord), 1) < repmat(x_coord, 1, len(x_div_arr))).sum(axis=1).astype(int)
+        # tx_coord_all['array_row'] = (repmat(y_div_arr.reshape(1,-1), len(y_coord), 1) < repmat(y_coord, 1, len(y_div_arr))).sum(axis=1).astype(int)
+        tx_coord_all['array_col'] = np.searchsorted(x_div_arr, x_coord, side='right')
+        tx_coord_all['array_row'] = np.searchsorted(y_div_arr, y_coord, side='right')
         print("End of grid-based aggregation of"+ST_type+": %.2f seconds" % (time.time()-start_time))
 
         ## Normalize the transcript number in each grid by total count in the cell
@@ -243,8 +245,10 @@ def read_imageST(load_path, sc_adata=None, sc_celltype_colname = 'celltype',
         x_div_arr = np.linspace(np.min(x_coord), np.max(x_coord), num=x_bins, endpoint=False)[1:]
         y_div_arr = np.linspace(np.min(y_coord), np.max(y_coord), num=y_bins, endpoint=False)[1:]
         # Assigning the grid column and row number to each transcript based on the coordinates by x_div_arr and y_div_arr
-        sp_adata_cell.obs['grid_array_col'] = (repmat(x_div_arr.reshape(1,-1), len(x_coord), 1) < repmat(x_coord, 1, len(x_div_arr))).sum(axis=1).astype(int)
-        sp_adata_cell.obs['grid_array_row'] = (repmat(y_div_arr.reshape(1,-1), len(y_coord), 1) < repmat(y_coord, 1, len(y_div_arr))).sum(axis=1).astype(int)
+        # sp_adata_cell.obs['grid_array_col'] = (repmat(x_div_arr.reshape(1,-1), len(x_coord), 1) < repmat(x_coord, 1, len(x_div_arr))).sum(axis=1).astype(int)
+        # sp_adata_cell.obs['grid_array_row'] = (repmat(y_div_arr.reshape(1,-1), len(y_coord), 1) < repmat(y_coord, 1, len(y_div_arr))).sum(axis=1).astype(int)
+        sp_adata_cell.obs['grid_array_col'] = np.searchsorted(x_div_arr, x_coord, side='right')
+        sp_adata_cell.obs['grid_array_row'] = np.searchsorted(y_div_arr, y_coord, side='right')
         print("End of grid-based aggregation of "+ST_type+": %.2f seconds" % (time.time()-start_time))
 
         ## Normalize the transcript number in each grid by total count in the cell
