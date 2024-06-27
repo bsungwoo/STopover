@@ -77,6 +77,26 @@ class STopover_visium(AnnData):
         self.save_path = save_path
         self.J_count = J_count
         self.spatial_type = 'visium'
+
+    def __getitem__(self, index):
+        """
+        Overrides the __getitem__ method to ensure that subsetting returns an instance of STopover_visium.
+        """
+        subset = super().__getitem__(index)
+        return STopover_visium(
+            sp_adata=subset,
+            min_size=self.min_size,
+            fwhm=self.fwhm,
+            thres_per=self.thres_per,
+            save_path=self.save_path,
+            J_count=self.J_count
+        )
+
+    def __repr__(self):
+        if self.is_view:
+            return "View of " + self._gen_repr(self.n_obs, self.n_vars).replace("AnnData object", "STopover_visium object")
+        else:
+            return self._gen_repr(self.n_obs, self.n_vars).replace("AnnData object", "STopover_visium object")
     
 
     def reinitalize(self, sp_adata, lognorm, min_size, fwhm, thres_per, save_path, J_count):
@@ -439,6 +459,45 @@ class STopover_imageST(STopover_visium):
         self.sc_norm_total = sc_norm_total
         self.min_counts, self.min_genes= min_counts, min_genes
         self.spatial_type = 'imageST'
+
+    def __getitem__(self, index):
+        """
+        Overrides the __getitem__ method to ensure that subsetting returns an instance of STopover_imageST.
+        """
+        subset = super(STopover_visium, self).__getitem__(index)
+        return STopover_imageST(
+            sp_adata=subset,
+            sc_celltype_colname=self.sc_celltype_colname,
+            ST_type='cosmx',  # This value can be parameterized as per requirement
+            grid_method='transcript',  # This value can be parameterized as per requirement
+            annot_method='ingest',  # This value can be parameterized as per requirement
+            sc_norm_total=self.sc_norm_total,
+            min_counts=self.min_counts,
+            min_genes=self.min_genes,
+            tx_file_name='tx_file.csv',  # This value can be parameterized as per requirement
+            cell_exprmat_file_name='exprMat_file.csv',  # This value can be parameterized as per requirement
+            cell_metadata_file_name='metadata_file.csv',  # This value can be parameterized as per requirement
+            fov_colname='fov',  # This value can be parameterized as per requirement
+            cell_id_colname='cell_ID',  # This value can be parameterized as per requirement
+            tx_xcoord_colname='x_global_px',  # This value can be parameterized as per requirement
+            tx_ycoord_colname='y_global_px',  # This value can be parameterized as per requirement
+            transcript_colname=self.transcript_colname,
+            meta_xcoord_colname='CenterX_global_px',  # This value can be parameterized as per requirement
+            meta_ycoord_colname='CenterY_global_px',  # This value can be parameterized as per requirement
+            x_bins=self.x_bins,
+            y_bins=self.y_bins,
+            min_size=self.min_size,
+            fwhm=self.fwhm,
+            thres_per=self.thres_per,
+            save_path=self.save_path,
+            J_count=self.J_count
+        )
+
+    def __repr__(self):
+        if self.is_view:
+            return "View of " + self._gen_repr(self.n_obs, self.n_vars).replace("AnnData object", "STopover_imageST object")
+        else:
+            return self._gen_repr(self.n_obs, self.n_vars).replace("AnnData object", "STopover_imageST object")
 
 
     def reinitalize(self,sp_adata, lognorm=False, sc_celltype_colname=None, sc_norm_total=None, x_bins=None, y_bins=None, 
