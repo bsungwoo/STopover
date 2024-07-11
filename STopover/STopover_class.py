@@ -97,7 +97,11 @@ class STopover_visium(AnnData):
             return "View of " + self._gen_repr(self.n_obs, self.n_vars).replace("AnnData object", "STopover_visium object")
         else:
             return self._gen_repr(self.n_obs, self.n_vars).replace("AnnData object", "STopover_visium object")
-    
+
+    def copy(self):
+        adata_copy = super().copy()
+        return self.reinitalize(sp_adata=adata_copy, lognorm=False, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, 
+                                save_path=self.save_path, J_count=self.J_count)
 
     def reinitalize(self, sp_adata, lognorm, min_size, fwhm, thres_per, save_path, J_count):
         '''
@@ -499,7 +503,13 @@ class STopover_imageST(STopover_visium):
         else:
             return self._gen_repr(self.n_obs, self.n_vars).replace("AnnData object", "STopover_imageST object")
 
-
+    def copy(self):
+        adata_copy = super().copy()
+        return self.reinitalize(sp_adata=adata_copy, lognorm=False, sc_celltype_colname=self.sc_celltype_colname, 
+                                sc_norm_total=self.sc_norm_total, x_bins=self.x_bins, y_bins=self.y_bins, 
+                                min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, 
+                                save_path=self.save_path, J_count=self.J_count, inplace=False)
+        
     def reinitalize(self,sp_adata, lognorm=False, sc_celltype_colname=None, sc_norm_total=None, x_bins=None, y_bins=None, 
                     min_size=None, fwhm=None, thres_per=None, save_path=None, J_count=None, inplace=True):
         '''
