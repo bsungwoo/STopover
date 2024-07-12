@@ -101,14 +101,17 @@ class STopover_visium(AnnData):
     def copy(self):
         adata_copy = super().copy()
         return self.reinitalize(sp_adata=adata_copy, lognorm=False, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, 
-                                save_path=self.save_path, J_count=self.J_count)
+                                save_path=self.save_path, J_count=self.J_count, inplace=False)
 
-    def reinitalize(self, sp_adata, lognorm, min_size, fwhm, thres_per, save_path, J_count):
+    def reinitalize(self, sp_adata, lognorm, min_size, fwhm, thres_per, save_path, J_count, inplace=True):
         '''
         ## Reinitialize the class
         '''
-        self.__init__(sp_adata=sp_adata, lognorm=lognorm, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
-
+        if inplace:
+            self.__init__(sp_adata=sp_adata, lognorm=lognorm, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
+        else:
+            sp_adata_re = STopover_visium(sp_adata=sp_adata, lognorm=lognorm, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
+            return sp_adata_re
 
     def return_lr_db(self, lr_db_species='human', db_name='CellTalk'):
         '''
