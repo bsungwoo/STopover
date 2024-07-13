@@ -16,7 +16,7 @@ class STopover_visium(AnnData):
     ## Class to calculate connected component location and jaccard similarity indices in visium dataset
     
     ### Input
-    sp_adata: Anndata object for spatial transcriptomic data with count matrix ('raw') in .X
+    sp_adata: Anndata object for spatial transcriptomic data with count matrix ('') in .X
     sp_load_path: path to 10X-formatted Visium dataset directory or .h5ad Anndata object
     lognorm: whether to lognormalize (total count normalize and log transform) the count matrix saved in adata.X
     min_size: minimum size of a connected component
@@ -61,15 +61,15 @@ class STopover_visium(AnnData):
         if len(J_result_num) > 0: J_count = max(J_result_num) + 1
         # Make feature names unique
         adata_mod.var_names_make_unique()
-        # Preserve raw .obs data in .uns
-        if J_count==0: adata_mod.uns['obs_raw'] = adata_mod.obs
+        # Preserve  .obs data in .uns
+        if J_count==0: adata_mod.uns['obs_'] = adata_mod.obs
 
         # Preprocess the Visium spatial transcriptomic data
         if lognorm:
             if 'log1p' in adata_mod.uns.keys(): print("'adata' seems to be already log-transformed")
             sc.pp.normalize_total(adata_mod, target_sum=1e4, inplace=True)
             sc.pp.log1p(adata_mod)
-        super(STopover_visium, self).__init__(X=adata_mod.X, obs=adata_mod.obs, var=adata_mod.var, uns=adata_mod.uns, obsm=adata_mod.obsm, raw=adata_mod.raw)
+        super(STopover_visium, self).__init__(X=adata_mod.X, obs=adata_mod.obs, var=adata_mod.var, uns=adata_mod.uns, obsm=adata_mod.obsm, layers=adata_mod.layers, raw=adata_mod.raw)
 
         self.min_size = min_size
         self.fwhm = fwhm
@@ -656,7 +656,7 @@ class STopover_imageST(STopover_visium):
         dot_size: size of the spot visualized on the tissue
         alpha: transparency of the colored spot
 
-        fig_size: size of the drawn figure
+        fig_size: size of the dn figure
         title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
         return_axis: whether to return the plot axis
 
@@ -691,7 +691,7 @@ class STopover_imageST(STopover_visium):
         vis_jaccard: whether to visualize jaccard index on right corner of the plot
         jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
 
-        fig_size: size of the drawn figure
+        fig_size: size of the dn figure
         title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
         return_axis: whether to return the plot axis
         axis: matplotlib axes for plotting single image
