@@ -1,4 +1,5 @@
 import os
+import copy
 import scanpy as sc
 from anndata import AnnData
 
@@ -99,9 +100,17 @@ class STopover_visium(AnnData):
             return self._gen_repr(self.n_obs, self.n_vars).replace("AnnData object", "STopover_visium object")
 
     def copy(self):
-        adata_copy = super().copy()
-        return self.reinitalize(sp_adata=adata_copy, lognorm=False, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, 
-                                save_path=self.save_path, J_count=self.J_count, inplace=False)
+        return copy.deepcopy(self)
+
+    def __deepcopy__(self, memo):
+        # Create a new instance of the class
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result       
+        # Copy all attributes
+        for k, v in self.__dict__.items():
+            setattr(result, k, copy.deepcopy(v, memo))
+        return result
 
     def reinitalize(self, sp_adata, lognorm, min_size, fwhm, thres_per, save_path, J_count, inplace=True):
         '''
