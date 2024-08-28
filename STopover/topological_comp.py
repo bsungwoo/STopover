@@ -13,6 +13,7 @@ from numpy.matlib import repmat
 import pandas as pd
 from scipy import sparse
 from scipy.spatial.distance import pdist, squareform
+from scipy.ndimage import gaussian_filter
 from anndata import AnnData
             
 from .make_original_dendrogram_cc import make_original_dendrogram_cc
@@ -20,33 +21,86 @@ from .make_smoothed_dendrogram import make_smoothed_dendrogram
 from .make_dendrogram_bar import make_dendrogram_bar
 
 
-def extract_adjacency_spatial(loc, fwhm=2.5):
+def extract_adjacency_spatial(loc, spatial_type='visium', fwhm=2.5):
     '''
     ## Compute adjacency matrix and gaussian mask based on spatial locations of spots/grids
     ### Input
     loc: p*2 array for x, y coordinates of p spots/grids
+    spatial_type: type of the spatial transcriptomics dataset
     fwhm: full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent spots/grids
+    feat: when 'spatial_type' is not 'visium', provide feat 
 
     ### Output
     A: Spatial adjacency matrix for spots/grids based on the given x,y coordiantes
-    mask: Gaussian smoothing mask for the features based on x,y coordinates of spots/grids
+    arr_mod: 
+    * If 'spatial_type'=='visium': Gaussian smoothing mask for the features based on x,y coordinates of spots/grids
+    * else: smoothed feature array
     '''
+    assert isinstance(loc, np.ndarray)
     sigma = fwhm / 2.355
-    # adjacency matrix between spots
-    A = np.round(squareform(pdist(loc, 'euclidean')), 4)
-    # Replace the distance to infinity in case when it exceeds fwhm
-    A[np.where(A > fwhm)] = np.inf
+    
+    if spatial_type=='visium':
+        # adjacency matrix between spots
+        A = np.round(squareform(pdist(loc, 'euclidean')), 4)
+        # Replace the distance to infinity in case when it exceeds fwhm
+        A[np.where(A > fwhm)] = np.inf
 
-    # Smoothing x and y
-    # Gaussian smoothing with zero padding
-    # adjacency matrix was actually distance matrix
-    mask = 1/(2*np.pi*sigma**2)*np.exp(-(A**2)/(2*sigma**2))
+        # Smoothing x and y
+        # Gaussian smoothing with zero padding
+        # adjacency matrix was actually distance matrix
+        arr_mod = 1/(2*np.pi*sigma**2)*np.exp(-(A**2)/(2*sigma**2))
+            
+        # really estimate adjacency matrix (convert to 1, 0)
+        min_distance = np.min(A[np.nonzero(A)])
+        A = ((A > 0) & (A <= min_distance)).astype(int)
+        return sparse.csr_matrix(A), arr_mod
+    elif spatial_type=='imageST':
+        # Generate the indices for all cells in the matrix
+        rows, cols = max(loc[:,1])+1, max(loc[:,0])+1
+        indices = np.indices((rows, cols))
         
-    # really estimate adjacency matrix (convert to 1, 0)
-    min_distance = np.min(A[np.nonzero(A)])
-    A = ((A > 0) & (A <= min_distance)).astype(int)
-    return A, mask
+        # Calculate the indices of adjacent cells (up: 1st move, left: 2nd move)
+        adjacent_indices = np.array([[-1, 0], [0, -1]])
+        adjacent_indices = np.tile(adjacent_indices[:, :, np.newaxis, np.newaxis], (1, 1, rows, cols))
+        adjacent_indices = adjacent_indices + indices[:, np.newaxis, :, :]
+        
+        # Determine the valid adjacent cells within the bounds of the matrix
+        valid_adjacent = np.logical_and.reduce((adjacent_indices[0] >= 0, adjacent_indices[0] < rows,
+                                                adjacent_indices[1] >= 0, adjacent_indices[1] < cols))
+        
+        # Valid index for move 1
+        num_nonzero1 = np.count_nonzero(valid_adjacent[0])
+        arr_mov1_row = indices[np.concatenate((valid_adjacent[0][np.newaxis,:,:], 
+                                            valid_adjacent[0][np.newaxis,:,:]), axis=0)].reshape((-1,(rows-1),cols))
+        arr_mov1_col = adjacent_indices[:,0,:,:][np.concatenate((valid_adjacent[0][np.newaxis,:,:], 
+                                                                valid_adjacent[0][np.newaxis,:,:]), axis=0)].reshape((-1,(rows-1),cols))
+        arr_mov1_row = np.ravel_multi_index(arr_mov1_row, (rows,cols)).flatten()
+        arr_mov1_col = np.ravel_multi_index(arr_mov1_col, (rows,cols)).flatten()
 
+        # Valid index for move 2
+        num_nonzero2 = np.count_nonzero(valid_adjacent[1])
+        arr_mov2_row = indices[np.concatenate((valid_adjacent[1][np.newaxis,:,:], 
+                                            valid_adjacent[1][np.newaxis,:,:]), axis=0)].reshape((-1,rows,cols-1))
+        arr_mov2_col = adjacent_indices[:,1,:,:][np.concatenate((valid_adjacent[1][np.newaxis,:,:], 
+                                                                valid_adjacent[1][np.newaxis,:,:]), axis=0)].reshape((-1,rows,(cols-1)))
+        arr_mov2_row = np.ravel_multi_index(arr_mov2_row, (rows,cols)).flatten()
+        arr_mov2_col = np.ravel_multi_index(arr_mov2_col, (rows,cols)).flatten()
+        
+        # Create data array for non-zero elements
+        data1 = np.ones(num_nonzero1, dtype=np.int8)
+        data2 = np.ones(num_nonzero2, dtype=np.int8)
+        
+        # Create the sparse matrix using COO format
+        adjacency_matrix1 = sparse.coo_matrix((data1, (arr_mov1_row, arr_mov1_col)), shape=(rows*cols, rows*cols))
+        adjacency_matrix2 = sparse.coo_matrix((data2, (arr_mov2_row, arr_mov2_col)), shape=(rows*cols, rows*cols))
+
+        adjacency = adjacency_matrix1.tocsr() + adjacency_matrix2.tocsr()
+        # Copy the values from the lower triangle to the upper triangle
+        adjacency = adjacency + adjacency.T
+        
+        return adjacency
+    else:
+        raise ValueError(f"'{spatial_type}' not among ['visium','imageST']")
 
 
 def extract_connected_comp(tx, A_sparse, threshold_x, num_spots, min_size=5):
@@ -78,7 +132,6 @@ def extract_connected_comp(tx, A_sparse, threshold_x, num_spots, min_size=5):
     sind = nlayer_x[0]
     CCx = [nCC_x[i] for i in sind]
     return CCx
-
 
 
 def extract_connected_loc_mat(CC, num_spots, format='sparse'):
@@ -168,13 +221,16 @@ def filter_connected_loc_exp(CC_loc_mat, data=None, feat=None, thres_per=30, ret
     else: return CC_loc_mat_fin.sum(axis=1)
 
 
-
-def topological_comp_res(feat=None, A=None, mask=None, min_size = 5, thres_per=30, return_mode='all'):
+def topological_comp_res(feat=None, A=None, mask=None, ncols=100, nrows=100, 
+                         spatial_type='visium', fwhm=2.5, min_size = 5, thres_per=30, return_mode='all'):
     '''
     ## Calculate topological connected components for the given feature value
     ### Input
     feat: the feature to investigate topological similarity 
     -> represents the feature values as numpy array when data is not provided (number of spots * 1 array)
+    A: sparse matrix for spatial adjacency matrix across spots/grids (0 and 1)
+    mask: mask for gaussian filtering
+    nrows, ncols: number of rows and columns in the array to divide the image-based ST data (for grid-based aggregation)
     min_size: minimum size of a connected component
     thres_per: percentile expression threshold to remove the connected components
 
@@ -197,7 +253,7 @@ def topological_comp_res(feat=None, A=None, mask=None, min_size = 5, thres_per=3
         raise ValueError("'return_mode' should be among 'all', 'cc_loc', or 'jaccard_cc_list'")
 
     # If no dataset is given, then feature x and feature y should be provided as numpy arrays
-    if (A is None) or (mask is None):
+    if (spatial_type=='visium') and (A is None or mask is None):
         raise ValueError("'A' and 'mask' should be provided")
     if isinstance(feat, sparse.spmatrix): feat = feat.toarray()
     elif isinstance(feat, np.ndarray): pass
@@ -205,16 +261,23 @@ def topological_comp_res(feat=None, A=None, mask=None, min_size = 5, thres_per=3
 
     # Calculate adjacency matrix and mask if data is provided
     # Gaussian smoothing with zero padding
-    p = len(feat)
-    smooth = np.sum(mask*repmat(feat,1,p), axis=0)
-    smooth = smooth/np.sum(smooth)*np.sum(feat)
+    if spatial_type == 'visium':
+        p = len(feat)
+        smooth = np.sum(mask*repmat(feat,1,p), axis=0)
+        smooth = smooth/np.sum(smooth)*np.sum(feat)
+    else:
+        # Gaussian smoothing
+        # Smooth the image
+        sigma = fwhm / 2.355
+        smooth = gaussian_filter(feat.reshape((nrows,ncols)), sigma=(sigma, sigma, 0), truncate=2.355).flatten()
+        smooth = smooth/np.sum(smooth)*np.sum(feat)
 
     ## Estimate dendrogram for feat_x
     t = smooth*(smooth>0)
     # Find nonzero unique value and sort in descending order
     threshold = np.flip(np.sort(np.setdiff1d(t, 0), axis=None))
     # Compute connected components for feat_x
-    CC_list = extract_connected_comp(t, sparse.csr_matrix(A), threshold, num_spots=p, min_size=min_size)
+    CC_list = extract_connected_comp(t, A, threshold, num_spots=p, min_size=min_size)
 
     # Extract location of connected components as arrays
     CC_loc_mat = extract_connected_loc_mat(CC_list, num_spots=len(feat))

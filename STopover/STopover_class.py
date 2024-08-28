@@ -5,6 +5,7 @@ from anndata import AnnData
 
 from .imageST_utils import *
 from .topological_sim import topological_sim_pairs_
+from .permutation import run_permutation_test
 from .topological_comp import save_connected_loc_data_
 from .jaccard import jaccard_and_connected_loc_
 from .jaccard import jaccard_top_n_connected_loc_
@@ -71,6 +72,9 @@ class STopover_visium(AnnData):
             sc.pp.normalize_total(adata_mod, target_sum=1e4, inplace=True)
             sc.pp.log1p(adata_mod)
         super(STopover_visium, self).__init__(X=adata_mod.X, obs=adata_mod.obs, var=adata_mod.var, uns=adata_mod.uns, obsm=adata_mod.obsm, layers=adata_mod.layers, raw=adata_mod.raw)
+        
+        # Create directory to save
+        os.makedirs(save_path, exist_ok=True)
 
         self.min_size = min_size
         self.fwhm = fwhm
@@ -215,7 +219,33 @@ class STopover_visium(AnnData):
         adata.uns['_'.join(('J',str(J_result_name),str(self.J_count)))] = df
         # Initialize the object
         self.reinitalize(sp_adata=adata, lognorm=False, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count+1)
-    
+
+      
+    def run_significance_test(self, feat_pairs_sig_test=None, nperm=1000, seed=0, 
+                              jaccard_type='default', num_workers=os.cpu_count(), 
+                              progress_bar=True, J_result_name='result'):
+        '''
+        feat_pairs_sig_test: feature pairs for the significance test (default: None -> Test all saved in .uns)
+        nperm: number of the random permutation (default: 1000)
+        seed: the seed for the random number generator (default: 0)
+        jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
+        num_workers: number of workers to use for multiprocessing
+        progress_bar: whether to show the progress bar during multiprocessing
+        '''
+        print("Run permutation test for the given LR pairs")
+        import re
+        pattern = re.compile("^J_.*_[0-9]$")
+        adata_keys = sorted([i for i in self.uns.keys() if pattern.match(i)])
+        
+        df, adata = run_permutation_test(self, feat_pairs_sig_test, nperm=nperm, seed=seed, spatial_type = self.spatial_type,
+                                         fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per, jaccard_type=jaccard_type,
+                                         num_workers=num_workers, progress_bar=progress_bar)
+        
+        # save jaccard index result in .uns of anndata
+        adata.uns['_'.join((adata_keys[-1], 'sig'))] = df
+        # Initialize the object
+        self.reinitalize(sp_adata=adata, lognorm=False, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count)     
+
 
     def save_connected_loc_data(self, save_format='h5ad', filename = 'cc_location'):
         '''
@@ -229,7 +259,7 @@ class STopover_visium(AnnData):
         '''
         save_connected_loc_data_(data=self, save_format=save_format, path=self.save_path, filename=filename)
 
-    
+
     def J_result_reset(self):
         '''
         ## Remove the results for jaccard similarity and connected component location and reset
