@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy import sparse
+from scipy.ndimage import gaussian_filter
 
 import os
 import time
@@ -177,7 +178,7 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
             else:
                 if data_type=='array': val_element = data_sub[:,comb_feat_list.index].X
                 else: val_element = data_sub[:,comb_feat_list.index].X.toarray()
-        val_list.append([val_element[next(shuffle_gen),:] for _ in range(nperm)])
+        
         # Append the dataframe
         df_top_total = pd.concat([df_top_total, df_tmp], axis=0)
 
@@ -190,6 +191,35 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
         
         # Generate a list of location arrays from the DataFrame
         loc_list.append(df_loc.to_numpy())
+        
+        # Add permuted feature results
+        perm_list = []
+        for _ in range(nperm):
+            if spatial_type=='visium':
+                perm_list.append(val_element[next(shuffle_gen),:])
+            else:
+                sigma = fwhm / 2.355
+                cols, rows = df_loc['array_col'].values, df_loc['array_row'].values
+
+                # Convert val_element to a 3D array where each "slice" along the third axis corresponds to a feature
+                arr = np.zeros((len(np.unique(rows)), len(np.unique(cols)), val_element.shape[1]))
+                # Fill the 3D array with the appropriate values
+                arr[rows, cols, :] = val_element
+                # Apply the Gaussian filter along the first two dimensions for each feature simultaneously
+                smooth = gaussian_filter(arr, sigma=(sigma, sigma, 0), truncate=2.355, mode='constant')
+
+                # Normalize the smoothed array
+                smooth_sum = np.sum(smooth, axis=(0, 1), keepdims=True)
+                val_element_sum = np.sum(val_element, axis=0, keepdims=True)
+                smooth = smooth / smooth_sum * val_element_sum
+                
+                # Subset the smooth array using the original rows and cols indices
+                smooth_subset = smooth[rows, cols, :]
+                # Flatten the smoothed array along the first two dimensions
+                smooth_subset = smooth_subset.reshape(-1, val_element.shape[1])
+                # Append the shuffled smoothed array to perm_list
+                perm_list.append(smooth_subset[next(shuffle_gen), :])
+        val_list.append(perm_list)
 
     # Make dataframe for the list of feature 1 and 2 across the groups
     df_top_total.index = range(df_top_total.shape[0])
@@ -197,28 +227,24 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
     print("Elapsed time: %.2f seconds " % (time.time()-start_time))
 
     # Start the multiprocessing for extracting adjacency matrix and mask
-    print("Calculation of adjacency matrix and mask")
+    print(f"Calculation of adjacency matrix for {spatial_type}")
     adjacency_mask = parmap.map(extract_adjacency_spatial, loc_list, spatial_type=spatial_type, fwhm=fwhm,
                                 pm_pbar=progress_bar, pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))), pm_chunksize=50)
     if spatial_type=='visium':
         feat_A_mask_pair = [(feat[perm_idx][:,feat_idx].reshape((-1,1)),
-                            adjacency_mask[grp_idx][0],
-                            adjacency_mask[grp_idx][1],None,None) \
+                            adjacency_mask[grp_idx][0], adjacency_mask[grp_idx][1]) \
                             for grp_idx, feat in enumerate(val_list) \
                             for perm_idx in range(nperm) for feat_idx in range(feat[0].shape[1])]
     else:
         feat_A_mask_pair = [(feat[perm_idx][:,feat_idx].reshape((-1,1)),
-                            adjacency_mask[grp_idx][0],
-                            adjacency_mask[grp_idx][1],
-                            len(np.unique(loc_list[grp_idx][0,:])),
-                            len(np.unique(loc_list[grp_idx][1,:]))) \
+                            adjacency_mask[grp_idx], None) \
                             for grp_idx, feat in enumerate(val_list) \
                             for perm_idx in range(nperm) for feat_idx in range(feat[0].shape[1])]
 
     # Start the multiprocessing for finding connected components of each feature
     print("Calculation of connected components for each feature")
     output_cc = parmap.starmap(topological_comp_res, feat_A_mask_pair, spatial_type=spatial_type,
-                               fwhm=fwhm, min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
+                               min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
                                pm_pbar=progress_bar, pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))))
 
     # Make dataframe for the similarity between feature 1 and 2 across the groups

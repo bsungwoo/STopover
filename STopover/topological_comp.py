@@ -13,7 +13,6 @@ from numpy.matlib import repmat
 import pandas as pd
 from scipy import sparse
 from scipy.spatial.distance import pdist, squareform
-from scipy.ndimage import gaussian_filter
 from anndata import AnnData
             
 from .make_original_dendrogram_cc import make_original_dendrogram_cc
@@ -55,7 +54,6 @@ def extract_adjacency_spatial(loc, spatial_type='visium', fwhm=2.5):
         A = ((A > 0) & (A <= min_distance)).astype(int)
         return sparse.csr_matrix(A), arr_mod
     elif spatial_type=='imageST':
-        print("Calculation of adjacency matrix for imageST")
         # Generate the indices for all cells in the matrix
         rows, cols = max(loc[:,1])+1, max(loc[:,0])+1
         indices = np.indices((rows, cols))
@@ -99,7 +97,11 @@ def extract_adjacency_spatial(loc, spatial_type='visium', fwhm=2.5):
         # Copy the values from the lower triangle to the upper triangle
         adjacency = adjacency + adjacency.T
         
-        return adjacency
+         # Subset the adjacency matrix to only include the specified rows and cols
+        valid_indices = np.ravel_multi_index((loc[:, 1], loc[:, 0]), (rows, cols))
+        adjacency_subset = adjacency[valid_indices, :][:, valid_indices]
+        
+        return adjacency_subset
     else:
         raise ValueError(f"'{spatial_type}' not among ['visium','imageST']")
 
@@ -120,7 +122,7 @@ def extract_connected_comp(tx, A_sparse, threshold_x, num_spots, min_size=5):
     cCC_x,cE_x,cduration_x,chistory_x = make_original_dendrogram_cc(tx,A_sparse,threshold_x)
 
     ## Estimated smoothed dendrogram for feat_x
-    nCC_x,nE_x,nduration_x,nhistory_x = make_smoothed_dendrogram(cCC_x,cE_x,cduration_x,chistory_x,np.array([min_size, num_spots]))
+    nCC_x,_,nduration_x,nhistory_x = make_smoothed_dendrogram(cCC_x,cE_x,cduration_x,chistory_x,np.array([min_size, num_spots]))
     
     ## Estimate bars for plot for feat_x
     cvertical_x_x,cvertical_y_x,chorizontal_x_x,chorizontal_y_x,cdots_x,clayer_x = make_dendrogram_bar(chistory_x,cduration_x)
@@ -222,8 +224,8 @@ def filter_connected_loc_exp(CC_loc_mat, data=None, feat=None, thres_per=30, ret
     else: return CC_loc_mat_fin.sum(axis=1)
 
 
-def topological_comp_res(feat=None, A=None, mask=None, ncols=100, nrows=100, 
-                         spatial_type='visium', fwhm=2.5, min_size = 5, thres_per=30, return_mode='all'):
+def topological_comp_res(feat=None, A=None, mask=None,
+                         spatial_type='visium', min_size = 5, thres_per=30, return_mode='all'):
     '''
     ## Calculate topological connected components for the given feature value
     ### Input
@@ -231,7 +233,7 @@ def topological_comp_res(feat=None, A=None, mask=None, ncols=100, nrows=100,
     -> represents the feature values as numpy array when data is not provided (number of spots * 1 array)
     A: sparse matrix for spatial adjacency matrix across spots/grids (0 and 1)
     mask: mask for gaussian filtering
-    nrows, ncols: number of rows and columns in the array to divide the image-based ST data (for grid-based aggregation)
+    rows, cols: array of rows and columns in the array used to divide the image-based ST data (for grid-based aggregation)
     min_size: minimum size of a connected component
     thres_per: percentile expression threshold to remove the connected components
 
@@ -262,16 +264,13 @@ def topological_comp_res(feat=None, A=None, mask=None, ncols=100, nrows=100,
 
     # Calculate adjacency matrix and mask if data is provided
     # Gaussian smoothing with zero padding
+    p = len(feat)
     if spatial_type == 'visium':
-        p = len(feat)
         smooth = np.sum(mask*repmat(feat,1,p), axis=0)
         smooth = smooth/np.sum(smooth)*np.sum(feat)
     else:
-        # Gaussian smoothing
-        # Smooth the image
-        sigma = fwhm / 2.355
-        smooth = gaussian_filter(feat.reshape((nrows,ncols)), sigma=(sigma, sigma, 0), truncate=2.355).flatten()
-        smooth = smooth/np.sum(smooth)*np.sum(feat)
+        # Already smoothed features as input
+        smooth = feat.flatten()
 
     ## Estimate dendrogram for feat_x
     t = smooth*(smooth>0)
