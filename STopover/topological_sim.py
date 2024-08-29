@@ -70,7 +70,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
             raise ValueError("'group_name' not found in columns of 'data.obs'")
         if not (set(group_list) <= set(data.obs[group_name])):
             raise ValueError("Some elements in 'group_list' not found in 'data.obs['"+str(group_name)+"']'")
-        data = data[data.obs[group_name].isin(group_list)].copy()
+        data = data[data.obs[group_name].isin(group_list)]
 
     # Determine the type of the data
     if isinstance(data.X, np.ndarray): data_type = 'array'
@@ -102,8 +102,8 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
 
     # Repeat the process for the proivded group_list
     for num, i in enumerate(group_list):
-        data_sub = data[data.obs[group_name]==i].copy()
-        df_tmp = df_feat.copy()
+        data_sub = data[data.obs[group_name]==i]
+        df_tmp = df_feat
         # Add the group name in the first column
         df_tmp.insert(0, group_name, i)
 
@@ -219,7 +219,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     for num, element in enumerate(group_list):
         df_subset = df_top_total[df_top_total[group_name]==element]
         # Find the subset of the given data
-        data_sub = data[data.obs[group_name]==element].copy()
+        data_sub = data[data.obs[group_name]==element]
         # Add the connected component location of all features in each group
         feat_num = val_list[num].shape[1]
         arr_cc_loc = np.concatenate(output_cc[feat_num_sum:(feat_num_sum+feat_num)], axis=1)
@@ -244,7 +244,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
             else: CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,feat_x_val,feat_y_val))
 
     # Get the output for connected component location and save
-    data_mod = data.copy()
+    data_mod = data
     output_cc_loc = pd.concat(output_cc_loc, axis=0).fillna(0).astype(int).astype('category')
     # Check if there is overlapping columns
     import re

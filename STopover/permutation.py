@@ -138,8 +138,8 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
 
     # Repeat the process for the proivded group_list
     for num, i in enumerate(group_list):
-        data_sub = data[data.obs[group_name]==i].copy()
-        df_tmp = df_feat.loc[df_feat[group_name]==i].copy()
+        data_sub = data[data.obs[group_name]==i]
+        df_tmp = df_feat.loc[df_feat[group_name]==i]
 
         comb_feat_list = pd.concat([df_tmp.loc[:,"Feat_1"], df_tmp.loc[:,"Feat_2"]], axis=0).drop_duplicates().to_frame().set_index(0)
         comb_feat_list['index'] = range(len(comb_feat_list))
@@ -228,7 +228,7 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
     for num, element in enumerate(group_list):
         df_subset = df_top_total[df_top_total[group_name]==element]
         # Find the subset of the given data
-        data_sub = data[data.obs[group_name]==element].copy()
+        data_sub = data[data.obs[group_name]==element]
         feat_num = (val_list[num][0].shape[1])
         for perm_idx in range(nperm):
             # Add the connected component location of all features in each group
@@ -259,7 +259,7 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
         feat_num_sum += feat_num*nperm
 
     # Get the output for connected component location and save
-    data_mod = data.copy()
+    data_mod = data
     output_cc_loc = pd.concat(output_cc_loc, axis=0).reset_index(drop=True)
     output_cc_loc[[i for i in output_cc_loc.columns if i not in ['barcode','perm_idx']]] = \
         output_cc_loc[[i for i in output_cc_loc.columns if i not in ['barcode','perm_idx']]].fillna(0).astype(pd.SparseDtype("int", fill_value=0)).astype('category')

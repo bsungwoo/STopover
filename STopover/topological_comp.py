@@ -55,6 +55,7 @@ def extract_adjacency_spatial(loc, spatial_type='visium', fwhm=2.5):
         A = ((A > 0) & (A <= min_distance)).astype(int)
         return sparse.csr_matrix(A), arr_mod
     elif spatial_type=='imageST':
+        print("Calculation of adjacency matrix for imageST")
         # Generate the indices for all cells in the matrix
         rows, cols = max(loc[:,1])+1, max(loc[:,0])+1
         indices = np.indices((rows, cols))
