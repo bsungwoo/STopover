@@ -103,7 +103,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     # Repeat the process for the proivded group_list
     for num, i in enumerate(group_list):
         data_sub = data[data.obs[group_name]==i]
-        df_tmp = df_feat
+        df_tmp = df_feat.copy()
         # Add the group name in the first column
         df_tmp.insert(0, group_name, i)
 
