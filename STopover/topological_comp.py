@@ -233,7 +233,6 @@ def topological_comp_res(feat=None, A=None, mask=None,
     -> represents the feature values as numpy array when data is not provided (number of spots * 1 array)
     A: sparse matrix for spatial adjacency matrix across spots/grids (0 and 1)
     mask: mask for gaussian filtering
-    rows, cols: array of rows and columns in the array used to divide the image-based ST data (for grid-based aggregation)
     min_size: minimum size of a connected component
     thres_per: percentile expression threshold to remove the connected components
 

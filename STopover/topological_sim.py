@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy import sparse
+from scipy.ndimage import gaussian_filter
 
 import os
 import time
@@ -161,20 +162,20 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
         if obs_tf_x != obs_tf_y:
             if obs_tf_x:
                 val_x = data_sub.obs[comb_feat_list_x.index].to_numpy()
-                if data_type=='array': val_list.append(np.concatenate((val_x, data_sub[:,comb_feat_list_y.index].X), axis=1))
-                else: val_list.append(np.concatenate((val_x, data_sub[:,comb_feat_list_y.index].X.toarray()), axis=1))
+                if data_type=='array': val_element = np.concatenate((val_x, data_sub[:,comb_feat_list_y.index].X), axis=1)
+                else: val_element = np.concatenate((val_x, data_sub[:,comb_feat_list_y.index].X.toarray()), axis=1)
             else:
                 val_y = data_sub.obs[comb_feat_list_y.index].to_numpy()
-                if data_type=='array': val_list.append(np.concatenate((data_sub[:,comb_feat_list_x.index].X, val_y), axis=1))
-                else: val_list.append(np.concatenate((data_sub[:,comb_feat_list_x.index].X.toarray(), val_y), axis=1))
+                if data_type=='array': val_element = np.concatenate((data_sub[:,comb_feat_list_x.index].X, val_y), axis=1)
+                else: val_element = np.concatenate((data_sub[:,comb_feat_list_x.index].X.toarray(), val_y), axis=1)
         else:
             # In case type of feature x and y is same
             # Define combined feature list for feat_1 and feat_2 and remove duplicates
             if obs_tf_x:
-                val_list.append(data_sub.obs[comb_feat_list.index].to_numpy())
+                val_element = data_sub.obs[comb_feat_list.index].to_numpy()
             else:
-                if data_type=='array': val_list.append(data_sub[:,comb_feat_list.index].X)
-                else: val_list.append(data_sub[:,comb_feat_list.index].X.toarray())
+                if data_type=='array': val_element = data_sub[:,comb_feat_list.index].X
+                else: val_element = data_sub[:,comb_feat_list.index].X.toarray()
         # Append the dataframe
         df_top_total = pd.concat([df_top_total, df_tmp], axis=0)
 
@@ -185,6 +186,30 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
             df_loc['array_row'] = df_loc['array_row']*np.sqrt(3)*0.5
             df_loc['array_col'] = df_loc['array_col']*0.5
         loc_list.append(df_loc.to_numpy())
+        
+        if spatial_type == 'visium':
+            val_list.append(val_element)
+        if spatial_type == 'imageST':
+            sigma = fwhm / 2.355
+            cols, rows = df_loc['array_col'].values, df_loc['array_row'].values
+
+            # Convert val_element to a 3D array where each "slice" along the third axis corresponds to a feature
+            arr = np.zeros((len(np.unique(rows)), len(np.unique(cols)), val_element.shape[1]))
+            # Fill the 3D array with the appropriate values
+            arr[rows, cols, :] = val_element
+            # Apply the Gaussian filter along the first two dimensions for each feature simultaneously
+            smooth = gaussian_filter(arr, sigma=(sigma, sigma, 0), truncate=2.355, mode='constant')
+
+            # Normalize the smoothed array
+            smooth_sum = np.sum(smooth, axis=(0, 1), keepdims=True)
+            val_element_sum = np.sum(val_element, axis=0, keepdims=True)
+            smooth = smooth / smooth_sum * val_element_sum
+                
+            # Subset the smooth array using the original rows and cols indices
+            smooth_subset = smooth[rows, cols, :]
+            # Flatten the smoothed array along the first two dimensions
+            smooth_subset = smooth_subset.reshape(-1, val_element.shape[1])    
+            val_list.append(smooth_subset)
 
     # Make dataframe for the list of feature 1 and 2 across the groups
     column_names = [group_name,'Feat_1','Feat_2','Avg_1','Avg_2','Index_1','Index_2']
@@ -199,17 +224,16 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     adjacency_mask = parmap.map(extract_adjacency_spatial, loc_list, spatial_type=spatial_type, fwhm=fwhm,
                                 pm_pbar=progress_bar, pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))), pm_chunksize=50)
     if spatial_type=='visium':
-        feat_A_mask_pair = [(feat[:,feat_idx].reshape((-1,1)),adjacency_mask[grp_idx][0],adjacency_mask[grp_idx][1],None,None) \
-            for grp_idx, feat in enumerate(val_list) for feat_idx in range(feat.shape[1])]
+        feat_A_mask_pair = [(feat[:,feat_idx].reshape((-1,1)), adjacency_mask[grp_idx][0], adjacency_mask[grp_idx][1]) \
+                            for grp_idx, feat in enumerate(val_list) for feat_idx in range(feat.shape[1])]
     else:
-        feat_A_mask_pair = [(feat[:,feat_idx].reshape((-1,1)),adjacency_mask[grp_idx],None,
-                             len(np.unique(loc_list[grp_idx][0,:])),len(np.unique(loc_list[grp_idx][1,:]))) \
-            for grp_idx, feat in enumerate(val_list) for feat_idx in range(feat.shape[1])]
+        feat_A_mask_pair = [(feat[:,feat_idx].reshape((-1,1)), adjacency_mask[grp_idx], None) \
+                            for grp_idx, feat in enumerate(val_list) for feat_idx in range(feat.shape[1])]
     
     # Start the multiprocessing for finding connected components of each feature
     print("Calculation of connected components for each feature")
     output_cc = parmap.starmap(topological_comp_res, feat_A_mask_pair, spatial_type=spatial_type,
-                               fwhm=fwhm, min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
+                               min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
                                pm_pbar=progress_bar, pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))))
 
     # Make dataframe for the similarity between feature 1 and 2 across the groups
