@@ -9,14 +9,10 @@ Tool to capture spatial colocalization and interaction in the TME using topologi
 ```Plain Text  
   conda create -n STopover python=3.8
   conda activate STopover
-  pip install git+https://github.com/bsungwoo/STopover.git
-  pip install jupyter
+  pip install jupyter git+https://github.com/bsungwoo/STopover.git
+  # Install additional packages for VisiumHD analysis
+  pip install bin2cell tacco tensorflow
   python -m ipykernel install --user --name STopover --display-name STopover
-```
-##### If you want to annotate cells in image-based ST using TACCO, please install
-```Plain Text  
-  conda activate STopover
-  pip install tacco
 ```
 #### Run GUI for STopover (PyQt)
 ```Plain Text
@@ -37,7 +33,7 @@ Tool to capture spatial colocalization and interaction in the TME using topologi
   devtools::install_github("bsungwoo/STopover", force = T)
 ```
 ### 3. Standalone app (packaged with [pyinstaller](https://github.com/pyinstaller/pyinstaller))  
-Please download file: [STopover_v1_windows.exe](https://github.com/bsungwoo/STopover/releases/download/v1.1.0/STopover_1.1.0_windows.exe)  
+Please download file (STopover ver. 1.1.0): [STopover_v1_windows.exe](https://github.com/bsungwoo/STopover/releases/download/v1.1.0/STopover_1.1.0_windows.exe)  
 
 ## Key packages
 ** Python  
@@ -48,8 +44,8 @@ Please refer to DESCRIPTION file: [R requirements](https://github.com/bsungwoo/S
 ## Usage
 ### Python Code Example
 Please refer to [README_Python.md](https://github.com/bsungwoo/STopover/blob/master/STopover/README_Python.md)  
-Please refer to [STopover_visium](https://github.com/bsungwoo/STopover/blob/master/Visium_sample.ipynb), [STopover_cosmx](https://github.com/bsungwoo/STopover/blob/master/SMI_sample.ipynb)  
+Please refer to [STopover_visium](https://github.com/bsungwoo/STopover/blob/master/notebooks/Visium_example.ipynb), [STopover_visiumHD](https://github.com/bsungwoo/STopover/blob/master/notebooks/VisiumHD_example.ipynb), [STopover_imageST: CosMx](https://github.com/bsungwoo/STopover/blob/master/notebooks/CosMx_example.ipynb), [STopover_imageST: Xenium](https://github.com/bsungwoo/STopover/blob/master/notebooks/Xenium_example.ipynb)  
 
 ### R Code Example
 Please refer to the below documents  
-Link to documents: [STopover_visium](https://rpubs.com/bsungwoo/STopover_visium), [STopover_cosmx](https://rpubs.com/bsungwoo/STopover_cosmx)  
+Link to documents: [STopover_visium](https://rpubs.com/bsungwoo/STopover_visium), [STopover_imageST](https://rpubs.com/bsungwoo/STopover_cosmx)  

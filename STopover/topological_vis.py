@@ -23,35 +23,34 @@ def vis_jaccard_top_n_pair_visium(data, feat_name_x='', feat_name_y='',
                                   title_fontsize=20, legend_fontsize=None, title = '', return_axis=False,
                                   save = False, path = os.getcwd(), save_name_add = '', dpi=150):
     '''
-    ## Visualizing top n connected component x and y showing maximum Jaccard index in Visium dataset
+    ## Visualizing top n connected component x and y showing maximum Jaccard index
     ### Input
-    data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
-    feat_name_x, feat_name_y: name of the feature x and y
-    top_n: the number of the top connected component pairs with the highest Jaccard similarity index
-    jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
-    ncol: number of columns to visualize top n CCs
-    spot_size: size of the spot visualized on the tissue
-    alpha_img: transparency of the tissue, alpha: transparency of the colored spot
+    * feat_name_x, feat_name_y: name of the feature x and y
+    * top_n: the number of the top connected component pairs withthe  highest Jaccard similarity index
+    * jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
+    * ncol: number of columns to visualize top n CCs
+    * spot_size: size of the spot visualized on the tissue
+    * alpha_img: transparency of the tissue, alpha: transparency of the colored spot
 
-    fig_size: size of the drawn figure
-    batch_colname: column name to categorize the batch in .obs
-    batch_name: the name of the batch slide to visualize (should be one of the elements of batch in .obs)
-    batch_library_dict: dictionary that matches batch name with library keys in adata.uns["spatial"]
+    * fig_size: size of the drawn figure
+    * batch_colname: column name to categorize the batch in .obs
+    * batch_name: the name of the batch slide to visualize (should be one of the elements of batch in .obs)
+    * batch_library_dict: dictionary that matches batch name with library keys in adata.uns["spatial"]
         -> can be utilized When the multiple Visium slides are merged.
         -> if not provided, then categories for batch_colname in .obs will be matched with library keys in adata.uns["spatial"]
 
-    image_res: resolution of the tissue image to be used in visualization ('hires' or 'lowres')
-    adjust_image: whether to adjust the image to show the whole tissue image, if False then crop and show the location of connected component spots only
-    border: border of the spots around the spots; this information is used to adjust the image
-    title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
-    return_axis: whether to return the plot axis
+    * image_res: resolution of the tissue image to be used in visualization ('hires' or 'lowres')
+    * adjust_image: whether to adjust the image to show the whole tissue image, if False then crop and show the location of connected component spots only
+    * border: border of the spots around the spots; this information is used to adjust the image
+    * title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure  
+     * return_axis: whether to return the plot axis
 
-    save: whether to save of figure, path: saving path
-    save_name_add: additional name to be added in the end of the filename
-    dpi: dpi for image
+    * save: whether to save of figure, path: saving path
+    * save_name_add: additional name to be added in the end of the filename
+    * dpi: dpi for image
 
     ### Outut
-    axs: matplotlib axis for the plot
+    * axs: matplotlib axis for the plot
     '''
     # Set figure parameters
     xsize = ((top_n-1)//ncol)+1
@@ -134,36 +133,34 @@ def vis_all_connected_visium(data, feat_name_x='', feat_name_y='',
                              return_axis=False, axis = None,
                              save = False, path = os.getcwd(), save_name_add = '', dpi = 150):
     '''
-    ## Visualizing all connected components x and y on tissue in Visium dataset
-    -> Overlapping conected component locations in green, exclusive locations for x and y in red and blue, respectively
+    ## Visualizing all connected components x and y on tissue  
     ### Input  
-    data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
-    feat_name_x, feat_name_y: name of the feature x and y
-    spot_size: size of the spot visualized on the tissue
-    alpha_img: transparency of the tissue, alpha: transparency of the colored spot
-    vis_jaccard: whether to visualize jaccard index on right corner of the plot
-    jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
+    * feat_name_x, feat_name_y: name of the feature x and y
+    * spot_size: size of the spot visualized on the tissue
+    * alpha_img: transparency of the tissue, alpha: transparency of the colored spot
+    * vis_jaccard: whether to visualize jaccard index on right corner of the plot
+    * jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
 
-    fig_size: size of the drawn figure
-    batch_colname: column name to categorize the batch in .obs
-    batch_name: the name of the batch slide to visualize (should be one of the elements of batch in .obs)
-    batch_library_dict: dictionary that matches batch name with library keys in adata.uns["spatial"]
+    * fig_size: size of the drawn figure
+    * batch_colname: column name to categorize the batch in .obs
+    * batch_name: the name of the batch slide to visualize (should be one of the elements of batch in .obs)
+    * batch_library_dict: dictionary that matches batch name with library keys in adata.uns["spatial"]
         -> can be utilized When the multiple Visium slides are merged.
         -> if not provided, then categories for batch_colname in .obs will be matched with library keys in adata.uns["spatial"]
 
-    image_res: resolution of the tissue image to be used in visualization ('hires' or 'lowres')
-    adjust_image: whether to adjust the image to show the whole tissue image, if False then crop and show the location of connected component spots only
-    border: border of the spots around the spots; this information is used to adjust the image
-    title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
-    return_axis: whether to return the plot axis
-    axis: matplotlib axes for plotting single image
+    * image_res: resolution of the tissue image to be used in visualization ('hires' or 'lowres')
+    * adjust_image: whether to adjust the image to show the whole tissue image, if False then crop and show the location of connected component spots only
+    * border: border of the spots around the spots; this information is used to adjust the image
+    * fontsize: size of the figure title, title: title of the figure
+    * return_axis: whether to return the plot axis
+    * axis: matplotlib axes for plotting single image
 
-    save: whether to save of figure (when not axis is not given), path: saving path
-    save_name_add: additional name to be added in the end of the filename
-    dpi: dpi for image
+    * save: whether to save of figure, path: saving path
+    * save_name_add: additional name to be added in the end of the filename
+    * dpi: dpi for image
 
     ### Outut
-    axs: matplotlib axis for the plot
+    * axs: matplotlib axis for the plot
     '''
     # Check the feasibility of the dataset
     if set(['Comb_CC_'+feat_name_x,'Comb_CC_'+feat_name_y]) <= set(data.obs.columns):
@@ -245,29 +242,29 @@ def vis_spatial_imageST_(data, feat_name='', colorlist = None, dot_size=None, al
                          fig_size = (5,5), title_fontsize = 20, legend_fontsize = None, title = None, 
                          return_axis=False, figure = None, axis = None, save = False, path = os.getcwd(), save_name_add = '', dpi=150):
     '''
-    ## Visualizing spatial distribution of features in CosMx dataset
+    ## Visualizing spatial distribution of features in image-based ST / Visium HD dataset
     ### Input
-    data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
-    feat_name: name of the feature to visualize
-    colorlist: color list for the visualization of CC identity
-    dot_size: size of the spot visualized on the tissue
-    alpha: transparency of the colored spot
-    vmax: maximum value in the colorbar; if None, it will automatically set the maximum value
-    vmax: minimum value in the colorbar; if None, it will automatically set the minimum value
-    sort_labels: sort the category labels in alphanumeric order if the name of categorical feature is provided to 'feat_name'
+    * data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
+    * feat_name: name of the feature to visualize
+    * colorlist: color list for the visualization of CC identity
+    * dot_size: size of the spot visualized on the tissue
+    * alpha: transparency of the colored spot
+    * vmax: maximum value in the colorbar; if None, it will automatically set the maximum value
+    * vmax: minimum value in the colorbar; if None, it will automatically set the minimum value
+    * sort_labels: sort the category labels in alphanumeric order if the name of categorical feature is provided to 'feat_name'
 
-    fig_size: size of the drawn figure
-    title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
-    return_axis: whether to return the plot axis
-    figure: matplotlib figure for plotting single image, axis: matplotlib axes for plotting single image
+    * fig_size: size of the drawn figure
+    * title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
+    * return_axis: whether to return the plot axis
+    * figure: matplotlib figure for plotting single image, axis: matplotlib axes for plotting single image
 
-    save: whether to save of figure (when not axis is not given), path: saving path
-    save_name_add: additional name to be added in the end of the filename
-    dpi: dpi for image
+    * save: whether to save of figure, path: saving path
+    * save_name_add: additional name to be added in the end of the filename
+    * dpi: dpi for image
 
     ### Outut
-    axs: matplotlib axis for the plot
-    '''
+    * axs: matplotlib axis for the plot
+    ''' 
     try: tsimg = data.obs.loc[:,['array_col','array_row']].to_numpy()
     except: raise ValueError("'data' should contain coordinates of spots in .obs as 'array_col' and 'array_row'")
     tsimg_row = tsimg[:,1]
@@ -341,27 +338,27 @@ def vis_jaccard_top_n_pair_imageST(data, feat_name_x='', feat_name_y='',
                                    title = '', return_axis=False,
                                    save = False, path = os.getcwd(), save_name_add = '', dpi=150):
     '''
-    ## Visualizing top n connected component x and y showing maximum Jaccard index in CosMx dataset
-    -> Overlapping conected component locations in green, exclusive locations for x and y in red and blue, respectively
+    ## Visualizing top n connected component x and y showing maximum Jaccard index in image-based ST / Visium HD dataset
+        -> Overlapping conected component locations in green, exclusive locations for x and y in orange and blue, respectively
     ### Input
-    data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
-    feat_name_x, feat_name_y: name of the feature x and y
-    top_n: the number of the top connected component pairs with the highest Jaccard similarity index
-    jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
-    ncol: number of columns to visualize the top n CCs
-    dot_size: size of the spot visualized on the tissue
-    alpha: transparency of the colored spot
+    * data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
+    * feat_name_x, feat_name_y: name of the feature x and y
+    * top_n: the number of the top connected component pairs withthe  highest Jaccard similarity index
+    * jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
+    * ncol: number of columns to visualize top n CCs
+    * dot_size: size of the spot visualized on the tissue
+    * alpha: transparency of the colored spot
 
-    fig_size: size of the drawn figure
-    title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
-    return_axis: whether to return the plot axis
+    * fig_size: size of the dn figure
+    * title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
+    * return_axis: whether to return the plot axis
 
-    save: whether to save of figure, path: saving path
-    save_name_add: additional name to be added in the end of the filename
-    dpi: dpi for image
+    * save: whether to save of figure, path: saving path
+    * save_name_add: additional name to be added in the end of the filename
+    * dpi: dpi for image
 
     ### Outut
-    axs: matplotlib axis for the plot
+    * axs: matplotlib axis for the plot
     '''
     try: tsimg = data.obs.loc[:,['array_col','array_row']].to_numpy()
     except: raise ValueError("'data' should contain coordinates of spots in .obs as 'array_col' and 'array_row'")
@@ -412,34 +409,33 @@ def vis_jaccard_top_n_pair_imageST(data, feat_name_x='', feat_name_y='',
     else: plt.show()
 
 
-
 def vis_all_connected_imageST(data, feat_name_x='', feat_name_y='',
                               dot_size=None, alpha = 0.8, vis_jaccard=True, jaccard_type='default',
                               fig_size=(5,5), title_fontsize = 20, legend_fontsize = None, 
                               title = 'Locations of', return_axis=False, axis = None,
                               save = False, path = os.getcwd(), save_name_add = '', dpi = 150):
     '''
-    ## Visualizing all connected components x and y on tissue in CosMx dataset
-    -> Overlapping conected component locations in green, exclusive locations for x and y in red and blue, respectively
+    ## Visualizing all connected components x and y on tissue in image-based ST / Visium HD dataset
+        -> Overlapping conected component locations in green, exclusive locations for x and y in red and blue, respectively
     ### Input  
-    data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
-    feat_name_x, feat_name_y: name of the feature x and y
-    dot_size: size of the spot visualized on the tissue
-    alpha: transparency of the colored spot
-    vis_jaccard: whether to visualize jaccard index on right corner of the plot
-    jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
+    * data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
+    * feat_name_x, feat_name_y: name of the feature x and y
+    * dot_size: size of the spot visualized on the tissue
+    * alpha: transparency of the colored spot
+    * vis_jaccard: whether to visualize jaccard index on right corner of the plot
+    * jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
 
-    fig_size: size of the drawn figure
-    title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
-    return_axis: whether to return the plot axis
-    axis: matplotlib axes for plotting single image
+    * fig_size: size of the dn figure
+    * title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
+    * return_axis: whether to return the plot axis
+    * axis: matplotlib axes for plotting single image
 
-    save: whether to save of figure (when not axis is not given), path: saving path
-    save_name_add: additional name to be added in the end of the filename
-    dpi: dpi for image
+    * save: whether to save of figure, path: saving path
+    * save_name_add: additional name to be added in the end of the filename
+    * dpi: dpi for image
 
     ### Outut
-    axs: matplotlib axis for the plot
+    * axs: matplotlib axis for the plot
     '''
     try: tsimg = data.obs.loc[:,['array_col','array_row']].to_numpy()
     except: raise ValueError("'data' should contain coordinates of spots in .obs as 'array_col' and 'array_row'")

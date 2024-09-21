@@ -17,35 +17,35 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
                            fwhm=2.5, min_size=5, thres_per=30, jaccard_type='default',
                            num_workers=os.cpu_count(), progress_bar=True):
     '''
-    ## Calculate Jaccard index for given feature pairs and return dataframe
-        -> if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
+    ## Calculate Jaccard index between topological connected components of feature pairs and return dataframe
+        : if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
 
     ### Input
-    data: spatial data (format: anndata) containing log-normalized gene expression
-    feat_pairs:
+    * data: spatial data (format: anndata) containing log-normalized gene expression
+    * feat_pairs: 
         list of features with the format [('A','B'),('C','D')] or the pandas equivalent
         -> (A and C) should be same data format: all in metadata (.obs.columns) or all in gene names(.var.index)
         -> (C and D) should be same data format: all in metadata (.obs.columns) or all in gene names(.var.index)
         -> If the data format is not same the majority of the data format will be automatically searched
         -> and the rest of the features with different format will be removed from the pairs
-    spatial_type: type of the spatial data (should be either 'visium' or 'imageST')
+    * use_lr_db: whether to use list of features in L-R database (default = False)
+    * lr_db_species: select species to utilize in L-R database (default = 'human')
+    * db_name: name of the ligand-receptor database to use: either 'CellTalk', 'CellChat', or 'Omnipath' (default = 'CellTalk')
 
-    group_name:
+    * group_name:
         the column name for the groups saved in metadata(.obs)
         spatial data is divided according to the group and calculate topological overlap separately in each group
-    group_list: list of the name of groups
+    * group_list: list of the elements in the group 
+    * jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
 
-    fwhm: full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent spots/grids
-    min_size: minimum size of a connected component
-    thres_per: lower percentile value threshold to remove the connected components
-    jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
-    num_workers: number of workers to use for multiprocessing
-    progress_bar: whether to show the progress bar during multiprocessing
+    * J_result_name: the name of the jaccard index data file name
+    * num_workers: number of workers to use for multiprocessing
+    * progress_bar: whether to show the progress bar during multiprocessing
 
     ### Output
-    df_top_total: dataframe that contains spatial overlap measures represented by (Jmax, Jmean, Jmmx, Jmmy) for the feature pairs
+    * df_top_total: dataframe that contains spatial overlap measures represented by (Jmax, Jmean, Jmmx, Jmmy) for the feature pairs 
     and average value for the feature across the spatial spots (if group is provided, then calculate average for the spots in each group)
-    data_mod: AnnData with summed location of all connected components in metadata(.obs) across all feature pairs
+    * data_mod: AnnData with summed location of all connected components in metadata(.obs) across all feature pairs
     '''
     start_time = time.time()
 

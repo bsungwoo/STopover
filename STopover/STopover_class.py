@@ -1,6 +1,7 @@
 import os
 import copy
 import scanpy as sc
+import bin2cell as b2c
 from anndata import AnnData
 
 from .imageST_utils import *
@@ -10,6 +11,7 @@ from .topological_comp import save_connected_loc_data_
 from .jaccard import jaccard_and_connected_loc_
 from .jaccard import jaccard_top_n_connected_loc_
 from .topological_vis import *
+from .visiumHD_utils import 
 
 import pkg_resources
 
@@ -18,25 +20,18 @@ class STopover_visium(AnnData):
     ## Class to calculate connected component location and jaccard similarity indices in visium dataset
     
     ### Input
-    sp_adata: Anndata object for spatial transcriptomic data with count matrix ('') in .X
-    sp_load_path: path to 10X-formatted Visium dataset directory or .h5ad Anndata object
-    lognorm: whether to lognormalize (total count normalize and log transform) the count matrix saved in adata.X
-    min_size: minimum size of a connected component
-    fwhm: full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent spots
-    thres_per: lower percentile value threshold to remove the connected components
-    save_path: path to save the data files
-    J_count: number of jaccard similarity calculations after the first definition
+    * sp_adata: Anndata object for Visium spatial transcriptomic data  
+    * sp_load_path: path to 10X-formatted Visium dataset directory or .h5ad Anndata object  
+    * lognorm: whether to lognormalize (total count normalize and log transform) the count matrix saved in adata.X  
+    * min_size: minimum size of a connected component  
+    * fwhm: full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent spots  
+    * thres_per: lower percentile value threshold to remove the connected components  
+    * save_path: path to save the data files  
+    * J_count: number of jaccard similarity calculations after the first definition  
     '''
-    sp_adata: AnnData
-    sp_load_path: str
-    lognorm: bool
-    min_size: int
-    fwhm: float
-    thres_per: float
-    save_path: str
-    J_count: int
-
-    def __init__(self, sp_adata=None, sp_load_path='.', lognorm=False, min_size=20, fwhm=2.5, thres_per=30, save_path='.', J_count=0):
+    def __init__(self, sp_adata: AnnData = None, sp_load_path: str = '.', 
+                 lognorm: bool = False, min_size: int = 20, fwhm: float = 2.5, thres_per: float = 30, 
+                 save_path: str = '.', J_count: int = 0):
         assert min_size > 0
         assert fwhm > 0
         assert (thres_per >= 0) and (thres_per <= 100)
@@ -64,7 +59,7 @@ class STopover_visium(AnnData):
         # Make feature names unique
         adata_mod.var_names_make_unique()
         # Preserve  .obs data in .uns
-        if J_count==0: adata_mod.uns['obs_'] = adata_mod.obs
+        if J_count==0: adata_mod.uns['obs_raw'] = adata_mod.obs
 
         # Preprocess the Visium spatial transcriptomic data
         if lognorm:
@@ -129,12 +124,14 @@ class STopover_visium(AnnData):
     def return_lr_db(self, lr_db_species='human', db_name='CellTalk'):
         '''
         ## Return ligand-receptor database as pandas dataframe
+            -> CellTalk, CellChat or Omnipath databases can be extracted
 
         ### Input
-        lr_db_species: select species to utilize in CellTalkDB database
+        lr_db_species: select species to utilize in CellTalk, CellChat or Omnipath databases
+            -> Either 'human', 'mouse', or, 'rat' (only in Omnipath)
 
         ### Output
-        CellTalk or CellChat database as pandas dataframe
+        CellTalk, CellChat or Omnipath database as pandas dataframe
         '''
         if lr_db_species not in ['human','mouse','rat']: 
             raise ValueError("'lr_db_species' should be either 'human', 'mouse', or, 'rat'")
@@ -157,37 +154,6 @@ class STopover_visium(AnnData):
     def topological_similarity(self, feat_pairs=None, use_lr_db=False, lr_db_species='human', db_name='CellTalk',
                                group_name='batch', group_list=None, jaccard_type='default', J_result_name='result', 
                                num_workers=os.cpu_count(), progress_bar=True):
-        '''
-        ## Calculate Jaccard index between topological connected components of feature pairs and return dataframe
-            : if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
-
-        ### Input
-        data: spatial data (format: anndata) containing log-normalized gene expression
-        feat_pairs: 
-            list of features with the format [('A','B'),('C','D')] or the pandas equivalent
-            -> (A and C) should be same data format: all in metadata (.obs.columns) or all in gene names(.var.index)
-            -> (C and D) should be same data format: all in metadata (.obs.columns) or all in gene names(.var.index)
-            -> If the data format is not same the majority of the data format will be automatically searched
-            -> and the rest of the features with different format will be removed from the pairs
-        use_lr_db: whether to use list of features in L-R database (default = False)
-        lr_db_species: select species to utilize in L-R database (default = 'human')
-        db_name: name of the ligand-receptor database to use: either 'CellTalk', 'CellChat', or 'Omnipath' (default = 'CellTalk')
-
-        group_name:
-            the column name for the groups saved in metadata(.obs)
-            spatial data is divided according to the group and calculate topological overlap separately in each group
-        group_list: list of the elements in the group 
-        jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
-
-        J_result_name: the name of the jaccard index data file name
-        num_workers: number of workers to use for multiprocessing
-        progress_bar: whether to show the progress bar during multiprocessing
-
-        ### Output
-        df_top_total: dataframe that contains spatial overlap measures represented by (Jmax, Jmean, Jmmx, Jmmy) for the feature pairs 
-        and average value for the feature across the spatial spots (if group is provided, then calculate average for the spots in each group)
-        data_mod: AnnData with summed location of all connected components in metadata(.obs) across all feature pairs
-        '''
         if use_lr_db:
             feat_pairs = self.return_lr_db(lr_db_species=lr_db_species, db_name=db_name)
             if db_name=="Omnipath": 
@@ -222,15 +188,15 @@ class STopover_visium(AnnData):
 
       
     def run_significance_test(self, feat_pairs_sig_test=None, nperm=1000, seed=0, 
-                              jaccard_type='default', num_workers=os.cpu_count(), 
-                              progress_bar=True, J_result_name='result'):
+                              jaccard_type='default', num_workers=os.cpu_count(), progress_bar=True):
         '''
-        feat_pairs_sig_test: feature pairs for the significance test (default: None -> Test all saved in .uns)
-        nperm: number of the random permutation (default: 1000)
-        seed: the seed for the random number generator (default: 0)
-        jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
-        num_workers: number of workers to use for multiprocessing
-        progress_bar: whether to show the progress bar during multiprocessing
+        ## Perform a significant test using a permutation test and calculate p-values
+        * feat_pairs_sig_test: feature pairs for the significance test (default: None -> Test all saved in .uns)
+        * nperm: number of the random permutation (default: 1000)
+        * seed: the seed for the random number generator (default: 0)
+        * jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
+        * num_workers: number of workers to use for multiprocessing
+        * progress_bar: whether to show the progress bar during multiprocessing
         '''
         print("Run permutation test for the given LR pairs")
         import re
@@ -251,11 +217,9 @@ class STopover_visium(AnnData):
         '''
         ## Save the anndata or metadata file to the certain location
         ### Input
-        data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
-        save_format: format to save the location of connected components; either 'h5ad' or 'csv'
-        file_name: file name to save (default: cc_location)
-
-        ### Output: None
+        * data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
+        * save_format: format to save the location of connected components; either 'h5ad' or 'csv'
+        * file_name: file name to save (default: cc_location)
         '''
         save_connected_loc_data_(data=self, save_format=save_format, path=self.save_path, filename=filename)
 
@@ -269,7 +233,7 @@ class STopover_visium(AnnData):
         adata.obs = adata.uns['obs_raw']
         # Remove the J_result data saved in .uns
         import re
-        pattern = re.compile("^J_.*_[0-9]$")
+        pattern = re.compile(r"^J_.*_\d+(_sig)?$")
         adata_keys = list(adata.uns.keys())
         for J_result_name in adata_keys:
             if pattern.match(J_result_name): del adata.uns[J_result_name]
@@ -281,13 +245,13 @@ class STopover_visium(AnnData):
         '''
         ## Calculate jaccard index for connected components of feature x and y
         ### Input
-        feat_name_x, feat_name_y: name of the feature x and y
-        J_comp: whether to calculate Jaccard index Jcomp between CCx and CCy pair 
-        jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
+        * feat_name_x, feat_name_y: name of the feature x and y
+        * J_comp: whether to calculate Jaccard index Jcomp between CCx and CCy pair 
+        * jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
 
         ### Output
-        if J_comp is True, then jaccard simliarity metrics calculated from jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
-        if J_comp is False, then return pairwise jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
+        * if J_comp is True, then jaccard simliarity metrics calculated from jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
+        * if J_comp is False, then return pairwise jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
         '''
         J_result = jaccard_and_connected_loc_(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y, J_comp=J_comp, 
                                               jaccard_type=jaccard_type, return_mode='jaccard', return_sep_loc=False)
@@ -298,13 +262,13 @@ class STopover_visium(AnnData):
         '''
         ## Calculate top n connected component locations for given feature pairs x and y
         ### Input
-        feat_name_x, feat_name_y: name of the feature x and y
-        top_n: the number of the top connected components to be found
-        jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
+        * feat_name_x, feat_name_y: name of the feature x and y
+        * top_n: the number of the top connected components to be found
+        * jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
 
         ### Output
-        AnnData with intersecting location of top n connected components between feature x and y saved in metadata(.obs)
-        -> top 1, 2, 3, ... intersecting connected component locations are separately saved
+        * AnnData with intersecting location of top n connected components between feature x and y saved in metadata(.obs)
+            -> top 1, 2, 3, ... intersecting connected component locations are separately saved
         '''
         adata, J_top_n = jaccard_top_n_connected_loc_(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y, top_n = top_n, jaccard_type=jaccard_type)
         adata.uns['_'.join(('J_top',feat_name_x, feat_name_y, str(top_n)))] = J_top_n
@@ -318,36 +282,6 @@ class STopover_visium(AnnData):
                                image_res = 'hires', adjust_image = True, border = 500, 
                                title_fontsize = 20, legend_fontsize = None, title = '', return_axis=False,
                                save = False, save_name_add = '', dpi=150):
-        '''
-        ## Visualizing top n connected component x and y showing maximum Jaccard index
-        ### Input
-        feat_name_x, feat_name_y: name of the feature x and y
-        top_n: the number of the top connected component pairs withthe  highest Jaccard similarity index
-        jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
-        ncol: number of columns to visualize top n CCs
-        spot_size: size of the spot visualized on the tissue
-        alpha_img: transparency of the tissue, alpha: transparency of the colored spot
-
-        fig_size: size of the drawn figure
-        batch_colname: column name to categorize the batch in .obs
-        batch_name: the name of the batch slide to visualize (should be one of the elements of batch in .obs)
-        batch_library_dict: dictionary that matches batch name with library keys in adata.uns["spatial"]
-            -> can be utilized When the multiple Visium slides are merged.
-            -> if not provided, then categories for batch_colname in .obs will be matched with library keys in adata.uns["spatial"]
-
-        image_res: resolution of the tissue image to be used in visualization ('hires' or 'lowres')
-        adjust_image: whether to adjust the image to show the whole tissue image, if False then crop and show the location of connected component spots only
-        border: border of the spots around the spots; this information is used to adjust the image
-        title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure  
-        return_axis: whether to return the plot axis
-
-        save: whether to save of figure, path: saving path
-        save_name_add: additional name to be added in the end of the filename
-        dpi: dpi for image
-
-        ### Outut
-        axs: matplotlib axis for the plot
-        '''
         axis = vis_jaccard_top_n_pair_visium(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
                                              top_n=top_n, jaccard_type=jaccard_type, ncol = ncol, spot_size=spot_size, alpha_img=alpha_img, alpha=alpha, 
                                              fig_size=fig_size, batch_colname=batch_colname, batch_name=batch_name, batch_library_dict=batch_library_dict,
@@ -363,36 +297,6 @@ class STopover_visium(AnnData):
                           image_res = 'hires', adjust_image = True, border = 500, 
                           title_fontsize=20, legend_fontsize = None, title = '', return_axis=False, axis = None, 
                           save = False, save_name_add = '', dpi = 150):
-        '''
-        ## Visualizing all connected components x and y on tissue  
-        ### Input  
-        feat_name_x, feat_name_y: name of the feature x and y
-        spot_size: size of the spot visualized on the tissue
-        alpha_img: transparency of the tissue, alpha: transparency of the colored spot
-        vis_jaccard: whether to visualize jaccard index on right corner of the plot
-        jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
-
-        fig_size: size of the drawn figure
-        batch_colname: column name to categorize the batch in .obs
-        batch_name: the name of the batch slide to visualize (should be one of the elements of batch in .obs)
-        batch_library_dict: dictionary that matches batch name with library keys in adata.uns["spatial"]
-            -> can be utilized When the multiple Visium slides are merged.
-            -> if not provided, then categories for batch_colname in .obs will be matched with library keys in adata.uns["spatial"]
-
-        image_res: resolution of the tissue image to be used in visualization ('hires' or 'lowres')
-        adjust_image: whether to adjust the image to show the whole tissue image, if False then crop and show the location of connected component spots only
-        border: border of the spots around the spots; this information is used to adjust the image
-        fontsize: size of the figure title, title: title of the figure
-        return_axis: whether to return the plot axis
-        axis: matplotlib axes for plotting single image
-
-        save: whether to save of figure, path: saving path
-        save_name_add: additional name to be added in the end of the filename
-        dpi: dpi for image
-
-        ### Outut
-        axs: matplotlib axis for the plot
-        '''
         axis = vis_all_connected_visium(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
                                         spot_size=spot_size, alpha_img = alpha_img, alpha = alpha, vis_jaccard = vis_jaccard, jaccard_type=jaccard_type,
                                         fig_size = fig_size, batch_colname=batch_colname, batch_name = batch_name, batch_library_dict=batch_library_dict,
@@ -408,50 +312,42 @@ class STopover_imageST(STopover_visium):
     ## Class to calculate connected component location and jaccard similarity indices in image-based ST dataset
     
     ### Input
-    sp_adata: Anndata object for image-based ST data with count matrix ('raw') in .X
-    sp_load_path: path to image-based ST data directory or .h5ad Anndata object
+    * sp_adata: Anndata object for image-based ST data.
+    * annotate_sp_adata: whether to annotate provided sp_adata (raw count matrix should be contained in .X)
+    * sp_load_path: path to image-based ST data directory or .h5ad Anndata object
 
-    sc_adata: single-cell reference anndata for cell type annotation of image-based ST data
+    * sc_adata: single-cell reference anndata for cell type annotation of image-based ST data
         -> raw count matrix should be saved in .X
         -> If .h5ad file directory is provided, it will load the h5ad file
         -> If None, then leiden cluster numbers will be used to annotate umage-based ST data
-    sc_celltype_colname: column name for cell type annotation information in metadata of single-cell (.obs)
-    ST_type: type of the ST data to be read: cosmx, xenium, merfish (default: 'cosmx')
-    grid_method: type of the method to assign transcript to grid, either transcript coordinate based method and cell coordinate based method (default='transcript')
-    annot_method: cell type annotation method to use. Either 'ingest' or 'tacco' (default='ingest')
-    sc_norm_total: scaling factor for the total count normalization per cell
-    min_counts: minimum number of counts required for a cell to pass filtering (scanpy.pp.filter_cells) (default = 50)
-    min_genes: minimum number of genes expressed required for a cell to pass filtering (scanpy.pp.filter_cells) (default = 0)
+    * sc_celltype_colname: column name for cell type annotation information in metadata of single-cell (.obs)
+    * ST_type: type of the ST data to be read: cosmx, xenium, merfish (default: 'cosmx')
+    * grid_method: type of the method to assign transcript to grid, either transcript coordinate based method and cell coordinate based method (default='transcript')
+    * annot_method: cell type annotation method to use. Either 'ingest' or 'tacco' (default='tacco')
+    * sc_norm_total: scaling factor for the total count normalization per cell (default = 1e3)
+    * min_counts: minimum number of counts required for a cell in spatial data to pass filtering (scanpy.pp.filter_cells) (default = 10).
+    * min_cells: minimum number of cells expressed required for a gene in spatial data to pass filtering (scanpy.pp.filter_genes) (default = 5).
+    
+    * tx_file_name, cell_exprmat_file_name, cell_metadata_file_name: image-based ST file for transcript count, cell-level expression matrix, cell-level metadata
+    * fov_colname, cell_id_colname: column name for barcodes corresponding to fov and cell ID
+    * tx_xcoord_colname, tx_ycoord_colname, transcript_colname: column name for global x, y coordinates of the transcript and transcript name
+    * meta_xcoord_colname, meta_ycoord_colname: column name for global x, y coordinates in cell-level metadata file
+    * x_bins, y_bins: number of bins to divide the image-based ST data (for grid-based aggregation)
 
-    tx_file_name, cell_exprmat_file_name, cell_metadata_file_name: image-based ST file for transcript count, cell-level expression matrix, cell-level metadata
-    fov_colname, cell_id_colname: column name for barcodes corresponding to fov and cell ID
-    tx_xcoord_colname, tx_ycoord_colname, transcript_colname: column name for global x, y coordinates of the transcript and transcript name
-    meta_xcoord_colname, meta_ycoord_colname: column name for global x, y coordinates in cell-level metadata file
-    x_bins, y_bins: number of bins to divide the image-based ST data (for grid-based aggregation)
-
-    min_size: minimum size of a connected component
-    fwhm: full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent grid
-    thres_per: lower percentile value threshold to remove the connected components
-    save_path: path to save the data files
-    J_count: number of jaccard similarity calculations after the first definition
+    * min_size: minimum size of a connected component
+    * fwhm: full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent grid
+    * thres_per: lower percentile value threshold to remove the connected components
+    * save_path: path to save the data files
+    * J_count: number of jaccard similarity calculations after the first definition
     '''
-    sp_adata: AnnData
-    sp_load_path: str
-    x_bins: int
-    y_bins: int
-    min_size: int
-    fwhm: float
-    thres_per: float
-    save_path: str
-    J_count: int
+    def __init__(self, sp_adata: AnnData = None, annotate_sp_adata: bool = False, sp_load_path: str = '.', 
+                 sc_adata: AnnData = None, sc_celltype_colname: str = 'celltype', ST_type: str = 'cosmx', grid_method: str = 'transcript', annot_method: str = 'tacco', sc_norm_total: float = 1e3,
+                 min_counts: int = 10, min_cells: int = 5, tx_file_name: str = 'tx_file.csv', cell_exprmat_file_name: str ='exprMat_file.csv', cell_metadata_file_name: str = 'metadata_file.csv', 
+                 fov_colname: str = 'fov', cell_id_colname: str = 'cell_ID', tx_xcoord_colname: str = 'x_global_px', tx_ycoord_colname: str = 'y_global_px', transcript_colname: str = 'target',
+                 meta_xcoord_colname: str = 'CenterX_global_px', meta_ycoord_colname: str = 'CenterY_global_px',
+                 x_bins: int = 100, y_bins: int = 100, min_size: int = 20, fwhm: float = 2.5, thres_per: float = 30, save_path: str = '.', J_count: int = 0):
 
-    def __init__(self, sp_adata=None, sp_load_path='.', sc_adata=None, sc_celltype_colname = 'celltype', ST_type='cosmx', grid_method = 'transcript', annot_method='ingest', sc_norm_total=1e3,
-                 min_counts=50, min_genes=0, tx_file_name = 'tx_file.csv', cell_exprmat_file_name='exprMat_file.csv', cell_metadata_file_name='metadata_file.csv', 
-                 fov_colname = 'fov', cell_id_colname='cell_ID', tx_xcoord_colname='x_global_px', tx_ycoord_colname='y_global_px', transcript_colname='target',
-                 meta_xcoord_colname='CenterX_global_px', meta_ycoord_colname='CenterY_global_px',
-                 x_bins=100, y_bins=100, 
-                 min_size=20, fwhm=2.5, thres_per=30, save_path='.', J_count=0):
-
+        assert (min_counts >= 0) and (min_cells >= 0)
         assert (x_bins > 0) and (y_bins > 0)
         assert min_size > 0
         assert fwhm > 0
@@ -462,9 +358,10 @@ class STopover_imageST(STopover_visium):
             try:
                 print("Anndata object is not provided: searching for the .h5ad file in 'sp_load_path'")
                 adata_mod = sc.read_h5ad(sp_load_path)
-                try: min_size, fwhm, thres_per, x_bins, y_bins, sc_norm_total, min_counts, min_genes, sc_celltype_colname, transcript_colname = \
+                try: min_size, fwhm, thres_per, x_bins, y_bins, sc_norm_total, min_counts, min_cells, sc_celltype_colname, transcript_colname, grid_method, ST_type = \
                     adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'], adata_mod.uns['x_bins'], adata_mod.uns['y_bins'], \
-                        adata_mod.uns['sc_norm_total'], adata_mod.uns['min_counts'], adata_mod.uns['min_genes'], adata_mod.uns['sc_celltype_colname'], adata_mod.uns['transcript_colname']
+                        adata_mod.uns['sc_norm_total'], adata_mod.uns['min_counts'], adata_mod.uns['min_cells'], adata_mod.uns['sc_celltype_colname'], \
+                            adata_mod.uns['transcript_colname'], adata_mod.uns['grid_method'], adata_mod['ST_type']
                 except: pass
                 # Save Jcount value
                 J_result_num = [int(key_names.split("_")[2]) for key_names in adata_mod.uns.keys() if key_names.startswith("J_result_")]
@@ -476,34 +373,42 @@ class STopover_imageST(STopover_visium):
                     except: 
                         print("Path to 'sc_adata' h5ad file not found: replacing with None")
                         sc_adata = None
-                try: adata_mod, adata_cell = read_imageST(sp_load_path, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, ST_type=ST_type, grid_method=grid_method, annot_method=annot_method, 
-                                                          min_counts=min_counts, min_genes=min_genes, sc_norm_total=sc_norm_total,
-                                                          tx_file_name = tx_file_name, cell_exprmat_file_name=cell_exprmat_file_name, cell_metadata_file_name=cell_metadata_file_name, 
-                                                          fov_colname = fov_colname, cell_id_colname=cell_id_colname, 
-                                                          tx_xcoord_colname=tx_xcoord_colname, tx_ycoord_colname=tx_ycoord_colname, transcript_colname=transcript_colname,
-                                                          meta_xcoord_colname=meta_xcoord_colname, meta_ycoord_colname=meta_ycoord_colname,
-                                                          x_bins=x_bins, y_bins=y_bins)
-                except: raise ValueError("Error while preprocessing image-based ST files from: '"+sp_load_path+"'")
-                adata_mod.uns['adata_cell'] = adata_cell
+                try: 
+                    adata_mod, adata_cell = read_imageST(sp_load_path, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, ST_type=ST_type, grid_method=grid_method, annot_method=annot_method, 
+                                                         min_counts=min_counts, min_cells=min_cells, sc_norm_total=sc_norm_total,
+                                                         tx_file_name = tx_file_name, cell_exprmat_file_name=cell_exprmat_file_name, cell_metadata_file_name=cell_metadata_file_name, 
+                                                         fov_colname = fov_colname, cell_id_colname=cell_id_colname, 
+                                                         tx_xcoord_colname=tx_xcoord_colname, tx_ycoord_colname=tx_ycoord_colname, transcript_colname=transcript_colname,
+                                                         meta_xcoord_colname=meta_xcoord_colname, meta_ycoord_colname=meta_ycoord_colname,
+                                                         x_bins=x_bins, y_bins=y_bins)
+                    adata_mod.uns['adata_cell'] = STopover_imageST(sp_adata=adata_cell, sc_celltype_colname = sc_celltype_colname, save_path=save_path)
+                except:
+                    raise ValueError("Error while preprocessing image-based ST files from: '"+sp_load_path+"'")        
         else:
-            adata_mod = sp_adata.copy()
+            if annotate_sp_adata:
+                adata_mod = annotate_ST(adata_mod, sc_norm_total = sc_norm_total, sc_celltype_colname = sc_celltype_colname, 
+                                        annot_method = annot_method, return_df = False)
+            else:
+                adata_mod = sp_adata.copy()
         # Make feature names unique
         adata_mod.var_names_make_unique()
 
         adata_mod.uns['x_bins'], adata_mod.uns['y_bins'] = x_bins, y_bins
-        adata_mod.uns['min_counts'], adata_mod.uns['min_genes'] = min_counts, min_genes
-        adata_mod.uns['sc_norm_total'] = sc_norm_total
+        adata_mod.uns['ST_type'], adata_mod.uns['grid_method'] = ST_type, grid_method
         adata_mod.uns['sc_celltype_colname'] = sc_celltype_colname
         adata_mod.uns['transcript_colname'] = transcript_colname
+        adata_mod.uns['sc_norm_total'] = sc_norm_total
+        adata_mod.uns['min_counts'], adata_mod.uns['min_cells'] = min_counts, min_cells 
     
         # Generate object with the help of STopover_visium
         super(STopover_imageST, self).__init__(sp_adata=adata_mod, lognorm=False, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
 
         self.x_bins, self.y_bins = x_bins, y_bins
+        self.ST_type, self.grid_method = ST_type, grid_method
         self.sc_celltype_colname = sc_celltype_colname
         self.transcript_colname = transcript_colname
         self.sc_norm_total = sc_norm_total
-        self.min_counts, self.min_genes= min_counts, min_genes
+        self.min_counts, self.min_cells= min_counts, min_cells
         self.spatial_type = 'imageST'
 
     def __getitem__(self, index):
@@ -514,22 +419,12 @@ class STopover_imageST(STopover_visium):
         return STopover_imageST(
             sp_adata=subset,
             sc_celltype_colname=self.sc_celltype_colname,
-            ST_type='cosmx',  # This value can be parameterized as per requirement
-            grid_method='transcript',  # This value can be parameterized as per requirement
-            annot_method='ingest',  # This value can be parameterized as per requirement
+            ST_type=self.ST_type,
+            grid_method=self.grid_method, 
             sc_norm_total=self.sc_norm_total,
             min_counts=self.min_counts,
-            min_genes=self.min_genes,
-            tx_file_name='tx_file.csv',  # This value can be parameterized as per requirement
-            cell_exprmat_file_name='exprMat_file.csv',  # This value can be parameterized as per requirement
-            cell_metadata_file_name='metadata_file.csv',  # This value can be parameterized as per requirement
-            fov_colname='fov',  # This value can be parameterized as per requirement
-            cell_id_colname='cell_ID',  # This value can be parameterized as per requirement
-            tx_xcoord_colname='x_global_px',  # This value can be parameterized as per requirement
-            tx_ycoord_colname='y_global_px',  # This value can be parameterized as per requirement
+            min_cells=self.min_cells,
             transcript_colname=self.transcript_colname,
-            meta_xcoord_colname='CenterX_global_px',  # This value can be parameterized as per requirement
-            meta_ycoord_colname='CenterY_global_px',  # This value can be parameterized as per requirement
             x_bins=self.x_bins,
             y_bins=self.y_bins,
             min_size=self.min_size,
@@ -545,36 +440,36 @@ class STopover_imageST(STopover_visium):
         else:
             return self._gen_repr(self.n_obs, self.n_vars).replace("AnnData object", "STopover_imageST object")
         
-    def reinitalize(self,sp_adata, lognorm=False, sc_celltype_colname=None, sc_norm_total=None, x_bins=None, y_bins=None, 
+    def reinitalize(self,sp_adata, lognorm=False, sc_celltype_colname=None, ST_type=None, grid_method=None, 
+                    sc_norm_total=None, min_counts=None, min_cells=None, x_bins=None, y_bins=None, transcript_colname=None,
                     min_size=None, fwhm=None, thres_per=None, save_path=None, J_count=None, inplace=True):
         '''
         ## Reinitialize the class
-        '''
-        if (sc_celltype_colname is None) or (sc_norm_total is None) or (x_bins is None) or (y_bins is None):
+        '''        
+        if (sc_celltype_colname is None) or (sc_norm_total is None) or (x_bins is None) or (y_bins is None) \
+            (ST_type is None) or (grid_method is None) or (transcript_colname is None) or (min_counts is None) or (min_cells is None):
             sc_celltype_colname = self.sc_celltype_colname
             sc_norm_total = self.sc_norm_total
-            x_bins = self.x_bins
-            y_bins = self.y_bins
+            x_bins, y_bins = self.x_bins, self.y_bins
+            ST_type, grid_method = self.ST_type, self.grid_method
+            transcript_colname = self.transcript_colname
+            min_counts, min_cells = self.min_counts, self.min_cells
+
         if inplace:
             self.__init__(sp_adata=sp_adata, sc_celltype_colname=sc_celltype_colname, sc_norm_total=sc_norm_total, 
-                          x_bins=x_bins, y_bins=y_bins, min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
+                          x_bins=x_bins, y_bins=y_bins, ST_type=ST_type, grid_method=grid_method, 
+                          transcript_colname=transcript_colname, min_counts=min_counts, min_cells=min_cells,
+                          min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
         else:
             sp_adata_mod = STopover_imageST(sp_adata, sc_celltype_colname=sc_celltype_colname, sc_norm_total=sc_norm_total, 
-                                            x_bins=x_bins, y_bins=y_bins, min_size=min_size, fwhm=fwhm, thres_per=thres_per, 
-                                            save_path=save_path, J_count=J_count)
+                                            x_bins=x_bins, y_bins=y_bins, ST_type=ST_type, grid_method=grid_method,
+                                            transcript_colname=transcript_colname, min_counts=min_counts, min_cells=min_cells,
+                                            min_size=min_size, fwhm=fwhm, thres_per=thres_per, save_path=save_path, J_count=J_count)
             return sp_adata_mod
 
 
     def celltype_specific_adata(self, cell_types=['']):
-        '''
-        ## Replace count matrix saved in .X with cell type specific transcript count matrix
-        ### Input
-        cell_types: the cell types to extract cell type-specific count information
-
-        ### Output
-        grid_tx_count_celltype: list of celltype specific grid-based count matrix as sparse.csr_matrix format
-        '''
-        grid_count_celltype_list = celltype_specific_mat(sp_adata=self, tx_info_name='tx_by_cell_grid', celltype_colname=self.sc_celltype_colname, 
+        grid_count_celltype_list = celltype_specific_mat(sp_adata=self, grid_method=self.grid_method, tx_info_name='tx_by_cell_grid', celltype_colname=self.sc_celltype_colname, 
                                                          cell_types=cell_types, transcript_colname=self.transcript_colname, sc_norm_total=self.sc_norm_total)
         grid_count_celltype_list = [STopover_imageST(celltype_stopover, sc_celltype_colname=self.sc_celltype_colname, 
                                     sc_norm_total=self.sc_norm_total, x_bins=self.x_bins, y_bins=self.y_bins, 
@@ -583,14 +478,14 @@ class STopover_imageST(STopover_visium):
 
 
     def topological_similarity_celltype_pair(self, celltype_x='', celltype_y='', feat_pairs=None, use_lr_db=False, lr_db_species='human', db_name='CellTalk',
-                                             group_name='batch', group_list=None, J_result_name='result', num_workers=os.cpu_count(), progress_bar=True):
+                                             group_name='batch', group_list=None, jaccard_type='default', J_result_name='result', num_workers=os.cpu_count(), progress_bar=True):
         '''
         ## Calculate Jaccard index between the two cell type-specific expression anndata of image-based ST data
         ### Input
-        celltype_x: name of the cell type x (should be among the column names of .obs)
-        celltype_y: name of the cell type y (should be among the column names of .obs)
+        * celltype_x: name of the cell type x (should be among the column names of .obs)
+        * celltype_y: name of the cell type y (should be among the column names of .obs)
             when use_lr_db=True, then the ligand expression in celltype x and receptor expression in celltype y will be searched
-        other parameters: refer to the topological_similarity method
+        * other parameters: refer to the topological_similarity method
         '''
         adata_x, adata_y = self.celltype_specific_adata(cell_types=[celltype_x, celltype_y])
         # Create combined anndata for two cell type specific count matrices
@@ -634,37 +529,13 @@ class STopover_imageST(STopover_visium):
         
         # Calculate topological similarites between the pairs from the two cell types  
         adata_xy.topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species, db_name=db_name,
-                                        group_name=group_name, group_list=group_list, J_result_name=J_result_name, num_workers=num_workers, progress_bar=progress_bar)
+                                        group_name=group_name, group_list=group_list, jaccard_type=jaccard_type, J_result_name=J_result_name, num_workers=num_workers, progress_bar=progress_bar)
         return adata_xy
 
 
     def vis_spatial_imageST(self, feat_name='', colorlist = None, dot_size=None, alpha = 0.8, vmax = None, vmin = None, sort_labels=True,
                           fig_size = (10,10), title_fontsize = 20, legend_fontsize = None, title = None, 
                           return_axis=False, figure = None, axis = None, save = False, save_name_add = '', dpi=150):
-        '''
-        ## Visualizing spatial distribution of features in image-based ST dataset
-        ### Input
-        data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
-        feat_name: name of the feature to visualize
-        colorlist: color list for the visualization of CC identity
-        dot_size: size of the spot visualized on the tissue
-        alpha: transparency of the colored spot
-        vmax: maximum value in the colorbar; if None, it will automatically set the maximum value
-        vmax: minimum value in the colorbar; if None, it will automatically set the minimum value
-        sort_labels: sort the category labels in alphanumeric order if the name of categorical feature is provided to 'feat_name'
-
-        fig_size: size of the drawn figure
-        title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
-        return_axis: whether to return the plot axis
-        figure: matplotlib figure for plotting single image, axis: matplotlib axes for plotting single image
-
-        save: whether to save of figure, path: saving path
-        save_name_add: additional name to be added in the end of the filename
-        dpi: dpi for image
-
-        ### Outut
-        axs: matplotlib axis for the plot
-        '''
         axis = vis_spatial_imageST_(data=self, feat_name=feat_name, colorlist = colorlist, dot_size=dot_size, alpha = alpha, vmax=vmax, vmin=vmin, sort_labels=sort_labels,
                                     fig_size = fig_size, title_fontsize = title_fontsize, legend_fontsize = legend_fontsize, title = title, 
                                     return_axis=return_axis, figure=figure, axis = axis, save = save, path = self.save_path, save_name_add = save_name_add, dpi=dpi)
@@ -676,29 +547,6 @@ class STopover_imageST(STopover_visium):
                                fig_size = (10,10), title_fontsize = 20, legend_fontsize = None,
                                title = '', return_axis=False,
                                save = False, save_name_add = '', dpi=150):
-        '''
-        ## Visualizing top n connected component x and y showing maximum Jaccard index in image-based ST dataset
-        -> Overlapping conected component locations in green, exclusive locations for x and y in red and blue, respectively
-        ### Input
-        data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
-        feat_name_x, feat_name_y: name of the feature x and y
-        top_n: the number of the top connected component pairs withthe  highest Jaccard similarity index
-        jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
-        ncol: number of columns to visualize top n CCs
-        dot_size: size of the spot visualized on the tissue
-        alpha: transparency of the colored spot
-
-        fig_size: size of the dn figure
-        title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
-        return_axis: whether to return the plot axis
-
-        save: whether to save of figure, path: saving path
-        save_name_add: additional name to be added in the end of the filename
-        dpi: dpi for image
-
-        ### Outut
-        axs: matplotlib axis for the plot
-        '''
         axis = vis_jaccard_top_n_pair_imageST(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
                                               top_n = top_n, jaccard_type=jaccard_type, ncol = ncol, dot_size= dot_size, alpha = alpha, 
                                               fig_size = fig_size, title_fontsize = title_fontsize, legend_fontsize = legend_fontsize,
@@ -712,32 +560,178 @@ class STopover_imageST(STopover_visium):
                           fig_size=(10,10), title_fontsize = 20, legend_fontsize = None, 
                           title = '', return_axis = False, axis = None,
                           save = False, save_name_add = '', dpi = 150):
-        '''
-        ## Visualizing all connected components x and y on tissue image-based ST dataset
-        -> Overlapping conected component locations in green, exclusive locations for x and y in red and blue, respectively
-        ### Input  
-        data: AnnData with summed location of all connected components in metadata(.obs) across feature pairs
-        feat_name_x, feat_name_y: name of the feature x and y
-        dot_size: size of the spot visualized on the tissue
-        alpha: transparency of the colored spot
-        vis_jaccard: whether to visualize jaccard index on right corner of the plot
-        jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
-
-        fig_size: size of the dn figure
-        title_fontsize: size of the figure title, legend_fontsize: size of the legend text, title: title of the figure
-        return_axis: whether to return the plot axis
-        axis: matplotlib axes for plotting single image
-
-        save: whether to save of figure, path: saving path
-        save_name_add: additional name to be added in the end of the filename
-        dpi: dpi for image
-
-        ### Outut
-        axs: matplotlib axis for the plot
-        '''
         axis = vis_all_connected_imageST(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y,
                                          dot_size=dot_size, alpha = alpha, vis_jaccard = vis_jaccard, jaccard_type=jaccard_type, 
                                          fig_size= fig_size, title_fontsize = title_fontsize, legend_fontsize = legend_fontsize, 
                                          title = title, return_axis = return_axis, axis = axis,
                                          save = save, path = self.save_path, save_name_add = save_name_add, dpi = dpi)
         return axis
+    
+    
+class STopover_visiumHD(STopover_imageST):
+    '''
+    ## Class to calculate connected component location and jaccard similarity indices in visium HD dataset
+    
+    ### Input
+    * sp_adata: Anndata object for visiumHD data.
+    * annotate_sp_adata: whether to annotate provided sp_adata (raw count matrix should be contained in .X)
+    * sp_load_path: path to image-based ST data directory or .h5ad Anndata object
+
+    * sc_adata: single-cell reference anndata for cell type annotation of image-based ST data
+        -> raw count matrix should be saved in .X
+        -> If .h5ad file directory is provided, it will load the h5ad file
+        -> If None, then leiden cluster numbers will be used to annotate umage-based ST data
+    * sc_celltype_colname: column name for cell type annotation information in metadata of single-cell (.obs)
+    * annot_method: cell type annotation method to use. Either 'ingest' or 'tacco' (default='tacco')
+    * sc_norm_total: scaling factor for the total count normalization per cell (default = 1e3)
+    
+    * bin_path (str, optional): path to the 2 micrometers binned output. Defaults to "binned_outputs/square_002um/".
+    * source_image_path (str, optional): path to the source image. Defaults to "Visium_HD_Mouse_Brain_tissue_image.tif".
+    * spaceranger_image_path (str, optional): path to the spaceranger image. Defaults to "spatial".
+    * min_cells (int, optional): minimum number of counts required for a cell to pass filtering (scanpy.pp.filter_cells). Defaults to 3.
+    * min_counts (int, optional): minimum number of cells expressed required for a gene to pass filtering (scanpy.pp.filter_genes). Defaults to 1.
+    * mpp: microns per pixel and translates to how many micrometers are captured in each pixel of the input. 
+        -> For example, if using the array coordinates (present as .obs["array_row"] and .obs["array_col"]) as an image, each of the pixels would have 2 micrometers in it, so the mpp of that particular representation is 2.
+        -> In local testing of the mouse brain, using an mpp of 0.5 has worked well with both GEX and H&E segmentation. The StarDist models were trained on images with an mpp closer to 0.3.
+    * prob_thresh_hne: threshold for the probability in H&E image, lowering it makes the model more lenient with regard to what it calls as nuclei
+        -> the default setting is quite stringent, while we want to seed a good number of putative cells in the object.
+    * prob_thresh_gex: threshold for the probability in total count distribution image, lowering it makes the model more lenient with regard to what it calls as nuclei
+    * nms_thresh: threshold to determine whether the putative objects overlap for them to be merged into a single label, increase it in the tissue with high cellularity.
+    * sigma: Gaussian filter with a sigma of 5 (measured in pixels) applied for a little smoothing of total count distribution.
+    * mask_arr_row_min, mask_arr_row_max, mask_arr_col_min, mask_arr_col_max: minimum or maximum row or column values to crop the image for plotting
+    * show_plot: whether to show the plots during the preprocessing
+    * save_path (str, optional): _description_. Defaults to '.'.
+    * min_counts: minimum number of counts required for a cell to pass filtering (scanpy.pp.filter_cells) (default = 10).
+    * min_cells: minimum number of cells expressed required for a gene to pass filtering (scanpy.pp.filter_genes) (default = 5).
+    
+    * x_grid_size, y_grid_size: size of the grid in x- and y-direction in number of bins (2 micron if 2 micron bin is used) to divide the visiumHD data (for grid-based aggregation)
+    * min_size: minimum size of a connected component
+    * fwhm: full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent grid
+    * thres_per: lower percentile value threshold to remove the connected components
+    * save_path: path to save the data files
+    * J_count: number of jaccard similarity calculations after the first definition
+    '''    
+    def __init__(self, sp_adata: AnnData = None, annotate_sp_adata: bool =False, sp_load_path: str = '.', 
+                 sc_adata: AnnData = None, sc_celltype_colname = 'celltype', annot_method: str = 'tacco', sc_norm_total: float = 1e3,
+                 min_counts: int = 1, min_cells: int = 3, bin_counts: int = 5, x_grid_size: float = (55/2), y_grid_size: float = (55/2), 
+                 mpp = 0.5, prob_thresh_hne = 0.01, prob_thresh_gex = 0.05, nms_thresh = 0.5, sigma = 5,
+                 mask_arr_row_min = 1450, mask_arr_row_max = 1550, mask_arr_col_min = 250, mask_arr_col_max = 450,
+                 show_plot = False, min_size: int = 20, fwhm: float = 2.5, thres_per: float = 30, save_path: str = '.', J_count: int = 0):
+
+        assert (min_counts >= 0) and (min_cells >= 0)
+        assert (x_bins > 0) and (y_bins > 0)
+        assert min_size > 0
+        assert fwhm > 0
+        assert (thres_per >= 0) and (thres_per <= 100)
+
+        # Load the image-based spatial transcriptomics data if no AnnData file was provided
+        if sp_adata is None:
+            try:
+                print("Anndata object is not provided: searching for the .h5ad file in 'sp_load_path'")
+                adata_mod = sc.read_h5ad(sp_load_path)
+                try: min_size, fwhm, thres_per, x_bins, y_bins, x_grid_size, y_grid_size, sc_norm_total, min_counts, min_cells, bin_counts, sc_celltype_colname = \
+                    adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'], \
+                    adata_mod.uns['x_bins'], adata_mod.uns['y_bins'], adata_mod.uns['x_grid_size'], adata_mod.uns['y_grid_size'], \
+                        adata_mod.uns['sc_norm_total'], adata_mod.uns['min_counts'], adata_mod.uns['min_cells'], adata_mod.uns['bin_counts'], adata_mod.uns['sc_celltype_colname']
+                except: pass
+                # Save Jcount value
+                J_result_num = [int(key_names.split("_")[2]) for key_names in adata_mod.uns.keys() if key_names.startswith("J_result_")]
+                if len(J_result_num) > 0: J_count = max(J_result_num) + 1
+            except:
+                print("Failed\nReading VisiumHD data files in 'sp_load_path'")
+                if isinstance(sc_adata, str):
+                    try: sc_adata = sc.read_h5ad(sc_adata)
+                    except: 
+                        print("Path to 'sc_adata' h5ad file not found: replacing with None")
+                        sc_adata = None
+                try: 
+                    adata_mod, adata_cell = read_visiumHD(bin_path=os.path.join(sp_load_path, "binned_outputs/square_002um/"), 
+                                                          source_image_path = os.path.join(sp_load_path, "Visium_HD_Mouse_Brain_tissue_image.tif"),
+                                                          spaceranger_image_path = os.path.join(sp_load_path, "spatial"), 
+                                                          sc_adata=None, sc_celltype_colname = sc_celltype_colname, 
+                                                          annot_method = annot_method, sc_norm_total = sc_norm_total, x_grid_size=x_grid_size, y_grid_size=y_grid_size,
+                                                          min_cells = min_cells, min_counts = min_counts, bin_counts = bin_counts, mpp = mpp, 
+                                                          prob_thresh_hne = prob_thresh_hne, prob_thresh_gex = prob_thresh_gex, nms_thresh = nms_thresh, sigma = sigma,
+                                                          mask_arr_row_min = mask_arr_row_min, mask_arr_row_max = mask_arr_row_max, mask_arr_col_min = mask_arr_col_min, mask_arr_col_max = mask_arr_col_max,
+                                                          show_plot = show_plot, save_path=save_path)
+                    adata_mod.uns['adata_cell'] = STopover_visiumHD(sp_adata=adata_cell, sc_celltype_colname = sc_celltype_colname, save_path=save_path)
+                except:
+                    raise ValueError("Error while preprocessing VisiumHD files from: '"+sp_load_path+"'")        
+        else:
+            if annotate_sp_adata:
+                adata_mod = annotate_ST(adata_mod, sc_norm_total = sc_norm_total, sc_celltype_colname = sc_celltype_colname, 
+                                        annot_method = annot_method, return_df = False)
+            else:
+                adata_mod = sp_adata.copy()
+        # Make feature names unique
+        adata_mod.var_names_make_unique()
+
+        adata_mod.uns['x_grid_size'], adata_mod.uns['y_grid_size'] = x_grid_size, y_grid_size
+        adata_mod.uns['sc_celltype_colname'] = sc_celltype_colname
+        adata_mod.uns['sc_norm_total'] = sc_norm_total
+        adata_mod.uns['min_counts'], adata_mod.uns['min_cells'], adata_mod.uns['bin_counts'] = min_counts, min_cells, bin_counts
+    
+        # Generate object with the help of STopover_imageST
+        super(STopover_visiumHD, self).__init__(sp_adata = adata_mod, annotate_sp_adata = False, sc_celltype_colname = sc_celltype_colname,
+                                                grid_method = 'cell', annot_method = annot_method, sc_norm_total = sc_norm_total,
+                                                min_counts = min_counts, min_cells = min_cells,
+                                                x_bins = adata_mod.obs['grid_array_col'].astype(int).max() + 1,
+                                                y_bins = adata_mod.obs['grid_array_row'].astype(int).max() + 1,
+                                                min_size = min_size, fwhm = fwhm, thres_per = thres_per, 
+                                                save_path = save_path, J_count = J_count)
+
+        self.x_grid_size, self.y_grid_size = x_grid_size, y_grid_size
+        self.sc_celltype_colname = sc_celltype_colname
+        self.sc_norm_total = sc_norm_total
+        self.min_counts, self.min_cells, self.bin_counts = min_counts, min_cells, bin_counts
+        self.spatial_type = 'visiumHD'
+
+    def __getitem__(self, index):
+        """
+        Overrides the __getitem__ method to ensure that subsetting returns an instance of STopover_imageST.
+        """
+        subset = super(STopover_imageST, self).__getitem__(index)                 
+        return STopover_visiumHD(
+            sp_adata=subset,
+            annotate_sp_adata=False,
+            sc_celltype_colname=self.sc_celltype_colname,
+            grid_method=self.grid_method,
+            sc_norm_total=self.sc_norm_total,
+            min_counts=self.min_counts,
+            min_cells=self.min_cells,
+            bin_counts=self.bin_counts,
+            x_bins=self.x_bins,
+            y_bins=self.y_bins,
+            x_grid_size=self.x_grid_size,
+            y_grid_size=self.y_grid_size,
+            min_size=self.min_size,
+            fwhm=self.fwhm,
+            thres_per=self.thres_per,
+            save_path=self.save_path,
+            J_count=self.J_count
+        )
+
+    def __repr__(self):
+        if self.is_view:
+            return "View of " + self._gen_repr(self.n_obs, self.n_vars).replace("AnnData object", "STopover_visiumHD object")
+        else:
+            return self._gen_repr(self.n_obs, self.n_vars).replace("AnnData object", "STopover_visiumHD object")
+        
+    def vis_spatial_visiumHD(self, feat_name='', colorlist = None, dot_size=None, alpha = 0.8, vmax = None, vmin = None, sort_labels=True,
+                             fig_size = (10,10), title_fontsize = 20, legend_fontsize = None, title = None, 
+                             return_axis=False, figure = None, axis = None, save = False, save_name_add = '', dpi=150):
+        vis_spatial_imageST_(self, feat_name=feat_name, colorlist=colorlist, dot_size=dot_size, alpha=alpha, vmax=vmax, vmin=vmin, sort_labels=sort_labels,
+                             fig_size=fig_size, title_fontsize=title_fontsize, 
+                             legend_fontsize = legend_fontsize, title = title, 
+                             return_axis=return_axis, figure = figure, axis = axis, 
+                             save = save, save_name_add = save_name_add, dpi=dpi)
+        
+# Copy docstrings
+STopover_visium.topological_similarity.__doc__ = topological_sim_pairs_.__doc__
+STopover_visium.vis_jaccard_top_n_pair.__doc__ = vis_jaccard_top_n_pair_imageST.__doc__
+STopover_visium.vis_all_connected.__doc__ = vis_all_connected_visium.__doc__
+STopover_imageST.vis_spatial_imageST.__doc__ = vis_spatial_imageST_.__doc__
+STopover_imageST.vis_jaccard_top_n_pair.__doc__ = vis_jaccard_top_n_pair_imageST.__doc__
+STopover_imageST.celltype_specific_adata.__doc__ = celltype_specific_mat.__doc__
+STopover_imageST.vis_all_connected.__doc__ = vis_all_connected_imageST.__doc__
+STopover_visiumHD.vis_spatial_visiumHD.__doc__ = vis_spatial_imageST_.__doc__

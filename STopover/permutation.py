@@ -107,7 +107,7 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
         if isinstance(feat_pairs, pd.DataFrame):
             if feat_pairs.shape[1] != 2:
                 raise ValueError("'feat_pairs' should be list format: [('A','B'),('C','D')] or equivalent pandas dataframe") 
-            feat_pairs.columns.values[0], feat_pairs.columns.values[1] = 'Feat_1', 'Feat_2'
+            feat_pairs = feat_pairs.rename(columns={feat_pairs.columns[0]: 'Feat_1', feat_pairs.columns[1]: 'Feat_2'})
             df_feat = pd.merge(feat_ref, feat_pairs.iloc[:,:2], left_on=['Feat_1','Feat_2'], right_on=['Feat_1','Feat_2'], how='inner')
         elif isinstance(feat_pairs, list): 
             df_sub = pd.DataFrame(feat_pairs, columns=['Feat_1','Feat_2'])
@@ -275,7 +275,7 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
                 CCy_loc_mat = arr_cc_loc[:,df_subset['Index_2'].iloc[index]]
                 if jaccard_type=="default": 
                     CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat))
-                else: 
+                else:
                     feat_x_val = val_list[num][perm_idx][:,df_subset['Index_1'].iloc[index]].reshape((-1,1))
                     feat_y_val = val_list[num][perm_idx][:,df_subset['Index_2'].iloc[index]].reshape((-1,1))
                     CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,feat_x_val,feat_y_val))
