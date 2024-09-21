@@ -11,7 +11,7 @@ from .topological_comp import save_connected_loc_data_
 from .jaccard import jaccard_and_connected_loc_
 from .jaccard import jaccard_top_n_connected_loc_
 from .topological_vis import *
-from .visiumHD_utils import 
+from .visiumHD_utils import read_visiumHD
 
 import pkg_resources
 
