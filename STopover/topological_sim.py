@@ -194,19 +194,25 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
             cols, rows = df_loc['array_col'].values, df_loc['array_row'].values
 
             # Convert val_element to a 3D array where each "slice" along the third axis corresponds to a feature
-            arr = np.zeros((len(np.unique(rows)), len(np.unique(cols)), val_element.shape[1]))
-            # Fill the 3D array with the appropriate values
-            arr[rows, cols, :] = val_element
+            # Map unique coordinates to indices
+            unique_rows = np.unique(rows)
+            unique_cols = np.unique(cols)
+            row_indices = np.searchsorted(unique_rows, rows)
+            col_indices = np.searchsorted(unique_cols, cols)
+            # Initialize the array with the mapped dimensions
+            arr = np.zeros((len(unique_rows), len(unique_cols), val_element.shape[1]))
+            # Fill the array using the mapped indices
+            arr[row_indices, col_indices, :] = val_element
+            
             # Apply the Gaussian filter along the first two dimensions for each feature simultaneously
             smooth = gaussian_filter(arr, sigma=(sigma, sigma, 0), truncate=2.355, mode='constant')
-
             # Normalize the smoothed array
             smooth_sum = np.sum(smooth, axis=(0, 1), keepdims=True)
             val_element_sum = np.sum(val_element, axis=0, keepdims=True)
             smooth = smooth / smooth_sum * val_element_sum
                 
             # Subset the smooth array using the original rows and cols indices
-            smooth_subset = smooth[rows, cols, :]
+            smooth_subset = smooth[row_indices, col_indices, :]
             # Flatten the smoothed array along the first two dimensions
             smooth_subset = smooth_subset.reshape(-1, val_element.shape[1])    
             val_list.append(smooth_subset)

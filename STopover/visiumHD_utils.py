@@ -92,7 +92,7 @@ def bin2cell_process(bin_path="binned_outputs/square_002um/", source_image_path 
     b2c.grid_image(adata, "n_counts_adjusted", mpp=mpp, sigma=sigma, 
                    save_path=os.path.join(save_path, "stardist/gex.tiff"))
     b2c.stardist(image_path=os.path.join(save_path, "stardist/gex.tiff"), 
-                 labels_npz_path=os.path.join(save_path, "stardist/gex.npz")", 
+                 labels_npz_path=os.path.join(save_path, "stardist/gex.npz"), 
                  stardist_model="2D_versatile_fluo", 
                  prob_thresh=prob_thresh_gex, nms_thresh=nms_thresh)
     if show_plot:
@@ -197,7 +197,7 @@ def read_visiumHD(bin_path="binned_outputs/square_002um/", source_image_path = "
     # Assigning the grid column and row number to each transcript based on the coordinates by x_div_arr and y_div_arr
     sp_adata_cell.obs['grid_array_col'] = np.searchsorted(x_div_arr, x_coord, side='right')
     sp_adata_cell.obs['grid_array_row'] = np.searchsorted(y_div_arr, y_coord, side='right')
-    print("End of grid-based aggregation of visiumHD": %.2f seconds" % (time.time()-start_time))
+    print("End of grid-based aggregation of visiumHD: %.2f seconds" % (time.time()-start_time))
 
     ## Normalize the transcript number in each grid by total count in the cell
     tx_by_cell_grid = pd.concat([sp_adata_cell.obs.loc[:,['grid_array_col','grid_array_row']], 

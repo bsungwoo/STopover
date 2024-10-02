@@ -361,7 +361,7 @@ class STopover_imageST(STopover_visium):
                 try: min_size, fwhm, thres_per, x_bins, y_bins, sc_norm_total, min_counts, min_cells, sc_celltype_colname, transcript_colname, grid_method, ST_type = \
                     adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'], adata_mod.uns['x_bins'], adata_mod.uns['y_bins'], \
                         adata_mod.uns['sc_norm_total'], adata_mod.uns['min_counts'], adata_mod.uns['min_cells'], adata_mod.uns['sc_celltype_colname'], \
-                            adata_mod.uns['transcript_colname'], adata_mod.uns['grid_method'], adata_mod['ST_type']
+                            adata_mod.uns['transcript_colname'], adata_mod.uns['grid_method'], adata_mod.uns['ST_type']
                 except: pass
                 # Save Jcount value
                 J_result_num = [int(key_names.split("_")[2]) for key_names in adata_mod.uns.keys() if key_names.startswith("J_result_")]
@@ -619,7 +619,7 @@ class STopover_visiumHD(STopover_imageST):
                  show_plot = False, min_size: int = 20, fwhm: float = 2.5, thres_per: float = 30, save_path: str = '.', J_count: int = 0):
 
         assert (min_counts >= 0) and (min_cells >= 0)
-        assert (x_bins > 0) and (y_bins > 0)
+        assert (x_grid_size > 0) and (y_grid_size > 0)
         assert min_size > 0
         assert fwhm > 0
         assert (thres_per >= 0) and (thres_per <= 100)
@@ -629,9 +629,9 @@ class STopover_visiumHD(STopover_imageST):
             try:
                 print("Anndata object is not provided: searching for the .h5ad file in 'sp_load_path'")
                 adata_mod = sc.read_h5ad(sp_load_path)
-                try: min_size, fwhm, thres_per, x_bins, y_bins, x_grid_size, y_grid_size, sc_norm_total, min_counts, min_cells, bin_counts, sc_celltype_colname = \
+                try: min_size, fwhm, thres_per, x_grid_size, y_grid_size, sc_norm_total, min_counts, min_cells, bin_counts, sc_celltype_colname = \
                     adata_mod.uns['min_size'], adata_mod.uns['fwhm'], adata_mod.uns['thres_per'], \
-                    adata_mod.uns['x_bins'], adata_mod.uns['y_bins'], adata_mod.uns['x_grid_size'], adata_mod.uns['y_grid_size'], \
+                        adata_mod.uns['x_grid_size'], adata_mod.uns['y_grid_size'], \
                         adata_mod.uns['sc_norm_total'], adata_mod.uns['min_counts'], adata_mod.uns['min_cells'], adata_mod.uns['bin_counts'], adata_mod.uns['sc_celltype_colname']
                 except: pass
                 # Save Jcount value
