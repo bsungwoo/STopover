@@ -28,6 +28,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
         -> (C and D) should be same data format: all in metadata (.obs.columns) or all in gene names(.var.index)
         -> If the data format is not same the majority of the data format will be automatically searched
         -> and the rest of the features with different format will be removed from the pairs
+    * spatial_type: type of the spatial data (should be either 'visium', 'imageST', or 'visiumHD')
     * use_lr_db: whether to use list of features in L-R database (default = False)
     * lr_db_species: select species to utilize in L-R database (default = 'human')
     * db_name: name of the ligand-receptor database to use: either 'CellTalk', 'CellChat', or 'Omnipath' (default = 'CellTalk')
@@ -57,7 +58,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
         raise ValueError("'feat_pairs' should be list format: [('A','B'),('C','D')] or equivalent pandas dataframe")
 
     # Check the format of the data and jaccard output type
-    if spatial_type not in ['visium', 'imageST']: raise ValueError("'spatial_type' should be either 'visium' or 'imageST'")
+    if spatial_type not in ['visium', 'imageST', 'visiumHD']: raise ValueError("'spatial_type' should be either 'visium', 'imageST', or 'visiumHD'")
     if jaccard_type not in ['default', 'weighted']: raise ValueError("'jaccard_type' should be either 'default' or 'weighted'")
 
     # Add group name if no group name is provided
@@ -189,7 +190,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
         
         if spatial_type == 'visium':
             val_list.append(val_element)
-        if spatial_type == 'imageST':
+        elif spatial_type in ['imageST', 'visiumHD']:
             sigma = fwhm / 2.355
             cols, rows = df_loc['array_col'].values, df_loc['array_row'].values
 

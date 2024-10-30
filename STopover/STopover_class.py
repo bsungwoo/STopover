@@ -1,7 +1,6 @@
 import os
 import copy
 import scanpy as sc
-import bin2cell as b2c
 from anndata import AnnData
 
 from .imageST_utils import *
@@ -11,7 +10,6 @@ from .topological_comp import save_connected_loc_data_
 from .jaccard import jaccard_and_connected_loc_
 from .jaccard import jaccard_top_n_connected_loc_
 from .topological_vis import *
-from .visiumHD_utils import read_visiumHD
 
 import pkg_resources
 
@@ -585,9 +583,9 @@ class STopover_visiumHD(STopover_imageST):
     * annot_method: cell type annotation method to use. Either 'ingest' or 'tacco' (default='tacco')
     * sc_norm_total: scaling factor for the total count normalization per cell (default = 1e3)
     
-    * bin_path (str, optional): path to the 2 micrometers binned output. Defaults to "binned_outputs/square_002um/".
-    * source_image_path (str, optional): path to the source image. Defaults to "Visium_HD_Mouse_Brain_tissue_image.tif".
-    * spaceranger_image_path (str, optional): path to the spaceranger image. Defaults to "spatial".
+    * bin_path (str, optional): path to the binned output. Defaults to "binned_outputs/square_002um/".
+    * read_mode: how the visiumHD dataset is read, whether it is read as a unit of cells or as a unit of bins.
+    * source_image_name (str, optional): name of the source image. Defaults to "Visium_HD_Mouse_Brain_tissue_image.tif".
     * min_cells (int, optional): minimum number of counts required for a cell to pass filtering (scanpy.pp.filter_cells). Defaults to 3.
     * min_counts (int, optional): minimum number of cells expressed required for a gene to pass filtering (scanpy.pp.filter_genes). Defaults to 1.
     * mpp: microns per pixel and translates to how many micrometers are captured in each pixel of the input. 
@@ -603,6 +601,7 @@ class STopover_visiumHD(STopover_imageST):
     * save_path (str, optional): _description_. Defaults to '.'.
     * min_counts: minimum number of counts required for a cell to pass filtering (scanpy.pp.filter_cells) (default = 10).
     * min_cells: minimum number of cells expressed required for a gene to pass filtering (scanpy.pp.filter_genes) (default = 5).
+    * bin_counts: minimum count value inside of cells required for a cell to psas filtering. Default is 5.
     
     * x_grid_size, y_grid_size: size of the grid in x- and y-direction in number of bins (2 micron if 2 micron bin is used) to divide the visiumHD data (for grid-based aggregation)
     * min_size: minimum size of a connected component
@@ -613,11 +612,12 @@ class STopover_visiumHD(STopover_imageST):
     '''    
     def __init__(self, sp_adata: AnnData = None, annotate_sp_adata: bool =False, sp_load_path: str = '.', 
                  sc_adata: AnnData = None, sc_celltype_colname = 'celltype', annot_method: str = 'tacco', sc_norm_total: float = 1e3,
+                 bin_path: str = "binned_outputs/square_016um/", source_image_name: str = "Visium_HD_Mouse_Brain_tissue_image.tif", read_mode: str = 'bin',
                  min_counts: int = 1, min_cells: int = 3, bin_counts: int = 5, x_grid_size: float = (55/2), y_grid_size: float = (55/2), 
                  mpp = 0.5, prob_thresh_hne = 0.01, prob_thresh_gex = 0.05, nms_thresh = 0.5, sigma = 5,
                  mask_arr_row_min = 1450, mask_arr_row_max = 1550, mask_arr_col_min = 250, mask_arr_col_max = 450,
                  show_plot = False, min_size: int = 20, fwhm: float = 2.5, thres_per: float = 30, save_path: str = '.', J_count: int = 0):
-
+        
         assert (min_counts >= 0) and (min_cells >= 0)
         assert (x_grid_size > 0) and (y_grid_size > 0)
         assert min_size > 0
@@ -644,23 +644,25 @@ class STopover_visiumHD(STopover_imageST):
                     except: 
                         print("Path to 'sc_adata' h5ad file not found: replacing with None")
                         sc_adata = None
-                try: 
-                    adata_mod, adata_cell = read_visiumHD(bin_path=os.path.join(sp_load_path, "binned_outputs/square_002um/"), 
-                                                          source_image_path = os.path.join(sp_load_path, "Visium_HD_Mouse_Brain_tissue_image.tif"),
-                                                          spaceranger_image_path = os.path.join(sp_load_path, "spatial"), 
-                                                          sc_adata=None, sc_celltype_colname = sc_celltype_colname, 
-                                                          annot_method = annot_method, sc_norm_total = sc_norm_total, x_grid_size=x_grid_size, y_grid_size=y_grid_size,
+                try:
+                    from .visiumHD_utils import read_visiumHD
+                    adata_mod, adata_cell = read_visiumHD(bin_path=os.path.join(sp_load_path, bin_path), 
+                                                          source_image_path = os.path.join(sp_load_path, source_image_name),
+                                                          spaceranger_image_path = os.path.join(sp_load_path, bin_path, "spatial"), read_mode=read_mode,
+                                                          sc_adata=sc_adata, sc_celltype_colname = sc_celltype_colname, 
+                                                          annot_method = "tacco", sc_norm_total = sc_norm_total, x_grid_size=x_grid_size, y_grid_size=y_grid_size,
                                                           min_cells = min_cells, min_counts = min_counts, bin_counts = bin_counts, mpp = mpp, 
                                                           prob_thresh_hne = prob_thresh_hne, prob_thresh_gex = prob_thresh_gex, nms_thresh = nms_thresh, sigma = sigma,
                                                           mask_arr_row_min = mask_arr_row_min, mask_arr_row_max = mask_arr_row_max, mask_arr_col_min = mask_arr_col_min, mask_arr_col_max = mask_arr_col_max,
                                                           show_plot = show_plot, save_path=save_path)
-                    adata_mod.uns['adata_cell'] = STopover_visiumHD(sp_adata=adata_cell, sc_celltype_colname = sc_celltype_colname, save_path=save_path)
+                    if read_mode == 'cell':
+                        adata_mod.uns['adata_cell'] = STopover_visiumHD(sp_adata=adata_cell, sc_celltype_colname = sc_celltype_colname, save_path=save_path)
                 except:
                     raise ValueError("Error while preprocessing VisiumHD files from: '"+sp_load_path+"'")        
         else:
             if annotate_sp_adata:
                 adata_mod = annotate_ST(adata_mod, sc_norm_total = sc_norm_total, sc_celltype_colname = sc_celltype_colname, 
-                                        annot_method = annot_method, return_df = False)
+                                        annot_method = annot_method, return_df = False, return_prob=True)
             else:
                 adata_mod = sp_adata.copy()
         # Make feature names unique
@@ -672,18 +674,21 @@ class STopover_visiumHD(STopover_imageST):
         adata_mod.uns['min_counts'], adata_mod.uns['min_cells'], adata_mod.uns['bin_counts'] = min_counts, min_cells, bin_counts
     
         # Generate object with the help of STopover_imageST
+        array_col_name = 'array_col' if read_mode=='bin' else 'grid_array_col'
+        array_row_name = 'array_row' if read_mode=='bin' else 'grid_array_row'
         super(STopover_visiumHD, self).__init__(sp_adata = adata_mod, annotate_sp_adata = False, sc_celltype_colname = sc_celltype_colname,
                                                 grid_method = 'cell', annot_method = annot_method, sc_norm_total = sc_norm_total,
                                                 min_counts = min_counts, min_cells = min_cells,
-                                                x_bins = adata_mod.obs['grid_array_col'].astype(int).max() + 1,
-                                                y_bins = adata_mod.obs['grid_array_row'].astype(int).max() + 1,
+                                                x_bins = adata_mod.obs[array_col_name].astype(int).max() + 1,
+                                                y_bins = adata_mod.obs[array_row_name].astype(int).max() + 1,
                                                 min_size = min_size, fwhm = fwhm, thres_per = thres_per, 
                                                 save_path = save_path, J_count = J_count)
 
-        self.x_grid_size, self.y_grid_size = x_grid_size, y_grid_size
+        self.x_grid_size = int([i.split('_')[-1][:3] for i in bin_path.split('/') if 'square' in i][0]) if read_mode=='bin' else x_grid_size
+        self.y_grid_size = int([i.split('_')[-1][:3] for i in bin_path.split('/') if 'square' in i][0]) if read_mode=='bin' else y_grid_size
         self.sc_celltype_colname = sc_celltype_colname
         self.sc_norm_total = sc_norm_total
-        self.min_counts, self.min_cells, self.bin_counts = min_counts, min_cells, bin_counts
+        self.min_counts, self.min_cells, self.bin_counts = min_counts, min_cells, 0 if read_mode=='bin' else bin_counts
         self.spatial_type = 'visiumHD'
 
     def __getitem__(self, index):
@@ -695,13 +700,10 @@ class STopover_visiumHD(STopover_imageST):
             sp_adata=subset,
             annotate_sp_adata=False,
             sc_celltype_colname=self.sc_celltype_colname,
-            grid_method=self.grid_method,
             sc_norm_total=self.sc_norm_total,
             min_counts=self.min_counts,
             min_cells=self.min_cells,
             bin_counts=self.bin_counts,
-            x_bins=self.x_bins,
-            y_bins=self.y_bins,
             x_grid_size=self.x_grid_size,
             y_grid_size=self.y_grid_size,
             min_size=self.min_size,

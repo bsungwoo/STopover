@@ -53,7 +53,7 @@ def extract_adjacency_spatial(loc, spatial_type='visium', fwhm=2.5):
         min_distance = np.min(A[np.nonzero(A)])
         A = ((A > 0) & (A <= min_distance)).astype(int)
         return sparse.csr_matrix(A), arr_mod
-    elif spatial_type=='imageST':
+    elif spatial_type in ['imageST','visiumHD']:
         # Generate the indices for all cells in the matrix
         rows, cols = max(loc[:,1])+1, max(loc[:,0])+1
         indices = np.indices((rows, cols))
@@ -103,7 +103,7 @@ def extract_adjacency_spatial(loc, spatial_type='visium', fwhm=2.5):
         
         return adjacency_subset
     else:
-        raise ValueError(f"'{spatial_type}' not among ['visium','imageST']")
+        raise ValueError(f"'{spatial_type}' not among ['visium','imageST','visiumHD']")
 
 
 def extract_connected_comp(tx, A_sparse, threshold_x, num_spots, min_size=5):

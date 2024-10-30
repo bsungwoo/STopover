@@ -64,7 +64,7 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
         -> and the rest of the features with different format will be removed from the pairs
     nperm: number of the random permutation (default: 1000)
     seed: the seed for the random number generator (default: 0)
-    spatial_type: type of the spatial data (should be either 'visium' or 'imageST')
+    spatial_type: type of the spatial data (should be either 'visium', 'imageST', or 'visiumHD')
 
     group_name:
         the column name for the groups saved in metadata(.obs)
@@ -120,7 +120,7 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
     group_list = np.intersect1d(pd.unique(df_feat[group_name]), pd.unique(data.obs[group_name]))
 
     # Check the format of the data and jaccard output type
-    if spatial_type not in ['visium', 'imageST']: raise ValueError("'spatial_type' should be either 'visium' or 'imageST'")
+    if spatial_type not in ['visium', 'imageST', 'visiumHD']: raise ValueError("'spatial_type' should be either 'visium', 'imageST', or 'visiumHD'")
     if jaccard_type not in ['default', 'weighted']: raise ValueError("'jaccard_type' should be either 'default' or 'weighted'")
 
     # Determine the type of the data

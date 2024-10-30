@@ -14,7 +14,7 @@ warnings.filterwarnings("ignore")
 
 
 def annotate_ST(sp_adata, sc_adata=None, sc_norm_total=1e3, 
-                sc_celltype_colname = 'celltype', annot_method='tacco',
+                sc_celltype_colname = 'celltype', annot_method='tacco', return_prob=False,
                 cell_id = ['fov','cell_ID'], return_df=True):
     '''
     ## Annotate cells composing image-based ST SMI data
@@ -25,6 +25,7 @@ def annotate_ST(sp_adata, sc_adata=None, sc_norm_total=1e3,
     sc_norm_total: scaling factor for the total count normalization per cell
     sc_celltype_colname: column name for cell annotation of single-cell data (in .obs)
     annot_method: cell type annotation methods: either 'ingest' or 'tacco' (default='ingest')
+    return_prob: return probability for the cell type annotation at each data point
     cell_id: list of column names that represents cell ids in sp_adata.obs
     return_df: whether to return pandas dataframe that summarizes cell type for each cell
 
@@ -34,31 +35,28 @@ def annotate_ST(sp_adata, sc_adata=None, sc_norm_total=1e3,
     '''
     # Check feasibility of the variable
     if annot_method not in ["ingest","tacco"]: raise ValueError("'annotate_method' should be either 'ingest' or 'tacco'")
-    if (not isinstance(cell_id, list)) or len(cell_id)==0 or len(set(cell_id) - set(sp_adata.obs.columns))>0:
+    if return_df and ((not isinstance(cell_id, list)) or len(cell_id)==0 or len(set(cell_id) - set(sp_adata.obs.columns))>0):
         raise TypeError("'cell_id' should be a list of column names that represents cell ids in sp_adata.obs")
-    # Normalize, log transform and scale spatial data
-    sp_adata_orig = sp_adata.copy()
-    sp_adata.layers['counts'] = sp_adata.X.copy()
-    sc.pp.normalize_total(sp_adata, target_sum=sc_norm_total, inplace=True)
-    # Log transform and scale spatial data (image-based ST)
-    sc.pp.log1p(sp_adata)
-    sp_adata.raw = sp_adata.copy()
-
+    
     if sc_adata is not None:
         print("Using '"+annot_method+"' to annotate cells with reference single-cell data")
         sc_adata_ = sc_adata.copy()
         sc_adata_.var_names_make_unique()
         if annot_method=="ingest":
+            print("Running Ingest Annotation..")
             # Normalize single-cell data
             sc.pp.normalize_total(sc_adata_, target_sum=1e4, inplace=True)
-            # Log transform and scale single-cell data
+            sc.pp.normalize_total(sp_adata, target_sum=sc_norm_total, inplace=True)
+            # Log transform and single-cell and spatial dataset
             sc.pp.log1p(sc_adata_)
-            # sc_adata_.raw = sc_adata_
+            sc.pp.log1p(sp_adata)
+            sp_adata.raw = sp_adata.copy()
             # Find intersecting genes
             inter_var_names = sc_adata_.var_names.intersection(sp_adata.var_names)
-            sc_adata_ = sc_adata_[:, inter_var_names].copy()
-            sp_adata = sp_adata[:, inter_var_names].copy()
-
+            sc_adata_ = sc_adata_[:, inter_var_names]
+            sp_adata = sp_adata[:, inter_var_names]
+            sc.pp.scale(sc_adata_, max_value=10)
+            sc.pp.scale(sp_adata, max_value=10)
             # Perform PCA and find neighbords and umap embedding
             sc.pp.pca(sc_adata_)
             sc.pp.neighbors(sc_adata_)
@@ -66,24 +64,35 @@ def annotate_ST(sp_adata, sc_adata=None, sc_norm_total=1e3,
             # Fill nan values and designate as categorical variable
             sc_adata_.obs[sc_celltype_colname] = sc_adata_.obs[sc_celltype_colname].astype(object).fillna('nan')
             sc_adata_.obs[sc_celltype_colname] = sc_adata_.obs[sc_celltype_colname].astype('category')
-
             # Scale single-cell and spatial data
-            sc.pp.scale(sc_adata, max_value=10)
-            sc.pp.scale(sp_adata, max_value=10)
             # Perform cell label transfer from single-cell to image-based ST data
             sc.tl.ingest(sp_adata, sc_adata_, obs=sc_celltype_colname, embedding_method='umap')
+            sp_adata = sp_adata.raw.to_adata()
         elif annot_method=="tacco":
+            print("Running TACCO Annotation..")
             import tacco as tc
+            sp_adata.raw = sp_adata.copy()
             # Find intersecting genes
             inter_var_names = sc_adata_.var_names.intersection(sp_adata.var_names)
-            sp_adata_orig = sp_adata_orig[:, inter_var_names].copy()
-            sc_adata_orig = sc_adata_[:, inter_var_names].copy()
+            sc_adata_ = sc_adata_[:, inter_var_names]
+            sp_adata = sp_adata[:, inter_var_names]
             print("_"*60)
-            df_annot = tc.tl.annotate(sp_adata_orig, sc_adata_orig, annotation_key=sc_celltype_colname)
-            sp_adata.obs[sc_celltype_colname] = np.array(df_annot.columns)[np.argmax(df_annot.to_numpy(), axis = 1)]
-            sp_adata.obs[sc_celltype_colname] = sp_adata.obs[sc_celltype_colname].astype('category')
+            df_annot = tc.tl.annotate(sp_adata, sc_adata_, annotation_key=sc_celltype_colname)
+            if return_prob:
+                sp_adata.obs = sp_adata.obs.join(df_annot)
+            else:
+                sp_adata.obs[sc_celltype_colname] = np.array(df_annot.columns)[np.argmax(df_annot.to_numpy(), axis = 1)]
+                sp_adata.obs[sc_celltype_colname] = sp_adata.obs[sc_celltype_colname].astype('category')
+            sp_adata = sp_adata.raw.to_adata()
+            sc.pp.normalize_total(sp_adata, target_sum=sc_norm_total, inplace=True)
+            # Log transform and scale spatial data (image-based ST)
+            sc.pp.log1p(sp_adata)
             print("_"*60)
     else:
+        print("Single-cell reference dataset not provided: perform unsupervised clustering")
+        sc.pp.normalize_total(sp_adata, target_sum=sc_norm_total, inplace=True)
+        # Log transform and scale spatial data (image-based ST)
+        sc.pp.log1p(sp_adata)
         # Find highly variable genes in spatial data
         sc.pp.highly_variable_genes(sp_adata, flavor="seurat", n_top_genes=2000)
         # Perform PCA and cluster the spots
@@ -96,9 +105,9 @@ def annotate_ST(sp_adata, sc_adata=None, sc_norm_total=1e3,
     if return_df:
         # Data frame containing annotated cell types in image-based ST data
         df_celltype = sp_adata.obs.loc[:,[sc_celltype_colname]+cell_id].set_index(cell_id)
-        return sp_adata.raw.to_adata(), df_celltype
+        return sp_adata, df_celltype
     else:
-        return sp_adata.raw.to_adata()
+        return sp_adata
 
 
 
