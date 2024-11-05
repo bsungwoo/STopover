@@ -311,6 +311,7 @@ class STopover_imageST(STopover_visium):
     
     ### Input
     * sp_adata: Anndata object for image-based ST data.
+    * grid_sp_adata: whether to convert the given cell-level anndata object sp_adata to grid-based dataset.
     * annotate_sp_adata: whether to annotate provided sp_adata (raw count matrix should be contained in .X)
     * sp_load_path: path to image-based ST data directory or .h5ad Anndata object
 
@@ -338,7 +339,8 @@ class STopover_imageST(STopover_visium):
     * save_path: path to save the data files
     * J_count: number of jaccard similarity calculations after the first definition
     '''
-    def __init__(self, sp_adata: AnnData = None, annotate_sp_adata: bool = False, sp_load_path: str = '.', 
+    def __init__(self, sp_adata: AnnData = None, grid_ap_adata: bool = True,
+                 annotate_sp_adata: bool = False, sp_load_path: str = '.', 
                  sc_adata: AnnData = None, sc_celltype_colname: str = 'celltype', ST_type: str = 'cosmx', grid_method: str = 'transcript', annot_method: str = 'tacco', sc_norm_total: float = 1e3,
                  min_counts: int = 10, min_cells: int = 5, tx_file_name: str = 'tx_file.csv', cell_exprmat_file_name: str ='exprMat_file.csv', cell_metadata_file_name: str = 'metadata_file.csv', 
                  fov_colname: str = 'fov', cell_id_colname: str = 'cell_ID', tx_xcoord_colname: str = 'x_global_px', tx_ycoord_colname: str = 'y_global_px', transcript_colname: str = 'target',
@@ -372,7 +374,8 @@ class STopover_imageST(STopover_visium):
                         print("Path to 'sc_adata' h5ad file not found: replacing with None")
                         sc_adata = None
                 try: 
-                    adata_mod, adata_cell = read_imageST(sp_load_path, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, ST_type=ST_type, grid_method=grid_method, annot_method=annot_method, 
+                    adata_mod, adata_cell = read_imageST(sp_load_path, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, ST_type=ST_type, 
+                                                         grid_method=grid_method, annot_method=annot_method, 
                                                          min_counts=min_counts, min_cells=min_cells, sc_norm_total=sc_norm_total,
                                                          tx_file_name = tx_file_name, cell_exprmat_file_name=cell_exprmat_file_name, cell_metadata_file_name=cell_metadata_file_name, 
                                                          fov_colname = fov_colname, cell_id_colname=cell_id_colname, 
@@ -383,10 +386,15 @@ class STopover_imageST(STopover_visium):
                 except:
                     raise ValueError("Error while preprocessing image-based ST files from: '"+sp_load_path+"'")        
         else:
-            if annotate_sp_adata:
-                adata_mod = annotate_ST(adata_mod, sc_norm_total = sc_norm_total, sc_celltype_colname = sc_celltype_colname, 
-                                        annot_method = annot_method, return_df = False)
+            if grid_ap_adata:
+                adata_mod, adata_cell = read_imageST(sp_adata_cell=sp_adata, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, 
+                                                     ST_type=ST_type, grid_method=grid_method, annot_method=annot_method, 
+                                                     min_counts=min_counts, min_cells=min_cells, sc_norm_total=sc_norm_total,
+                                                     x_bins=x_bins, y_bins=y_bins, annotate_sp_adata=annotate_sp_adata)
             else:
+                if annotate_sp_adata:
+                    adata_mod = annotate_ST(adata_mod, sc_norm_total = sc_norm_total, sc_celltype_colname = sc_celltype_colname, 
+                                            annot_method = annot_method, return_df = False)
                 adata_mod = sp_adata.copy()
         # Make feature names unique
         adata_mod.var_names_make_unique()

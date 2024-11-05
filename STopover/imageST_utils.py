@@ -111,16 +111,17 @@ def annotate_ST(sp_adata, sc_adata=None, sc_norm_total=1e3,
 
 
 
-def read_imageST(load_path, sc_adata=None, min_counts=10, min_cells=5, sc_celltype_colname = 'celltype', 
+def read_imageST(load_path, sp_adata_cell=None, sc_adata=None, min_counts=10, min_cells=5, sc_celltype_colname = 'celltype', 
                  ST_type='cosmx', grid_method = 'transcript', annot_method='tacco', sc_norm_total=1e3,
                  tx_file_name = 'tx_file.csv', cell_exprmat_file_name='exprMat_file.csv', cell_metadata_file_name='metadata_file.csv',
                  fov_colname = 'fov', cell_id_colname='cell_ID', tx_xcoord_colname='x_global_px', tx_ycoord_colname='y_global_px', transcript_colname='target',
                  meta_xcoord_colname='CenterX_global_px', meta_ycoord_colname='CenterY_global_px',
-                 x_bins=100, y_bins=100):
+                 x_bins=100, y_bins=100, annotate_sp_adata=False):
     '''
     ## Load image-based ST dataset and preprocess data
     ### Input
     load_path: path to load the image-based ST files
+    sp_adata_cell: cell-level spatial anndata for the image-based ST dataset. 
     sc_adata: single-cell reference anndata for cell type annotation of image-based ST data
         -> raw count matrix should be saved in .X
         -> If None, then leiden cluster numbers will be used to annotate image-based ST data
@@ -136,13 +137,15 @@ def read_imageST(load_path, sc_adata=None, min_counts=10, min_cells=5, sc_cellty
     tx_xcoord_colname, tx_ycoord_colname, transcript_colname: column name for global x, y coordinates of the transcript and transcript name
     meta_xcoord_colname, meta_ycoord_colname: column name for global x, y coordinates in cell-level metadata file
     x_bins, y_bins: number of bins to divide the image-based ST data (for grid-based aggregation)
+    annotate_sp_adata: whether to perform the cell annotation process on cell-level ST anndata
 
     ### Output
     sp_adata_grid: grid-based log-normalized count anndata with cell abundance information saved in .obs
     sp_adata_cell: cell-based log-normalized count anndata
     '''
     # Check data feasibility
-    if sc_adata is None: print("Reference single-cell data not provided: leiden clustering of image-based ST data will be used for annotation")
+    if sc_adata is None and sp_adata_cell is None: 
+        print("Reference single-cell data not provided: leiden clustering of image-based ST data will be used for annotation")
     else:
         if sc_celltype_colname not in sc_adata.obs.columns:
             print("Cell type annotation (sc_celltype_colname) not found in sc_adata.obs")
@@ -154,53 +157,60 @@ def read_imageST(load_path, sc_adata=None, min_counts=10, min_cells=5, sc_cellty
         cell_id = [cell_id_colname]
     else: raise ValueError("'ST_type' should be among 'cosmx','xenium', or 'merfish'")
     start_time = time.time()
+    
     # Cell annotation for spatial data
     ## Generate AnnData for the problem
     # Load expression matrix
-    if ST_type in ["cosmx","merfish"]:
-        exp_mat = csv.read_csv(os.path.join(load_path, cell_exprmat_file_name)).to_pandas()
-    elif ST_type=="xenium":
-        exp_mat = sc.read_10x_h5(os.path.join(load_path, cell_exprmat_file_name))
-        exp_mat = pd.DataFrame(exp_mat.X.toarray(), index=exp_mat.obs_names, columns=exp_mat.var_names)
-
-    # Subset the expression matrix to remove data not included in a cell and from negative probes
-    if ST_type=="cosmx": 
-        exp_mat = exp_mat[exp_mat[cell_id_colname] != 0].loc[:, ~exp_mat.columns.str.contains('NegPrb')].set_index(cell_id)
-        # Generate cell barcodes for image-based ST data
-        cell_names_expmat = exp_mat.index.to_frame()
-        cell_names_expmat = (cell_names_expmat[fov_colname].astype(str) + '_' + cell_names_expmat[cell_id_colname].astype(str)).to_numpy()
-        # Load image-based ST cell metadata
-        cell_meta = csv.read_csv(os.path.join(load_path, cell_metadata_file_name)).to_pandas().loc[:,cell_id+[meta_xcoord_colname,meta_ycoord_colname]]
-        cell_meta.columns = cell_id+['array_col','array_row']
-        cell_meta = pd.merge(exp_mat.index.to_frame().reset_index(drop=True), cell_meta, on=cell_id, how='inner')
-    else:
-        if ST_type=="merfish": exp_mat = exp_mat.loc[:, ~exp_mat.columns.str.contains('Blank-')].set_index(cell_id)
-        cell_names_expmat = exp_mat.index.values.astype(str)
-        # Load image-based ST cell metadata
-        cell_meta = csv.read_csv(os.path.join(load_path, cell_metadata_file_name)).to_pandas()
-        cell_meta = cell_meta.loc[:,[cell_meta.columns[0]]+[meta_xcoord_colname,meta_ycoord_colname]]
-        cell_meta.columns = cell_id+['array_col','array_row']
-        cell_meta[cell_id_colname] = cell_meta[cell_id_colname].astype(str)
-        exp_mat.index = exp_mat.index.astype(str)
-        if ST_type=="merfish": 
-            cell_meta = pd.merge(exp_mat.index.to_frame().reset_index(drop=True), cell_meta, on=cell_id, how='inner')
+    if sp_adata_cell is None:
+        if ST_type in ["cosmx","merfish"]:
+            exp_mat = csv.read_csv(os.path.join(load_path, cell_exprmat_file_name)).to_pandas()
         elif ST_type=="xenium":
-            cell_meta = pd.merge(exp_mat.index.to_frame().reset_index(drop=True).rename(columns = {0: cell_id_colname}), 
-                                 cell_meta, on=cell_id, how='inner')
+            exp_mat = sc.read_10x_h5(os.path.join(load_path, cell_exprmat_file_name))
+            exp_mat = pd.DataFrame(exp_mat.X.toarray(), index=exp_mat.obs_names, columns=exp_mat.var_names)
 
-    # Generate image-based ST anndata file
-    sp_adata_cell = an(X = sparse.csr_matrix(exp_mat, dtype=np.float32), obs=cell_meta)
-    sp_adata_cell.var_names = exp_mat.columns
-    sp_adata_cell.obs_names = cell_names_expmat
+        # Subset the expression matrix to remove data not included in a cell and from negative probes
+        if ST_type=="cosmx": 
+            exp_mat = exp_mat[exp_mat[cell_id_colname] != 0].loc[:, ~exp_mat.columns.str.contains('NegPrb')].set_index(cell_id)
+            # Generate cell barcodes for image-based ST data
+            cell_names_expmat = exp_mat.index.to_frame()
+            cell_names_expmat = (cell_names_expmat[fov_colname].astype(str) + '_' + cell_names_expmat[cell_id_colname].astype(str)).to_numpy()
+            # Load image-based ST cell metadata
+            cell_meta = csv.read_csv(os.path.join(load_path, cell_metadata_file_name)).to_pandas().loc[:,cell_id+[meta_xcoord_colname,meta_ycoord_colname]]
+            cell_meta.columns = cell_id+['array_col','array_row']
+            cell_meta = pd.merge(exp_mat.index.to_frame().reset_index(drop=True), cell_meta, on=cell_id, how='inner')
+        else:
+            if ST_type=="merfish": exp_mat = exp_mat.loc[:, ~exp_mat.columns.str.contains('Blank-')].set_index(cell_id)
+            cell_names_expmat = exp_mat.index.values.astype(str)
+            # Load image-based ST cell metadata
+            cell_meta = csv.read_csv(os.path.join(load_path, cell_metadata_file_name)).to_pandas()
+            cell_meta = cell_meta.loc[:,[cell_meta.columns[0]]+[meta_xcoord_colname,meta_ycoord_colname]]
+            cell_meta.columns = cell_id+['array_col','array_row']
+            cell_meta[cell_id_colname] = cell_meta[cell_id_colname].astype(str)
+            exp_mat.index = exp_mat.index.astype(str)
+            if ST_type=="merfish": 
+                cell_meta = pd.merge(exp_mat.index.to_frame().reset_index(drop=True), cell_meta, on=cell_id, how='inner')
+            elif ST_type=="xenium":
+                cell_meta = pd.merge(exp_mat.index.to_frame().reset_index(drop=True).rename(columns = {0: cell_id_colname}), 
+                                    cell_meta, on=cell_id, how='inner')
+            # Generate image-based ST anndata file
+            sp_adata_cell = an(X = sparse.csr_matrix(exp_mat, dtype=np.float32), obs=cell_meta)
+            sp_adata_cell.var_names = exp_mat.columns
+            sp_adata_cell.obs_names = cell_names_expmat
+
     # Remove cells with total transcript count below min_counts and genes with number of expressed cells (>0) below min_cells
     sc.pp.filter_cells(sp_adata_cell, min_counts=min_counts)
     sc.pp.filter_genes(sp_adata_cell, min_cells=min_cells)
     print("End of creating image-based ST cell-level anndata: %.2f seconds" % (time.time()-start_time))
 
     ## Annotation of cell-level image-based ST data
-    sp_adata_cell, df_celltype = annotate_ST(sp_adata_cell, sc_adata, sc_norm_total=sc_norm_total, 
-                                             sc_celltype_colname = sc_celltype_colname, annot_method=annot_method,
-                                             cell_id = cell_id, return_df=True)
+    if annotate_sp_adata:
+        sp_adata_cell, df_celltype = annotate_ST(sp_adata_cell, sc_adata, sc_norm_total=sc_norm_total, 
+                                                 sc_celltype_colname = sc_celltype_colname, annot_method=annot_method,
+                                                 cell_id = cell_id, return_df=True)
+    else:
+        if sc_celltype_colname not in sp_adata_cell.obs.columns:
+            raise ValueError(f"'{sc_celltype_colname}' not found in 'sp_adata.obs.columns'")
+        df_celltype = sp_adata_cell.obs[[sc_celltype_colname]]
     print("End of annotating image-based ST cell-level anndata: %.2f seconds" % (time.time()-start_time))
 
     if grid_method == "transcript":
