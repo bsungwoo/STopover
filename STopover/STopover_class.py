@@ -339,7 +339,7 @@ class STopover_imageST(STopover_visium):
     * save_path: path to save the data files
     * J_count: number of jaccard similarity calculations after the first definition
     '''
-    def __init__(self, sp_adata: AnnData = None, grid_sp_adata: bool = True,
+    def __init__(self, sp_adata: AnnData = None, grid_sp_adata: bool = False,
                  annotate_sp_adata: bool = False, sp_load_path: str = '.', 
                  sc_adata: AnnData = None, sc_celltype_colname: str = 'celltype', ST_type: str = 'cosmx', grid_method: str = 'transcript', annot_method: str = 'tacco', sc_norm_total: float = 1e3,
                  min_counts: int = 10, min_cells: int = 5, tx_file_name: str = 'tx_file.csv', cell_exprmat_file_name: str ='exprMat_file.csv', cell_metadata_file_name: str = 'metadata_file.csv', 
