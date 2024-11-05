@@ -44,7 +44,7 @@ Please refer to DESCRIPTION file: [R requirements](https://github.com/bsungwoo/S
 ## Usage
 ### Python Code Example
 Please refer to [README_Python.md](https://github.com/bsungwoo/STopover/blob/master/STopover/README_Python.md)  
-Please refer to [STopover_visium](https://github.com/bsungwoo/STopover/blob/master/notebooks/Visium_example.ipynb), [STopover_visiumHD](https://github.com/bsungwoo/STopover/blob/master/notebooks/VisiumHD_example.ipynb), [STopover_imageST: CosMx](https://github.com/bsungwoo/STopover/blob/master/notebooks/CosMx_example.ipynb), [STopover_imageST: Xenium](https://github.com/bsungwoo/STopover/blob/master/notebooks/Xenium_example.ipynb)  
+Please refer to [STopover_visium](https://github.com/bsungwoo/STopover/blob/master/notebooks/Visium_example.ipynb), [STopover_visiumHD](https://github.com/bsungwoo/STopover/blob/master/notebooks/VisiumHD_example.ipynb), [STopover_imageST: CosMx](https://github.com/bsungwoo/STopover/blob/master/notebooks/CosMx_example.ipynb), [STopover_imageST: Xenium](https://github.com/bsungwoo/STopover/blob/master/notebooks/Xenium_example.ipynb), [STopover_imageST: preprocess from cell- to grid-level data](https://github.com/bsungwoo/STopover/blob/master/notebooks/Xenium_cell_adata_preprocess.ipynb)  
 
 ### R Code Example
 Please refer to the below documents  
