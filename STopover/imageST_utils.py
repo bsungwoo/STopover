@@ -111,7 +111,7 @@ def annotate_ST(sp_adata, sc_adata=None, sc_norm_total=1e3,
 
 
 
-def read_imageST(load_path, sp_adata_cell=None, sc_adata=None, min_counts=10, min_cells=5, sc_celltype_colname = 'celltype', 
+def read_imageST(load_path=None, sp_adata_cell=None, sc_adata=None, min_counts=10, min_cells=5, sc_celltype_colname = 'celltype', 
                  ST_type='cosmx', grid_method = 'transcript', annot_method='tacco', sc_norm_total=1e3,
                  tx_file_name = 'tx_file.csv', cell_exprmat_file_name='exprMat_file.csv', cell_metadata_file_name='metadata_file.csv',
                  fov_colname = 'fov', cell_id_colname='cell_ID', tx_xcoord_colname='x_global_px', tx_ycoord_colname='y_global_px', transcript_colname='target',
@@ -144,7 +144,7 @@ def read_imageST(load_path, sp_adata_cell=None, sc_adata=None, min_counts=10, mi
     sp_adata_cell: cell-based log-normalized count anndata
     '''
     # Check data feasibility
-    if sc_adata is None and sp_adata_cell is None: 
+    if sc_adata is None and annotate_sp_adata: 
         print("Reference single-cell data not provided: leiden clustering of image-based ST data will be used for annotation")
     else:
         if sc_celltype_colname not in sc_adata.obs.columns:
@@ -162,6 +162,8 @@ def read_imageST(load_path, sp_adata_cell=None, sc_adata=None, min_counts=10, mi
     ## Generate AnnData for the problem
     # Load expression matrix
     if sp_adata_cell is None:
+        if load_path is None:
+            raise ValueError("path to the spatial dataset should be provided as 'load_path'")
         if ST_type in ["cosmx","merfish"]:
             exp_mat = csv.read_csv(os.path.join(load_path, cell_exprmat_file_name)).to_pandas()
         elif ST_type=="xenium":
