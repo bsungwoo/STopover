@@ -339,7 +339,7 @@ class STopover_imageST(STopover_visium):
     * save_path: path to save the data files
     * J_count: number of jaccard similarity calculations after the first definition
     '''
-    def __init__(self, sp_adata: AnnData = None, grid_ap_adata: bool = True,
+    def __init__(self, sp_adata: AnnData = None, grid_sp_adata: bool = True,
                  annotate_sp_adata: bool = False, sp_load_path: str = '.', 
                  sc_adata: AnnData = None, sc_celltype_colname: str = 'celltype', ST_type: str = 'cosmx', grid_method: str = 'transcript', annot_method: str = 'tacco', sc_norm_total: float = 1e3,
                  min_counts: int = 10, min_cells: int = 5, tx_file_name: str = 'tx_file.csv', cell_exprmat_file_name: str ='exprMat_file.csv', cell_metadata_file_name: str = 'metadata_file.csv', 
@@ -386,7 +386,7 @@ class STopover_imageST(STopover_visium):
                 except:
                     raise ValueError("Error while preprocessing image-based ST files from: '"+sp_load_path+"'")        
         else:
-            if grid_ap_adata:
+            if grid_sp_adata:
                 adata_mod, adata_cell = read_imageST(sp_adata_cell=sp_adata, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, 
                                                      ST_type=ST_type, grid_method=grid_method, annot_method=annot_method, 
                                                      min_counts=min_counts, min_cells=min_cells, sc_norm_total=sc_norm_total,
