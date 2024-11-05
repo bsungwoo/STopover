@@ -144,8 +144,9 @@ def read_imageST(load_path=None, sp_adata_cell=None, sc_adata=None, min_counts=1
     sp_adata_cell: cell-based log-normalized count anndata
     '''
     # Check data feasibility
-    if sc_adata is None and annotate_sp_adata: 
-        print("Reference single-cell data not provided: leiden clustering of image-based ST data will be used for annotation")
+    if sc_adata is None:
+        if annotate_sp_adata: 
+            print("Reference single-cell data not provided: leiden clustering of image-based ST data will be used for annotation")
     else:
         if sc_celltype_colname not in sc_adata.obs.columns:
             print("Cell type annotation (sc_celltype_colname) not found in sc_adata.obs")
