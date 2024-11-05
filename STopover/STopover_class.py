@@ -381,7 +381,7 @@ class STopover_imageST(STopover_visium):
                                                          fov_colname = fov_colname, cell_id_colname=cell_id_colname, 
                                                          tx_xcoord_colname=tx_xcoord_colname, tx_ycoord_colname=tx_ycoord_colname, transcript_colname=transcript_colname,
                                                          meta_xcoord_colname=meta_xcoord_colname, meta_ycoord_colname=meta_ycoord_colname,
-                                                         x_bins=x_bins, y_bins=y_bins)
+                                                         x_bins=x_bins, y_bins=y_bins, annotate_sp_adata=True)
                     adata_mod.uns['adata_cell'] = STopover_imageST(sp_adata=adata_cell, sc_celltype_colname = sc_celltype_colname, save_path=save_path)
                 except:
                     raise ValueError("Error while preprocessing image-based ST files from: '"+sp_load_path+"'")        

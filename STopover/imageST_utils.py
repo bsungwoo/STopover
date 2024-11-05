@@ -116,7 +116,7 @@ def read_imageST(load_path=None, sp_adata_cell=None, sc_adata=None, min_counts=1
                  tx_file_name = 'tx_file.csv', cell_exprmat_file_name='exprMat_file.csv', cell_metadata_file_name='metadata_file.csv',
                  fov_colname = 'fov', cell_id_colname='cell_ID', tx_xcoord_colname='x_global_px', tx_ycoord_colname='y_global_px', transcript_colname='target',
                  meta_xcoord_colname='CenterX_global_px', meta_ycoord_colname='CenterY_global_px',
-                 x_bins=100, y_bins=100, annotate_sp_adata=False):
+                 x_bins=100, y_bins=100, annotate_sp_adata=True):
     '''
     ## Load image-based ST dataset and preprocess data
     ### Input
