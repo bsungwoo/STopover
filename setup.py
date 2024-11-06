@@ -1,8 +1,8 @@
 import os
 import sys
+import subprocess
 from setuptools import setup, find_packages, Extension
 from setuptools.command.build_ext import build_ext
-import subprocess
 
 # Attempt to import pybind11 and install if not found
 try:
@@ -10,6 +10,20 @@ try:
 except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pybind11"])
     import pybind11  # Re-import after installation
+
+# Dynamically detect the Eigen include directory
+def find_eigen_include():
+    possible_paths = [
+        os.path.join(sys.prefix, "include", "eigen3"),
+        "/usr/include/eigen3",
+        "/usr/local/include/eigen3",
+    ]
+    for path in possible_paths:
+        if os.path.exists(os.path.join(path, "Eigen", "Core")):
+            return path
+    raise FileNotFoundError("Eigen library not found in expected locations.")
+
+eigen_include_dir = find_eigen_include()
 
 # Define the extension module with all necessary source files
 ext_modules = [
@@ -24,7 +38,7 @@ ext_modules = [
         include_dirs=[
             pybind11.get_include(),
             pybind11.get_include(user=True),
-            os.path.join(sys.prefix, "include", "eigen3")  # Path to Eigen library
+            eigen_include_dir
         ],
         language="c++",
         extra_compile_args=["-O3", "-Wall", "-std=c++17", "-fopenmp"],  # Optimization and OpenMP for parallelism
