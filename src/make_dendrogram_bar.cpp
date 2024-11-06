@@ -1,4 +1,8 @@
 #include "make_dendrogram_bar.h"
+#include <numeric>    // For std::accumulate
+#include <algorithm>  // For std::min_element, std::max_element
+#include <vector>
+#include <tuple>
 
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<std::vector<int>>>
 make_dendrogram_bar(const std::vector<std::vector<int>>& history,
