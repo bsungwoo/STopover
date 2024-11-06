@@ -11,19 +11,21 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pybind11"])
     import pybind11  # Re-import after installation
 
-# Dynamically detect the Eigen include directory
-def find_eigen_include():
-    possible_paths = [
-        os.path.join(sys.prefix, "include", "eigen3"),
-        "/usr/include/eigen3",
-        "/usr/local/include/eigen3",
-    ]
-    for path in possible_paths:
-        if os.path.exists(os.path.join(path, "Eigen", "Core")):
-            return path
-    raise FileNotFoundError("Eigen library not found in expected locations.")
+# Define the path where Eigen should be located
+EIGEN_INCLUDE_DIR = os.path.join(sys.prefix, "include", "eigen3", "Eigen")
 
-eigen_include_dir = find_eigen_include()
+# Function to install Eigen using conda if not found
+def install_eigen_with_conda():
+    if not os.path.exists(EIGEN_INCLUDE_DIR):
+        print("Eigen library not found. Attempting to install with Conda...")
+        try:
+            subprocess.check_call(["conda", "install", "-y", "-c", "conda-forge", "eigen"])
+        except subprocess.CalledProcessError:
+            raise RuntimeError("Conda installation of Eigen failed. "
+                               "Ensure conda is installed or install Eigen manually.")
+
+# Call the function to ensure Eigen is installed
+install_eigen_with_conda()
 
 # Define the extension module with all necessary source files
 ext_modules = [
@@ -38,7 +40,7 @@ ext_modules = [
         include_dirs=[
             pybind11.get_include(),
             pybind11.get_include(user=True),
-            eigen_include_dir
+            EIGEN_INCLUDE_DIR  # Use the conda-installed Eigen directory
         ],
         language="c++",
         extra_compile_args=["-O3", "-Wall", "-std=c++17", "-fopenmp"],  # Optimization and OpenMP for parallelism
