@@ -65,7 +65,8 @@ setup(
         "pyarrow",
         "ply",
         "pytest",
-        "parmap~=1.6"
+        "parmap~=1.6",
+        "pybind11"
     ],
     ext_modules=ext_modules,  # Include the C++ extension
     cmdclass={"build_ext": BuildExt},  # Use custom build_ext
