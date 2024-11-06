@@ -35,7 +35,10 @@ ext_modules = [
             "src/type_conversion.cpp",
             "src/topological_comp.cpp",
             "src/jaccard.cpp",
-            "src/parallelize.cpp"  # Main file including all parallel functions
+            "src/parallelize.cpp",
+            "src/make_dendrogram_bar.cpp",
+            "src/make_original_dendrogram.cpp",
+            "src/make_smoothed_dendrogram.cpp"
         ],
         include_dirs=[
             pybind11.get_include(),
