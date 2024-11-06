@@ -4,6 +4,9 @@
 #include "jaccard.h"
 
 namespace py = pybind11;
+using namespace JACCARD_H;
+using namespace TOPOLOGICAL_COMP_H;
+using namespace TYPE_CONVERSION_H;
 
 // ThreadPool implementation
 ThreadPool::ThreadPool(size_t threads) : stop(false) {
