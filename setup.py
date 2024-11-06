@@ -11,12 +11,12 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pybind11"])
     import pybind11  # Re-import after installation
 
-# Define the path where Eigen should be located
-EIGEN_INCLUDE_DIR = os.path.join(sys.prefix, "include", "eigen3", "Eigen")
+# Explicit path to the Eigen include directory
+EIGEN_INCLUDE_DIR = "/opt/conda/envs/STopover_test/include/eigen3"
 
-# Function to install Eigen using conda if not found
+# Function to install Eigen with conda if it's not already in the specified directory
 def install_eigen_with_conda():
-    if not os.path.exists(EIGEN_INCLUDE_DIR):
+    if not os.path.exists(os.path.join(EIGEN_INCLUDE_DIR, "Eigen", "Core")):
         print("Eigen library not found. Attempting to install with Conda...")
         try:
             subprocess.check_call(["conda", "install", "-y", "-c", "conda-forge", "eigen"])
@@ -24,7 +24,7 @@ def install_eigen_with_conda():
             raise RuntimeError("Conda installation of Eigen failed. "
                                "Ensure conda is installed or install Eigen manually.")
 
-# Call the function to ensure Eigen is installed
+# Ensure Eigen is installed before proceeding
 install_eigen_with_conda()
 
 # Define the extension module with all necessary source files
@@ -40,11 +40,11 @@ ext_modules = [
         include_dirs=[
             pybind11.get_include(),
             pybind11.get_include(user=True),
-            EIGEN_INCLUDE_DIR  # Use the conda-installed Eigen directory
+            EIGEN_INCLUDE_DIR  # Explicit Eigen directory
         ],
         language="c++",
-        extra_compile_args=["-O3", "-Wall", "-std=c++17", "-fopenmp"],  # Optimization and OpenMP for parallelism
-        extra_link_args=["-fopenmp"]  # Ensure OpenMP is linked
+        extra_compile_args=["-O3", "-Wall", "-std=c++17", "-fopenmp", f"-I{EIGEN_INCLUDE_DIR}", "-v"],
+        extra_link_args=["-fopenmp"]
     ),
 ]
 
@@ -59,7 +59,7 @@ class BuildExt(build_ext):
         elif compiler == "msvc":
             for ext in self.extensions:
                 ext.extra_compile_args = ["/O2", "/openmp"]
-
+        
         super().build_extensions()
 
 # Final setup function including Pybind11 extension and existing Python package configuration
