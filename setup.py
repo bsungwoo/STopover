@@ -2,8 +2,14 @@ import os
 import sys
 from setuptools import setup, find_packages, Extension
 from setuptools.command.build_ext import build_ext
+import subprocess
 
-# Do not import pybind11 here; it will be imported inside the build extension class.
+# Attempt to import pybind11 and install if not found
+try:
+    import pybind11
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pybind11"])
+    import pybind11  # Re-import after installation
 
 # Define the extension module with all necessary source files
 ext_modules = [
@@ -16,7 +22,9 @@ ext_modules = [
             "src/parallelize.cpp"  # Main file including all parallel functions
         ],
         include_dirs=[
-            # Include directories will be set in the custom build extension class
+            pybind11.get_include(),
+            pybind11.get_include(user=True),
+            os.path.join(sys.prefix, "include", "eigen3")  # Path to Eigen library
         ],
         language="c++",
         extra_compile_args=["-O3", "-Wall", "-std=c++17", "-fopenmp"],  # Optimization and OpenMP for parallelism
@@ -24,20 +32,9 @@ ext_modules = [
     ),
 ]
 
-# Define a custom build extension to handle compiler specifics and pybind11
+# Define a custom build extension to handle compiler specifics
 class BuildExt(build_ext):
     def build_extensions(self):
-        # Import pybind11 here, after build dependencies have been installed
-        import pybind11
-
-        # Add pybind11 include directories
-        for ext in self.extensions:
-            ext.include_dirs.extend([
-                pybind11.get_include(),
-                pybind11.get_include(user=True),
-                os.path.join(sys.prefix, "include", "eigen3")  # Path to Eigen library
-            ])
-
         # Apply compiler-specific options for GCC or Clang on Unix-based systems
         compiler = self.compiler.compiler_type
         if compiler == "unix":
@@ -46,6 +43,7 @@ class BuildExt(build_ext):
         elif compiler == "msvc":
             for ext in self.extensions:
                 ext.extra_compile_args = ["/O2", "/openmp"]
+
         super().build_extensions()
 
 # Final setup function including Pybind11 extension and existing Python package configuration
@@ -65,8 +63,7 @@ setup(
         "pyarrow",
         "ply",
         "pytest",
-        "parmap~=1.6",
-        "pybind11"
+        "parmap~=1.6"
     ],
     ext_modules=ext_modules,  # Include the C++ extension
     cmdclass={"build_ext": BuildExt},  # Use custom build_ext
