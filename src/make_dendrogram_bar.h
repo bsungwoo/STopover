@@ -6,6 +6,7 @@
 #include <pybind11/stl.h>
 #include <Eigen/Dense>
 #include <vector>
+#include <tuple>
 #include <algorithm>
 #include <numeric>
 #include <set>
