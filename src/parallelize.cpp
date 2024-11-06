@@ -1,23 +1,9 @@
 #include "parallelize.h"
-#include <pybind11/pybind11.h>
-#include <pybind11/eigen.h>
-#include <pybind11/numpy.h>
-#include <pybind11/stl.h>
-#include <Eigen/Sparse>
-#include <Eigen/Dense>
-#include <queue>
-#include <vector>
-#include <thread>
-#include <functional>
-#include <future>
-#include <mutex>
-#include <condition_variable>
 #include "type_conversion.h"  // Include the conversion header
 #include "topological_comp.h"
 #include "jaccard.h"
 
 namespace py = pybind11;
-
 
 // ThreadPool implementation
 ThreadPool::ThreadPool(size_t threads) : stop(false) {

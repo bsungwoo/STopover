@@ -1,15 +1,4 @@
 #include "make_smoothed_dendrogram.h"
-#include <pybind11/pybind11.h>
-#include <pybind11/eigen.h>
-#include <pybind11/stl.h>
-#include <Eigen/Dense>
-#include <vector>
-#include <algorithm>
-#include <numeric>
-#include <set>
-#include <cmath>
-#include <tuple>
-
 
 std::tuple<std::vector<std::vector<int>>, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<std::vector<int>>>
 make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,

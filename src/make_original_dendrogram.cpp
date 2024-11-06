@@ -1,13 +1,4 @@
 #include "make_original_dendrogram.h"
-#include <pybind11/pybind11.h>
-#include <pybind11/eigen.h>
-#include <pybind11/stl.h>
-#include <Eigen/Sparse>
-#include <Eigen/Dense>
-#include <vector>
-#include <set>
-#include <queue>
-#include <tuple>
 
 // Function to extract connected nodes using breadth-first search (BFS)
 std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx) {

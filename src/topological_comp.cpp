@@ -1,15 +1,4 @@
 #include "topological_comp.h"
-#include <pybind11/pybind11.h>
-#include <pybind11/eigen.h>
-#include <pybind11/stl.h>
-#include <Eigen/Sparse>
-#include <Eigen/Dense>
-#include <vector>
-#include <iostream>
-#include <cmath>
-#include <limits>
-#include <stdexcept>
-
 
 // Function to compute adjacency matrix and Gaussian smoothing mask based on spatial locations
 std::tuple<Eigen::SparseMatrix<int>, Eigen::MatrixXd> extract_adjacency_spatial(const Eigen::MatrixXd& loc, const std::string& spatial_type = "visium", double fwhm = 2.5) {

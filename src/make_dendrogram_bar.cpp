@@ -1,12 +1,4 @@
 #include "make_dendrogram_bar.h"
-#include <pybind11/pybind11.h>
-#include <pybind11/eigen.h>
-#include <pybind11/stl.h>
-#include <Eigen/Dense>
-#include <vector>
-#include <algorithm>
-#include <numeric>
-#include <set>
 
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<std::vector<int>>>
 make_dendrogram_bar(const std::vector<std::vector<int>>& history,
