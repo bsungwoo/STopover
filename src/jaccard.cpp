@@ -2,7 +2,7 @@
 
 // Function to calculate the Jaccard composite index from connected component locations
 double jaccard_composite(const Eigen::MatrixXd& CCx_loc_sum, const Eigen::MatrixXd& CCy_loc_sum,
-                         const Eigen::MatrixXd& feat_x = Eigen::MatrixXd(), const Eigen::MatrixXd& feat_y = Eigen::MatrixXd()) {
+                         const Eigen::MatrixXd& feat_x, const Eigen::MatrixXd& feat_y) {
     Eigen::MatrixXd CCxy_loc_sum;
 
     if (CCx_loc_sum.rows() != CCy_loc_sum.rows()) {

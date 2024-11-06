@@ -1,7 +1,7 @@
 #include "topological_comp.h"
 
 // Function to compute adjacency matrix and Gaussian smoothing mask based on spatial locations
-std::tuple<Eigen::SparseMatrix<int>, Eigen::MatrixXd> extract_adjacency_spatial(const Eigen::MatrixXd& loc, const std::string& spatial_type = "visium", double fwhm = 2.5) {
+std::tuple<Eigen::SparseMatrix<int>, Eigen::MatrixXd> extract_adjacency_spatial(const Eigen::MatrixXd& loc, const std::string& spatial_type, double fwhm) {
     int p = loc.rows();
     Eigen::MatrixXd A(p, p);
     Eigen::MatrixXd arr_mod(p, p);
@@ -75,7 +75,7 @@ std::tuple<Eigen::SparseMatrix<int>, Eigen::MatrixXd> extract_adjacency_spatial(
 }
 
 // Function to extract connected components
-std::vector<std::vector<int>> extract_connected_comp(const Eigen::VectorXd& tx, const Eigen::SparseMatrix<int>& A_sparse, const std::vector<double>& threshold_x, int num_spots, int min_size = 5) {
+std::vector<std::vector<int>> extract_connected_comp(const Eigen::VectorXd& tx, const Eigen::SparseMatrix<int>& A_sparse, const std::vector<double>& threshold_x, int num_spots, int min_size) {
     // Assuming the make_original_dendrogram_cc, make_smoothed_dendrogram, and make_dendrogram_bar functions are implemented elsewhere
     auto cCC_x, cE_x, cduration_x, chistory_x = make_original_dendrogram_cc(tx, A_sparse, threshold_x);
     auto nCC_x, nduration_x, nhistory_x = make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, Eigen::ArrayXd::LinSpaced(2, min_size, num_spots));
@@ -92,7 +92,7 @@ std::vector<std::vector<int>> extract_connected_comp(const Eigen::VectorXd& tx, 
 }
 
 // Function to extract the connected location matrix
-Eigen::SparseMatrix<int> extract_connected_loc_mat(const std::vector<std::vector<int>>& CC, int num_spots, const std::string& format = "sparse") {
+Eigen::SparseMatrix<int> extract_connected_loc_mat(const std::vector<std::vector<int>>& CC, int num_spots, const std::string& format) {
     Eigen::MatrixXi CC_loc_arr = Eigen::MatrixXi::Zero(num_spots, CC.size());
 
     for (int num = 0; num < CC.size(); ++num) {
@@ -112,7 +112,7 @@ Eigen::SparseMatrix<int> extract_connected_loc_mat(const std::vector<std::vector
 }
 
 // Function to filter the connected component locations based on expression values
-Eigen::SparseMatrix<int> filter_connected_loc_exp(const Eigen::SparseMatrix<int>& CC_loc_mat, const Eigen::MatrixXd& feat_data, int thres_per = 30, bool return_sep_loc = false) {
+Eigen::SparseMatrix<int> filter_connected_loc_exp(const Eigen::SparseMatrix<int>& CC_loc_mat, const Eigen::MatrixXd& feat_data, int thres_per, bool return_sep_loc) {
     // Summing the connected component matrix
     Eigen::VectorXd CC_mat_sum = CC_loc_mat * Eigen::VectorXd::Ones(CC_loc_mat.cols());
 
@@ -143,7 +143,7 @@ Eigen::SparseMatrix<int> filter_connected_loc_exp(const Eigen::SparseMatrix<int>
 
 // Function for topological connected component analysis
 std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_comp_res(const Eigen::VectorXd& feat, const Eigen::SparseMatrix<int>& A, const Eigen::MatrixXd& mask,
-                                                                                         const std::string& spatial_type = "visium", int min_size = 5, int thres_per = 30, const std::string& return_mode = "all") {
+                                                                                         const std::string& spatial_type, int min_size, int thres_per, const std::string& return_mode) {
     if (return_mode != "all" && return_mode != "cc_loc" && return_mode != "jaccard_cc_list") {
         throw std::invalid_argument("'return_mode' should be among 'all', 'cc_loc', or 'jaccard_cc_list'");
     }
