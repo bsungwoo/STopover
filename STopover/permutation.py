@@ -5,12 +5,7 @@ from scipy.ndimage import gaussian_filter
 
 import os
 import time
-import parmap
-
-from .topological_comp import extract_adjacency_spatial
-from .topological_comp import topological_comp_res
-
-from .jaccard import jaccard_composite
+from .parallel_computing import *
 
 
 def shuffle_generator(arr, seed):
@@ -234,8 +229,8 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
 
     # Start the multiprocessing for extracting adjacency matrix and mask
     print(f"Calculation of adjacency matrix for {spatial_type}")
-    adjacency_mask = parmap.map(extract_adjacency_spatial, loc_list, spatial_type=spatial_type, fwhm=fwhm,
-                                pm_pbar=progress_bar, pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))), pm_chunksize=50)
+    adjacency_mask = parallel_with_progress_extract_adjacency(loc_list, spatial_type=spatial_type, 
+                                                              fwhm=fwhm, num_workers=num_workers//1.5)
     if spatial_type=='visium':
         feat_A_mask_pair = [(feat[perm_idx][:,feat_idx].reshape((-1,1)),
                             adjacency_mask[grp_idx][0], adjacency_mask[grp_idx][1]) \
@@ -249,9 +244,12 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
 
     # Start the multiprocessing for finding connected components of each feature
     print("Calculation of connected components for each feature")
-    output_cc = parmap.starmap(topological_comp_res, feat_A_mask_pair, spatial_type=spatial_type,
-                               min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
-                               pm_pbar=progress_bar, pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))))
+    output_cc = parallel_with_progress_topological_comp(feats=[feat[0] for feat in feat_A_mask_pair],
+                                                        A_matrices=[feat[1] for feat in feat_A_mask_pair],
+                                                        masks = [feat[2] for feat in feat_A_mask_pair],
+                                                        spatial_type=spatial_type,
+                                                        min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
+                                                        num_workers=num_workers//1.5)
 
     # Make dataframe for the similarity between feature 1 and 2 across the groups
     print('Calculation of composite jaccard indexes between feature pairs')
@@ -299,9 +297,11 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
     data_mod.uns[f"cc_loc_{adata_keys[-1]}_perm"] = output_cc_loc
 
     # Get the output for jaccard
-    output_j = parmap.starmap(jaccard_composite, CCxy_loc_mat_list,
-                              pm_pbar=progress_bar,
-                              pm_processes=int(max(1, min(os.cpu_count(), num_workers)//1.5)))
+    output_j = parallel_with_progress_jaccard_composite(CCx_loc_sums=[feat[0] for feat in CCxy_loc_mat_list], 
+                                                        CCy_loc_sums=[feat[1] for feat in CCxy_loc_mat_list],
+                                                        feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
+                                                        feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
+                                                        num_workers=num_workers//1.5)
 
     # Create a dataframe for J metrics and calculate p-values
     df_perm_fin = df_perm.assign(J_comp_perm=output_j).groupby([group_name, 'Feat_1', 'Feat_2']).apply(calculate_p_value).reset_index()

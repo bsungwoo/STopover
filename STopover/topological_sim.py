@@ -5,12 +5,7 @@ from scipy.ndimage import gaussian_filter
 
 import os
 import time
-import parmap
-
-from .topological_comp import extract_adjacency_spatial
-from .topological_comp import topological_comp_res
-
-from .jaccard import jaccard_composite
+from .parallel_computing import *
 
 
 def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list=None, group_name='batch',
@@ -228,8 +223,8 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
 
     # Start the multiprocessing for extracting adjacency matrix and mask
     print("Calculation of adjacency matrix and mask")
-    adjacency_mask = parmap.map(extract_adjacency_spatial, loc_list, spatial_type=spatial_type, fwhm=fwhm,
-                                pm_pbar=progress_bar, pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))), pm_chunksize=50)
+    adjacency_mask = parallel_with_progress_extract_adjacency(loc_list, spatial_type=spatial_type, 
+                                                              fwhm=fwhm, num_workers=num_workers//1.5)
     if spatial_type=='visium':
         feat_A_mask_pair = [(feat[:,feat_idx].reshape((-1,1)), adjacency_mask[grp_idx][0], adjacency_mask[grp_idx][1]) \
                             for grp_idx, feat in enumerate(val_list) for feat_idx in range(feat.shape[1])]
@@ -239,9 +234,12 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     
     # Start the multiprocessing for finding connected components of each feature
     print("Calculation of connected components for each feature")
-    output_cc = parmap.starmap(topological_comp_res, feat_A_mask_pair, spatial_type=spatial_type,
-                               min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
-                               pm_pbar=progress_bar, pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))))
+    output_cc = parallel_with_progress_topological_comp(feats=[feat[0] for feat in feat_A_mask_pair],
+                                                        A_matrices=[feat[1] for feat in feat_A_mask_pair],
+                                                        masks = [feat[2] for feat in feat_A_mask_pair],
+                                                        spatial_type=spatial_type,
+                                                        min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
+                                                        num_workers=num_workers//1.5)
 
     # Make dataframe for the similarity between feature 1 and 2 across the groups
     print('Calculation of composite jaccard indexes between feature pairs')
@@ -271,7 +269,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
             if jaccard_type!="default":
                 feat_x_val = val_list[num][:,df_subset['Index_1'].iloc[index]].reshape((-1,1))
                 feat_y_val = val_list[num][:,df_subset['Index_2'].iloc[index]].reshape((-1,1))
-            if jaccard_type=="default": CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat))
+            if jaccard_type=="default": CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,None,None))
             else: CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,feat_x_val,feat_y_val))
 
     # Get the output for connected component location and save
@@ -287,8 +285,11 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     data_mod.obs = data_mod.obs.join(output_cc_loc, lsuffix='_prev'+str(data_count))
 
     # Get the output for jaccard
-    output_j = parmap.starmap(jaccard_composite, CCxy_loc_mat_list,
-                              pm_pbar=progress_bar, pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))))
+    output_j = parallel_with_progress_jaccard_composite(CCx_loc_sums=[feat[0] for feat in CCxy_loc_mat_list], 
+                                                        CCy_loc_sums=[feat[1] for feat in CCxy_loc_mat_list],
+                                                        feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
+                                                        feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
+                                                        num_workers=num_workers//1.5)
     # Create dataframe for J metrics
     output_j = pd.DataFrame(output_j, columns=['J_comp'])
     # Create dataframe with pairwise topological similarity measures
