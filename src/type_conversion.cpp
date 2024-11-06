@@ -1,9 +1,12 @@
 #include "type_conversion.h"
+#include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
+#include <Eigen/Sparse>
 
 namespace py = pybind11;
 using namespace Eigen;
 
-// Function to convert Eigen::SparseMatrix to scipy.sparse.csr_matrix
+// Function to convert scipy.sparse.csr_matrix to Eigen::SparseMatrix
 SparseMatrix<double> scipy_sparse_to_eigen_sparse(const py::object& scipy_sparse) {
     // Assuming scipy_sparse is a CSR matrix
     py::object data = scipy_sparse.attr("data");
@@ -41,28 +44,29 @@ SparseMatrix<double> scipy_sparse_to_eigen_sparse(const py::object& scipy_sparse
 
 // Function to convert Eigen::SparseMatrix to scipy.sparse.csr_matrix
 py::object eigen_sparse_to_scipy_sparse(const SparseMatrix<int>& eigen_matrix) {
-    std::vector<Triplet<int>> triplet_list;
+    std::vector<int> data, indices, indptr(eigen_matrix.rows() + 1, 0);
+
     for (int k = 0; k < eigen_matrix.outerSize(); ++k) {
         for (SparseMatrix<int>::InnerIterator it(eigen_matrix, k); it; ++it) {
-            triplet_list.emplace_back(it.row(), it.col(), it.value());
+            data.push_back(it.value());
+            indices.push_back(it.col());
+            indptr[it.row() + 1]++;  // Track the end of each row
         }
     }
 
-    // Create the data, indices, and indptr arrays for scipy.sparse.csr_matrix
-    py::list data, indices, indptr;
-    int row = 0;
-    for (const auto& triplet : triplet_list) {
-        data.append(triplet.value());
-        indices.append(triplet.col());
-        if (row != triplet.row()) {
-            indptr.append(triplet.row());
-            row = triplet.row();
-        }
+    // Accumulate indptr to get correct CSR format
+    for (int i = 1; i < indptr.size(); ++i) {
+        indptr[i] += indptr[i - 1];
     }
-    indptr.append(eigen_matrix.outerSize());
 
+    // Convert C++ arrays to Python arrays for scipy.sparse.csr_matrix construction
+    py::array_t<int> data_py(data.size(), data.data());
+    py::array_t<int> indices_py(indices.size(), indices.data());
+    py::array_t<int> indptr_py(indptr.size(), indptr.data());
+
+    // Create a scipy.sparse.csr_matrix using Python tuple
     py::object scipy_sparse = py::module::import("scipy.sparse").attr("csr_matrix")(
-        py::make_tuple(data, indices, indptr), py::make_tuple(eigen_matrix.rows(), eigen_matrix.cols())
+        py::make_tuple(data_py, indices_py, indptr_py), py::make_tuple(eigen_matrix.rows(), eigen_matrix.cols())
     );
     return scipy_sparse;
 }
