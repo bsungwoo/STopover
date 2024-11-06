@@ -17,6 +17,6 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                          Eigen::MatrixXd cE,
                          Eigen::MatrixXd cduration,
                          const std::vector<std::vector<int>>& chistory,
-                         Eigen::Vector2d lim_size = Eigen::Vector2d(0, std::numeric_limits<double>::infinity()))
+                         Eigen::Vector2d lim_size = Eigen::Vector2d(0, std::numeric_limits<double>::infinity()));
 
 #endif // SMOOTHED_DENDROGRAM_H

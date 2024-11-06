@@ -18,6 +18,6 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
                     Eigen::MatrixXd cvertical_y = Eigen::MatrixXd(),
                     Eigen::MatrixXd chorizontal_x = Eigen::MatrixXd(),
                     Eigen::MatrixXd chorizontal_y = Eigen::MatrixXd(),
-                    Eigen::MatrixXd cdots = Eigen::MatrixXd())
+                    Eigen::MatrixXd cdots = Eigen::MatrixXd());
 
 #endif // DENDROGRAM_BAR_H
