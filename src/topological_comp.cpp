@@ -156,14 +156,18 @@ Eigen::SparseMatrix<int> filter_connected_loc_exp(const Eigen::SparseMatrix<int>
     return CC_loc_mat_fin;
 }
 
-// Function for topological connected component analysis
-std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_comp_res(const Eigen::VectorXd& feat, const Eigen::SparseMatrix<int>& A, const Eigen::MatrixXd& mask,
-                                                                                         const std::string& spatial_type, int min_size, int thres_per, const std::string& return_mode) {
+std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_comp_res(
+    const Eigen::VectorXd& feat, const Eigen::SparseMatrix<int>& A, const Eigen::MatrixXd& mask,
+    const std::string& spatial_type, int min_size, int thres_per, const std::string& return_mode) {
+    
     if (return_mode != "all" && return_mode != "cc_loc" && return_mode != "jaccard_cc_list") {
         throw std::invalid_argument("'return_mode' should be among 'all', 'cc_loc', or 'jaccard_cc_list'");
     }
 
     int p = feat.size();
+
+    // Convert A to double to allow multiplication with feat
+    Eigen::SparseMatrix<double> A_double = A.cast<double>();
     Eigen::VectorXd smooth = (spatial_type == "visium") ? (mask * feat).array() / feat.sum() : feat;
 
     Eigen::VectorXd t = smooth.cwiseMax(0);
