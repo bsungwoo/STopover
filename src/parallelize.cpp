@@ -78,7 +78,7 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
     for (size_t i = 0; i < feats.size(); ++i) {
         // Convert inputs using appropriate conversion functions
         Eigen::VectorXd feat = feats[i].cast<Eigen::VectorXd>();
-        Eigen::SparseMatrix<int> A_matrix = scipy_sparse_to_eigen(A_matrices[i]);  // Use scipy conversion
+        Eigen::SparseMatrix<int> A_matrix = scipy_sparse_to_eigen_sparse(A_matrices[i]);  // Use scipy conversion
         Eigen::MatrixXd mask = masks[i].cast<Eigen::MatrixXd>();
 
         // Enqueue the task
