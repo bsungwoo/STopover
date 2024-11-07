@@ -82,7 +82,7 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
         Eigen::VectorXd feat = feats[i].cast<Eigen::VectorXd>();
         
         // Ensure scipy_sparse_to_eigen_sparse uses int as the target type
-        Eigen::SparseMatrix<int> A_matrix = scipy_sparse_to_eigen_sparse(A_matrices[i]);  
+        Eigen::SparseMatrix<int> A_matrix = scipy_sparse_to_eigen_sparse(A_matrices[i]).cast<int>();  
         
         Eigen::MatrixXd mask = masks[i].cast<Eigen::MatrixXd>();
 
