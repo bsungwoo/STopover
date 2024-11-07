@@ -166,7 +166,7 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
 
     int p = feat.size();
 
-    // Convert A to double to allow multiplication with feat
+    // Convert A to double to allow multiplication with feat and mask
     Eigen::SparseMatrix<double> A_double = A.cast<double>();
     Eigen::VectorXd smooth = (spatial_type == "visium") ? (mask * feat).array() / feat.sum() : feat;
 
@@ -175,7 +175,7 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
     std::sort(threshold.begin(), threshold.end(), std::greater<double>());
     threshold.erase(std::unique(threshold.begin(), threshold.end()), threshold.end());
 
-    auto CC_list = extract_connected_comp(t, A, threshold, p, min_size);
+    auto CC_list = extract_connected_comp(t, A_double, threshold, p, min_size);
 
     Eigen::SparseMatrix<int> CC_loc_mat = extract_connected_loc_mat(CC_list, p, "sparse");
     CC_loc_mat = filter_connected_loc_exp(CC_loc_mat, feat, thres_per);
