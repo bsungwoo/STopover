@@ -26,10 +26,10 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
     }
 
     Eigen::VectorXi ind_notempty = Eigen::VectorXi::LinSpaced(ncc, 0, ncc - 1);
-    ind_notempty = ind_notempty.unaryExpr([&](int i) { return (duration.row(i).sum() != 0); }).eval();
+    ind_notempty = ind_notempty.unaryExpr([&](int i) { return static_cast<int>(duration.row(i).sum() != 0); });
 
     Eigen::VectorXi ind_empty = Eigen::VectorXi::LinSpaced(ncc, 0, ncc - 1);
-    ind_empty = ind_empty.unaryExpr([&](int i) { return (duration.row(i).sum() == 0); }).eval();
+    ind_empty = ind_empty.unaryExpr([&](int i) { return static_cast<int>(duration.row(i).sum() == 0); });
 
     std::vector<int> ind_past;
     for (int i = 0; i < ncc; ++i) {
@@ -39,7 +39,7 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
     }
     nlayer.push_back(ind_past);
 
-    while (ind_past.size() < ind_notempty.size()) {
+    while (ind_past.size() < static_cast<size_t>(ind_notempty.size())) {
         std::vector<int> tind;
         for (int i = 0; i < ncc; ++i) {
             if (std::includes(ind_past.begin(), ind_past.end(), history[i].begin(), history[i].end())) {
@@ -65,7 +65,7 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
         // Sort the first layer
         std::vector<int> sorted_layer;
         std::vector<std::pair<int, double>> sval_ind;
-        for (int i = 0; i < nlayer[0].size(); ++i) {
+        for (size_t i = 0; i < nlayer[0].size(); ++i) {
             sval_ind.push_back(std::make_pair(i, duration(nlayer[0][i], 1)));
         }
         std::sort(sval_ind.begin(), sval_ind.end(), [](auto& a, auto& b) { return a.second > b.second; });
@@ -73,7 +73,7 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
             sorted_layer.push_back(nlayer[0][p.first]);
         }
 
-        for (int i = 0; i < sorted_layer.size(); ++i) {
+        for (size_t i = 0; i < sorted_layer.size(); ++i) {
             int ii = sorted_layer[i];
             nvertical_x(ii, 0) = i;
             nvertical_x(ii, 1) = i;
@@ -83,8 +83,8 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
             ndots(ii, 1) = duration(ii, 0);
         }
 
-        for (int i = 1; i < nlayer.size(); ++i) {
-            for (int j = 0; j < nlayer[i].size(); ++j) {
+        for (size_t i = 1; i < nlayer.size(); ++i) {
+            for (size_t j = 0; j < nlayer[i].size(); ++j) {
                 int ii = nlayer[i][j];
                 std::vector<double> tx;
                 for (int h : history[ii]) {
@@ -114,7 +114,7 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
         Eigen::MatrixXd& nhorizontal_y = chorizontal_y;
         Eigen::MatrixXd& ndots = cdots;
 
-        for (int j = 0; j < nlayer[0].size(); ++j) {
+        for (size_t j = 0; j < nlayer[0].size(); ++j) {
             int ii = nlayer[0][j];
             nvertical_y.row(ii) = duration.row(ii).transpose();
             nhorizontal_x.row(ii).setZero();
@@ -123,8 +123,8 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
             ndots(ii, 1) = nvertical_y(ii, 1);
         }
 
-        for (int i = 1; i < nlayer.size(); ++i) {
-            for (int j = 0; j < nlayer[i].size(); ++j) {
+        for (size_t i = 1; i < nlayer.size(); ++i) {
+            for (size_t j = 0; j < nlayer[i].size(); ++j) {
                 int ii = nlayer[i][j];
                 std::vector<double> tx;
                 for (int h : history[ii]) {
