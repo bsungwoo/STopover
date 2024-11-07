@@ -1,5 +1,7 @@
 #include "topological_comp.h"
 #include <limits>    // for std::numeric_limits
+#include <algorithm> // for std::sort
+#include <cmath>     // for M_PI
 
 // Function to compute adjacency matrix and Gaussian smoothing mask based on spatial locations
 std::tuple<Eigen::SparseMatrix<int>, Eigen::MatrixXd> extract_adjacency_spatial(const Eigen::MatrixXd& loc, const std::string& spatial_type, double fwhm) {
@@ -91,22 +93,20 @@ std::tuple<Eigen::SparseMatrix<int>, Eigen::MatrixXd> extract_adjacency_spatial(
     }
 }
 
-// Placeholder functions - must be implemented or linked separately
-std::tuple<std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>> make_original_dendrogram_cc(const Eigen::VectorXd&, const Eigen::SparseMatrix<int>&, const std::vector<double>&);
+// Placeholder function declarations - Implement these or link them properly
+std::tuple<std::vector<std::vector<int>>, std::vector<int>, std::vector<int>, std::vector<int>> make_original_dendrogram_cc(const Eigen::VectorXd&, const Eigen::SparseMatrix<int>&, const std::vector<double>&);
 std::tuple<std::vector<int>, std::vector<int>, std::vector<int>> make_smoothed_dendrogram(const std::vector<std::vector<int>>&, const std::vector<int>&, const std::vector<int>&, const std::vector<int>&, const Eigen::ArrayXd&);
 std::tuple<std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>> make_dendrogram_bar(const std::vector<int>&, const std::vector<int>&);
 
-// Function to extract connected components
+// Corrected function to extract connected components
 std::vector<std::vector<int>> extract_connected_comp(const Eigen::VectorXd& tx, const Eigen::SparseMatrix<int>& A_sparse, const std::vector<double>& threshold_x, int num_spots, int min_size) {
     auto [cCC_x, cE_x, cduration_x, chistory_x] = make_original_dendrogram_cc(tx, A_sparse, threshold_x);
     auto [nCC_x, nduration_x, nhistory_x] = make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, Eigen::ArrayXd::LinSpaced(2, min_size, num_spots));
-    auto [cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, clayer_x] = make_dendrogram_bar(chistory_x, cduration_x);
+    auto [cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, nlayer_x] = make_dendrogram_bar(chistory_x, cduration_x);
 
-    // Assuming nlayer_x contains data as expected
-    std::vector<int> sind = clayer_x;
     std::vector<std::vector<int>> CCx;
-    for (int i : sind) {
-        CCx.push_back(nCC_x[i]);
+    for (size_t i = 0; i < nlayer_x.size(); ++i) {
+        CCx.push_back({nCC_x[i]});
     }
     return CCx;
 }
@@ -129,7 +129,7 @@ Eigen::SparseMatrix<int> extract_connected_loc_mat(const std::vector<std::vector
     }
 }
 
-// Function to filter connected component locations based on expression values
+// Adjusted function to filter connected component locations based on expression values
 Eigen::SparseMatrix<int> filter_connected_loc_exp(const Eigen::SparseMatrix<int>& CC_loc_mat, const Eigen::MatrixXd& feat_data, int thres_per) {
     Eigen::VectorXd CC_mat_sum = CC_loc_mat * Eigen::VectorXd::Ones(CC_loc_mat.cols());
 
@@ -174,7 +174,7 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
     auto CC_list = extract_connected_comp(t, A, threshold, p, min_size);
 
     Eigen::SparseMatrix<int> CC_loc_mat = extract_connected_loc_mat(CC_list, p, "sparse");
-    CC_loc_mat = filter_connected_loc_exp(CC_loc_mat, feat, thres_per, false);
+    CC_loc_mat = filter_connected_loc_exp(CC_loc_mat, feat, thres_per);
 
     return std::make_tuple(CC_list, CC_loc_mat);
 }
