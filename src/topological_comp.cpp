@@ -91,9 +91,9 @@ std::tuple<Eigen::SparseMatrix<int>, Eigen::MatrixXd> extract_adjacency_spatial(
     }
 }
 
-// Placeholder functions - must be implemented separately
-std::tuple<std::vector<std::vector<int>>, std::vector<int>, std::vector<int>, std::vector<int>> make_original_dendrogram_cc(const Eigen::VectorXd&, const Eigen::SparseMatrix<int>&, const std::vector<double>&);
-std::tuple<std::vector<std::vector<int>>, std::vector<int>, std::vector<int>> make_smoothed_dendrogram(const std::vector<std::vector<int>>&, const std::vector<int>&, const std::vector<int>&, const std::vector<int>&, const Eigen::ArrayXd&);
+// Placeholder functions - must be implemented or linked separately
+std::tuple<std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>> make_original_dendrogram_cc(const Eigen::VectorXd&, const Eigen::SparseMatrix<int>&, const std::vector<double>&);
+std::tuple<std::vector<int>, std::vector<int>, std::vector<int>> make_smoothed_dendrogram(const std::vector<std::vector<int>>&, const std::vector<int>&, const std::vector<int>&, const std::vector<int>&, const Eigen::ArrayXd&);
 std::tuple<std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>> make_dendrogram_bar(const std::vector<int>&, const std::vector<int>&);
 
 // Function to extract connected components
@@ -101,9 +101,9 @@ std::vector<std::vector<int>> extract_connected_comp(const Eigen::VectorXd& tx, 
     auto [cCC_x, cE_x, cduration_x, chistory_x] = make_original_dendrogram_cc(tx, A_sparse, threshold_x);
     auto [nCC_x, nduration_x, nhistory_x] = make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, Eigen::ArrayXd::LinSpaced(2, min_size, num_spots));
     auto [cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, clayer_x] = make_dendrogram_bar(chistory_x, cduration_x);
-    auto [c_ignore, v_ignore, h_ignore, d_ignore, l_ignore, nlayer_x] = make_dendrogram_bar(nhistory_x, nduration_x, cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x);
 
-    std::vector<int> sind = nlayer_x[0];
+    // Assuming nlayer_x contains data as expected
+    std::vector<int> sind = clayer_x;
     std::vector<std::vector<int>> CCx;
     for (int i : sind) {
         CCx.push_back(nCC_x[i]);
@@ -124,20 +124,20 @@ Eigen::SparseMatrix<int> extract_connected_loc_mat(const std::vector<std::vector
 
     if (format == "sparse") {
         return CC_loc_arr.sparseView();
-    } else if (format == "array") {
+    } else {
         throw std::invalid_argument("Sparse format required for compatibility.");
     }
 }
 
-// Function to filter the connected component locations based on expression values
-Eigen::SparseMatrix<int> filter_connected_loc_exp(const Eigen::SparseMatrix<int>& CC_loc_mat, const Eigen::MatrixXd& feat_data, int thres_per, bool return_sep_loc) {
+// Function to filter connected component locations based on expression values
+Eigen::SparseMatrix<int> filter_connected_loc_exp(const Eigen::SparseMatrix<int>& CC_loc_mat, const Eigen::MatrixXd& feat_data, int thres_per) {
     Eigen::VectorXd CC_mat_sum = CC_loc_mat * Eigen::VectorXd::Ones(CC_loc_mat.cols());
 
     std::vector<std::pair<int, double>> CC_mean;
     for (int i = 0; i < CC_loc_mat.rows(); ++i) {
         double sum = CC_mat_sum(i);
         if (sum != 0) {
-            CC_mean.push_back({i, feat_data(i)});
+            CC_mean.emplace_back(i, feat_data(i));
         }
     }
 
@@ -149,7 +149,7 @@ Eigen::SparseMatrix<int> filter_connected_loc_exp(const Eigen::SparseMatrix<int>
     CC_mean.resize(cutoff);
 
     Eigen::SparseMatrix<int> CC_loc_mat_fin(CC_loc_mat.rows(), CC_mean.size());
-    for (int idx = 0; idx < CC_mean.size(); ++idx) {
+    for (size_t idx = 0; idx < CC_mean.size(); ++idx) {
         CC_loc_mat_fin.col(idx) = CC_loc_mat.col(CC_mean[idx].first);
     }
 
