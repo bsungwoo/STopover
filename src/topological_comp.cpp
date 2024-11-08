@@ -150,7 +150,6 @@ std::tuple<std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int
 
 // Corrected function to extract connected components
 std::vector<std::vector<int>> extract_connected_comp(
-    const Eigen::MatrixXd& loc, const std::string& spatial_type, double fwhm,
     const Eigen::VectorXd& tx, const Eigen::SparseMatrix<double>& A_sparse, 
     const std::vector<double>& threshold_x, int num_spots, int min_size) {
     
