@@ -1,32 +1,6 @@
 import numpy as np
 import tqdm
-from .parallelize import parallel_extract_adjacency, parallel_topological_comp, parallel_jaccard_composite
-
-def parallel_with_progress_extract_adjacency(locs, spatial_type="visium", fwhm=2.5, num_workers=4):
-    """
-    Parallel computation for extracting adjacency matrix and Gaussian smoothing mask.
-    Progress is shown using a tqdm progress bar.
-    
-    Args:
-        locs (list): List of locations (NumPy arrays) to compute adjacency matrix for.
-        spatial_type (str): Type of spatial data.
-        fwhm (float): Full-width half-maximum for Gaussian smoothing.
-        num_workers (int): Number of parallel workers.
-        
-    Returns:
-        list: A list of tuples containing the adjacency matrix and Gaussian mask for each location.
-    """
-    # Create a progress bar
-    with tqdm.tqdm(total=len(locs)) as pbar:
-        # Define a Python callback function to update progress
-        def update_progress():
-            pbar.update(1)
-        
-        # Call the C++ function in parallel, passing the progress callback
-        result = parallel_extract_adjacency(locs, spatial_type, fwhm, num_workers, update_progress)
-
-    return result
-
+from .parallelize import parallel_topological_comp, parallel_jaccard_composite
 
 def parallel_with_progress_topological_comp(locs, feats, spatial_type="visium", fwhm=2.5,
                                             min_size=5, thres_per=30, return_mode="all", num_workers=4):
