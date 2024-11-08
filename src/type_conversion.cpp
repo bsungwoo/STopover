@@ -1,72 +1,56 @@
 #include "type_conversion.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
-#include <Eigen/Sparse>
+#include <pybind11/eigen.h>
+#include <vector>
+#include <stdexcept>
 
 namespace py = pybind11;
-using namespace Eigen;
 
-// Function to convert scipy.sparse.csr_matrix to Eigen::SparseMatrix
-SparseMatrix<double> scipy_sparse_to_eigen_sparse(const py::object& scipy_sparse) {
-    // Assuming scipy_sparse is a CSR matrix
-    py::object data = scipy_sparse.attr("data");
-    py::object indices = scipy_sparse.attr("indices");
-    py::object indptr = scipy_sparse.attr("indptr");
-    py::object shape = scipy_sparse.attr("shape");
+Eigen::SparseMatrix<double> scipy_sparse_to_eigen_sparse(const py::object& scipy_sparse_matrix) {
+    try {
+        // Ensure the matrix is in COO format
+        // Extract row, col, data arrays
+        py::array_t<int> row = scipy_sparse_matrix.attr("row").cast<py::array_t<int>>();
+        py::array_t<int> col = scipy_sparse_matrix.attr("col").cast<py::array_t<int>>();
+        py::array_t<double> data = scipy_sparse_matrix.attr("data").cast<py::array_t<double>>();
 
-    auto data_array = data.cast<py::array_t<double>>();
-    auto indices_array = indices.cast<py::array_t<int>>();
-    auto indptr_array = indptr.cast<py::array_t<int>>();
-    auto shape_tuple = shape.cast<std::tuple<int, int>>();
-
-    int rows = std::get<0>(shape_tuple);
-    int cols = std::get<1>(shape_tuple);
-
-    SparseMatrix<double> eigen_sparse(rows, cols);
-
-    std::vector<Triplet<double>> tripletList;
-    tripletList.reserve(data_array.size());
-
-    // Convert data from CSR to Eigen's SparseMatrix
-    const double* data_ptr = static_cast<const double*>(data_array.data());
-    const int* indices_ptr = static_cast<const int*>(indices_array.data());
-    const int* indptr_ptr = static_cast<const int*>(indptr_array.data());
-
-    for (int i = 0; i < rows; ++i) {
-        for (int j = indptr_ptr[i]; j < indptr_ptr[i + 1]; ++j) {
-            tripletList.emplace_back(i, indices_ptr[j], data_ptr[j]);
+        // Get shape of the matrix
+        py::tuple shape = scipy_sparse_matrix.attr("shape").cast<py::tuple>();
+        if (shape.size() != 2) {
+            throw std::invalid_argument("Sparse matrix must be two-dimensional.");
         }
-    }
+        int nrows = shape[0].cast<int>();
+        int ncols = shape[1].cast<int>();
+        int nnz = data.size();
 
-    eigen_sparse.setFromTriplets(tripletList.begin(), tripletList.end());
-    return eigen_sparse;
-}
-
-// Function to convert Eigen::SparseMatrix to scipy.sparse.csr_matrix
-py::object eigen_sparse_to_scipy_sparse(const SparseMatrix<int>& eigen_matrix) {
-    std::vector<int> data, indices, indptr(eigen_matrix.rows() + 1, 0);
-
-    for (int k = 0; k < eigen_matrix.outerSize(); ++k) {
-        for (SparseMatrix<int>::InnerIterator it(eigen_matrix, k); it; ++it) {
-            data.push_back(it.value());
-            indices.push_back(it.col());
-            indptr[it.row() + 1]++;  // Track the end of each row
+        // Validate that row, col, and data have the same length
+        if (row.size() != nnz || col.size() != nnz) {
+            throw std::invalid_argument("Row, column, and data arrays must have the same length.");
         }
+
+        // Convert to Eigen::SparseMatrix<double>
+        std::vector<Eigen::Triplet<double>> tripletList;
+        tripletList.reserve(nnz);
+
+        auto row_ptr = row.unchecked<1>();
+        auto col_ptr = col.unchecked<1>();
+        auto data_ptr = data.unchecked<1>();
+
+        for (int i = 0; i < nnz; ++i) {
+            tripletList.emplace_back(row_ptr(i), col_ptr(i), data_ptr(i));
+        }
+
+        Eigen::SparseMatrix<double> mat(nrows, ncols);
+        mat.setFromTriplets(tripletList.begin(), tripletList.end());
+        mat.makeCompressed(); // Optimize the storage
+
+        return mat;
     }
-
-    // Accumulate indptr to get correct CSR format
-    for (int i = 1; i < indptr.size(); ++i) {
-        indptr[i] += indptr[i - 1];
+    catch (const py::cast_error& e) {
+        throw std::runtime_error("Failed to cast attributes from SciPy sparse matrix: " + std::string(e.what()));
     }
-
-    // Convert C++ arrays to Python arrays for scipy.sparse.csr_matrix construction
-    py::array_t<int> data_py(data.size(), data.data());
-    py::array_t<int> indices_py(indices.size(), indices.data());
-    py::array_t<int> indptr_py(indptr.size(), indptr.data());
-
-    // Create a scipy.sparse.csr_matrix using Python tuple
-    py::object scipy_sparse = py::module::import("scipy.sparse").attr("csr_matrix")(
-        py::make_tuple(data_py, indices_py, indptr_py), py::make_tuple(eigen_matrix.rows(), eigen_matrix.cols())
-    );
-    return scipy_sparse;
+    catch (const std::exception& e) {
+        throw std::runtime_error("Error converting SciPy sparse matrix to Eigen::SparseMatrix<double>: " + std::string(e.what()));
+    }
 }
