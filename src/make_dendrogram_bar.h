@@ -1,3 +1,4 @@
+// make_dendrogram_bar.h
 #ifndef MAKE_DENDROGRAM_BAR_H
 #define MAKE_DENDROGRAM_BAR_H
 

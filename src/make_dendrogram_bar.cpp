@@ -1,3 +1,4 @@
+// make_dendrogram_bar.cpp
 #include "make_dendrogram_bar.h"
 #include "utils.h" // Include the shared utilities
 #include <algorithm> // For std::find, std::min, std::max, etc.
@@ -59,6 +60,9 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
     std::vector<int> all_indices(ncc);
     std::iota(all_indices.begin(), all_indices.end(), 0);
     std::vector<int> ind_empty;
+    // Ensure both vectors are sorted before set_difference
+    std::sort(all_indices.begin(), all_indices.end());
+    std::sort(ind_notempty.begin(), ind_notempty.end());
     std::set_difference(all_indices.begin(), all_indices.end(),
                         ind_notempty.begin(), ind_notempty.end(),
                         std::back_inserter(ind_empty));
@@ -91,7 +95,7 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
             }
         }
 
-        // Remove already included indices
+        // Remove already included indices and ind_empty
         std::vector<int> ttind;
         for (const auto& idx : tind) {
             if (std::find(ind_past.begin(), ind_past.end(), idx) == ind_past.end() &&
@@ -126,8 +130,7 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
 
         // Create a sorted list based on duration[nlayer[0],1] in descending order
         std::vector<std::pair<int, double>> sval_ind;
-        for (size_t i = 0; i < nlayer[0].size(); ++i) {
-            int idx = nlayer[0][i];
+        for (auto idx : nlayer[0]) {
             sval_ind.emplace_back(idx, duration(idx, 1));
         }
 
@@ -143,7 +146,7 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
             sind.push_back(pair.first);
         }
 
-        // Assign values to nvertical_x, nvertical_y, ndots based on sorted indices
+        // Assign to nvertical_x, nvertical_y, ndots based on sorted indices
         for (size_t i = 0; i < sind.size(); ++i) {
             int ii = sind[i];
             nvertical_x(ii, 0) = static_cast<double>(i);
@@ -167,7 +170,8 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
                 }
 
                 if (!tx.empty()) {
-                    double mean_tx = std::accumulate(tx.begin(), tx.end(), 0.0) / tx.size();
+                    double sum_tx = std::accumulate(tx.begin(), tx.end(), 0.0);
+                    double mean_tx = sum_tx / tx.size();
                     double min_tx = *std::min_element(tx.begin(), tx.end());
                     double max_tx = *std::max_element(tx.begin(), tx.end());
 
@@ -204,8 +208,8 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
         }
 
         // Process the first layer
-        for (size_t j = 0; j < nlayer[0].size(); ++j) {
-            int ii = nlayer[0][j];
+        for (const auto& ii : nlayer[0]) {
+            // Sort duration[ii, :] in ascending order
             Eigen::Vector2d sorted_duration = duration.row(ii).array().sort();
             nvertical_y.row(ii) = sorted_duration;
 
@@ -217,8 +221,7 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
 
         // Process subsequent layers
         for (size_t i = 1; i < nlayer.size(); ++i) {
-            for (size_t j = 0; j < nlayer[i].size(); ++j) {
-                int ii = nlayer[i][j];
+            for (const auto& ii : nlayer[i]) {
                 const std::vector<int>& current_history = history[ii];
 
                 // Extract nvertical_x values for the current history
@@ -228,7 +231,8 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
                 }
 
                 if (!tx.empty()) {
-                    double mean_tx = std::accumulate(tx.begin(), tx.end(), 0.0) / tx.size();
+                    double sum_tx = std::accumulate(tx.begin(), tx.end(), 0.0);
+                    double mean_tx = sum_tx / tx.size();
                     double min_tx = *std::min_element(tx.begin(), tx.end());
                     double max_tx = *std::max_element(tx.begin(), tx.end());
 
