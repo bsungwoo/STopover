@@ -1,6 +1,6 @@
 import numpy as np
 import tqdm
-from parallelize import parallel_extract_adjacency, parallel_topological_comp, parallel_jaccard_composite
+from .parallelize import parallel_extract_adjacency, parallel_topological_comp, parallel_jaccard_composite
 
 def parallel_with_progress_extract_adjacency(locs, spatial_type="visium", fwhm=2.5, num_workers=4):
     """

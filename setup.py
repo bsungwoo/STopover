@@ -30,7 +30,7 @@ install_eigen_with_conda()
 # Define the extension module with all necessary source files
 ext_modules = [
     Extension(
-        "parallelize",  # Module name matches PYBIND11_MODULE
+        "STopover.parallelize",  # Module name within the STopover package
         sources=[
             "src/type_conversion.cpp",
             "src/topological_comp.cpp",
@@ -47,7 +47,7 @@ ext_modules = [
             "src"  # Assuming headers are in 'src'
         ],
         language="c++",
-        extra_compile_args=["-O3", "-Wall", "-std=c++17", "-fopenmp", f"-I{EIGEN_INCLUDE_DIR}", "-v"],
+        extra_compile_args=["-O3", "-Wall", "-std=c++17", "-fopenmp"],
         extra_link_args=["-fopenmp"]
     ),
 ]
@@ -59,6 +59,7 @@ class BuildExt(build_ext):
         compiler = self.compiler.compiler_type
         if compiler == "unix":
             for ext in self.extensions:
+                # Ensures ABI compatibility if needed
                 ext.extra_compile_args += ["-D_GLIBCXX_USE_CXX11_ABI=0"]
         elif compiler == "msvc":
             for ext in self.extensions:
