@@ -178,7 +178,7 @@ class STopover_visium(AnnData):
         
         df, adata = topological_sim_pairs_(data=self, feat_pairs=feat_pairs, spatial_type=self.spatial_type, group_list=group_list, group_name=group_name,
                                             fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per, jaccard_type=jaccard_type,
-                                            num_workers=num_workers, progress_bar=progress_bar)
+                                            num_workers=num_workers)
         # save jaccard index result in .uns of anndata
         adata.uns['_'.join(('J',str(J_result_name),str(self.J_count)))] = df
         # Initialize the object
@@ -193,8 +193,6 @@ class STopover_visium(AnnData):
         * nperm: number of the random permutation (default: 1000)
         * seed: the seed for the random number generator (default: 0)
         * jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
-        * num_workers: number of workers to use for multiprocessing
-        * progress_bar: whether to show the progress bar during multiprocessing
         '''
         print("Run permutation test for the given LR pairs")
         import re
@@ -203,7 +201,7 @@ class STopover_visium(AnnData):
         
         df, adata = run_permutation_test(self, feat_pairs_sig_test, nperm=nperm, seed=seed, spatial_type = self.spatial_type,
                                          fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per, jaccard_type=jaccard_type,
-                                         num_workers=num_workers, progress_bar=progress_bar)
+                                         num_workers=num_workers)
         
         # save jaccard index result in .uns of anndata
         adata.uns['_'.join((adata_keys[-1], 'sig'))] = df
@@ -535,7 +533,7 @@ class STopover_imageST(STopover_visium):
         
         # Calculate topological similarites between the pairs from the two cell types  
         adata_xy.topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species, db_name=db_name,
-                                        group_name=group_name, group_list=group_list, jaccard_type=jaccard_type, J_result_name=J_result_name, num_workers=num_workers, progress_bar=progress_bar)
+                                        group_name=group_name, group_list=group_list, jaccard_type=jaccard_type, J_result_name=J_result_name, num_workers=num_workers)
         return adata_xy
 
 
