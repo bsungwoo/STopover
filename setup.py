@@ -120,7 +120,6 @@ ext_modules = [
     Extension(
         "STopover.parallelize",  # Module name within the STopover package
         sources=[
-            "src/type_conversion.cpp",
             "src/topological_comp.cpp",
             "src/jaccard.cpp",
             "src/parallelize.cpp",
