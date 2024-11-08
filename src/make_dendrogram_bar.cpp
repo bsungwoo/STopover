@@ -1,72 +1,69 @@
 #include "make_dendrogram_bar.h"
-#include <algorithm>
-#include <numeric>
+#include "utils.h" // Include the shared utilities
+#include <numeric>    // For std::accumulate
+#include <algorithm>  // For std::min_element, std::max_element
+#include <vector>
+#include <tuple>
 #include <iostream>
-#include <set>
 
-// Helper function to check if all elements of subset are in superset
-bool is_subset(const std::vector<int>& subset, const std::vector<int>& superset) {
-    for (const auto& elem : subset) {
-        if (std::find(superset.begin(), superset.end(), elem) == superset.end()) {
-            return false;
-        }
-    }
-    return true;
-}
+std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<std::vector<int>>>
+make_dendrogram_bar(const std::vector<std::vector<int>>& history,
+                    const Eigen::MatrixXd& duration,
+                    Eigen::MatrixXd cvertical_x,
+                    Eigen::MatrixXd cvertical_y,
+                    Eigen::MatrixXd chorizontal_x,
+                    Eigen::MatrixXd chorizontal_y,
+                    Eigen::MatrixXd cdots) {
 
-// Helper function to compute intersection size
-size_t intersection_size(const std::vector<int>& a, const std::vector<int>& b) {
-    std::set<int> set_a(a.begin(), a.end());
-    std::set<int> set_b(b.begin(), b.end());
-    std::vector<int> intersection;
-    std::set_intersection(set_a.begin(), set_a.end(),
-                          set_b.begin(), set_b.end(),
-                          std::back_inserter(intersection));
-    return intersection.size();
-}
+    using namespace STopoverUtils; // To access helper functions
 
-std::tuple<
-    Eigen::MatrixXd,    // nvertical_x
-    Eigen::MatrixXd,    // nvertical_y
-    Eigen::MatrixXd,    // nhorizontal_x
-    Eigen::MatrixXd,    // nhorizontal_y
-    Eigen::MatrixXd,    // ndots
-    std::vector<std::vector<int>> // nlayer
->
-make_dendrogram_bar(
-    const std::vector<std::vector<int>>& history,
-    const Eigen::MatrixXd& duration,
-    const Eigen::MatrixXd& cvertical_x,
-    const Eigen::MatrixXd& cvertical_y,
-    const Eigen::MatrixXd& chorizontal_x,
-    const Eigen::MatrixXd& chorizontal_y,
-    const Eigen::MatrixXd& cdots
-) {
-    // Determine if this is a new dendrogram or updating existing one
     bool is_new = (cvertical_x.size() == 0) && (cvertical_y.size() == 0) &&
                   (chorizontal_x.size() == 0) && (chorizontal_y.size() == 0) &&
                   (cdots.size() == 0);
 
-    int ncc = duration.rows();
+    size_t ncc = duration.rows();
 
     // Estimate the depth of dendrogram
     std::vector<std::vector<int>> nlayer;
 
-    // Find CCs with no parent (history size == 0)
+    // Find CCs with no parent
     std::vector<int> ind_past;
-    for (int i = 0; i < ncc; ++i) {
-        if (history[i].empty()) {
-            ind_past.push_back(i);
+    std::vector<int> length_history(ncc);
+    for (size_t i = 0; i < ncc; ++i) {
+        length_history[i] = history[i].size();
+    }
+
+    // Identify non-empty CCs
+    std::vector<int> ind_notempty;
+    for (size_t i = 0; i < ncc; ++i) {
+        if (duration.row(i).sum() != 0) {
+            ind_notempty.push_back(static_cast<int>(i));
+        }
+    }
+
+    // Identify empty CCs
+    std::vector<int> ind_empty;
+    for (size_t i = 0; i < ncc; ++i) {
+        if (std::find(ind_notempty.begin(), ind_notempty.end(), static_cast<int>(i)) == ind_notempty.end()) {
+            ind_empty.push_back(static_cast<int>(i));
+        }
+    }
+
+    // Identify leaf CCs (no history and not empty)
+    for (size_t i = 0; i < ncc; ++i) {
+        if (length_history[i] == 0 &&
+            std::find(ind_empty.begin(), ind_empty.end(), static_cast<int>(i)) == ind_empty.end()) {
+            ind_past.push_back(static_cast<int>(i));
         }
     }
     nlayer.emplace_back(ind_past);
 
     // Iteratively find other layers
-    while (ind_past.size() < ncc) {
+    while (ind_past.size() < ind_notempty.size()) {
         std::vector<int> tind;
-        for (int i = 0; i < ncc; ++i) {
-            if (!history[i].empty() && is_subset(history[i], ind_past)) {
-                tind.push_back(i);
+        for (size_t i = 0; i < ncc; ++i) {
+            if (length_history[i] > 0 && is_subset(history[i], ind_past)) {
+                tind.push_back(static_cast<int>(i));
             }
         }
 
@@ -86,145 +83,252 @@ make_dendrogram_bar(
         }
     }
 
-    if (is_new) {
-        // Initialize matrices for dendrogram bars
-        Eigen::MatrixXd nvertical_x = Eigen::MatrixXd::Zero(ncc, 2);
-        Eigen::MatrixXd nvertical_y = Eigen::MatrixXd::Zero(ncc, 2);
-        Eigen::MatrixXd nhorizontal_x = Eigen::MatrixXd::Zero(ncc, 2);
-        Eigen::MatrixXd nhorizontal_y = Eigen::MatrixXd::Zero(ncc, 2);
-        Eigen::MatrixXd ndots = Eigen::MatrixXd::Zero(ncc, 2);
+    // Initialization
+    std::vector<std::vector<int>> nCC = cCC;
+    Eigen::MatrixXd nE = cE;
+    Eigen::MatrixXd nduration = cduration;
+    std::vector<std::vector<int>> nchildren = chistory;
+    Eigen::VectorXi nparent = Eigen::VectorXi::Constant(ncc, -1);
 
-        // Sort the first layer based on duration[:,1] in descending order
-        std::vector<std::pair<int, double>> sval_ind;
-        for (size_t i = 0; i < nlayer[0].size(); ++i) {
-            int idx = nlayer[0][i];
-            sval_ind.emplace_back(idx, duration(idx, 1));
-        }
+    std::vector<int> ilayer(ncc, -1);
 
-        // Sort descending based on duration's death time
-        std::sort(sval_ind.begin(), sval_ind.end(),
-                  [](const std::pair<int, double>& a, const std::pair<int, double>& b) -> bool {
-                      return a.second > b.second;
-                  });
-
-        // Extract sorted indices
-        std::vector<int> sorted_layer;
-        for (const auto& pair : sval_ind) {
-            sorted_layer.push_back(pair.first);
-        }
-
-        // Assign positions for the first layer
-        for (size_t i = 0; i < sorted_layer.size(); ++i) {
-            int ii = sorted_layer[i];
-            nvertical_x(ii, 0) = static_cast<double>(i);
-            nvertical_x(ii, 1) = static_cast<double>(i);
-            nvertical_y(ii, 0) = duration(ii, 0);
-            nvertical_y(ii, 1) = duration(ii, 1);
-            ndots(ii, 0) = static_cast<double>(i);
-            ndots(ii, 1) = duration(ii, 0);
-        }
-
-        // Iterate over the remaining layers
-        for (size_t i = 1; i < nlayer.size(); ++i) {
-            for (size_t j = 0; j < nlayer[i].size(); ++j) {
-                int ii = nlayer[i][j];
-                std::vector<double> tx;
-
-                // Collect the x-coordinates of the children
-                for (const auto& child : history[ii]) {
-                    tx.push_back(nvertical_x(child, 0));
+    for (size_t i = 0; i < ncc; ++i) {
+        if (!nchildren[i].empty()) {
+            for (const auto& child : nchildren[i]) {
+                if (child >=0 && child < static_cast<int>(ncc)) { // Ensure child index is valid
+                    nparent[child] = static_cast<int>(i);
                 }
-
-                if (!tx.empty()) {
-                    // Compute mean, min, and max
-                    double mean_tx = std::accumulate(tx.begin(), tx.end(), 0.0) / tx.size();
-                    double min_tx = *std::min_element(tx.begin(), tx.end());
-                    double max_tx = *std::max_element(tx.begin(), tx.end());
-
-                    // Assign vertical x-coordinates
-                    nvertical_x(ii, 0) = mean_tx;
-                    nvertical_x(ii, 1) = mean_tx;
-
-                    // Assign horizontal x-coordinates
-                    nhorizontal_x(ii, 0) = min_tx;
-                    nhorizontal_x(ii, 1) = max_tx;
-
-                    // Assign dot x-coordinate
-                    ndots(ii, 0) = mean_tx;
-                }
-
-                // Assign dot y-coordinate and vertical y-coordinates
-                ndots(ii, 1) = duration(ii, 0);
-                nvertical_y(ii, 0) = duration(ii, 0);
-                nvertical_y(ii, 1) = duration(ii, 1);
-
-                // Assign horizontal y-coordinates (constant at duration[ii,0])
-                nhorizontal_y(ii, 0) = duration(ii, 0);
-                nhorizontal_y(ii, 1) = duration(ii, 0);
             }
         }
+        // Find which layer the current CC belongs to
+        for (size_t j = 0; j < nlayer.size(); ++j) {
+            if (std::find(nlayer[j].begin(), nlayer[j].end(), static_cast<int>(i)) != nlayer[j].end()) {
+                ilayer[i] = static_cast<int>(j);
+                break;
+            }
+        }
+    }
 
-        return std::make_tuple(nvertical_x, nvertical_y, nhorizontal_x, nhorizontal_y, ndots, nlayer);
-    } else {
-        // Update existing matrices
-        // Initialize copies of existing matrices
-        Eigen::MatrixXd nvertical_x = cvertical_x;
-        Eigen::MatrixXd nvertical_y = cvertical_y;
-        Eigen::MatrixXd nhorizontal_x = chorizontal_x;
-        Eigen::MatrixXd nhorizontal_y = chorizontal_y;
-        Eigen::MatrixXd ndots = cdots;
-        std::vector<std::vector<int>> nlayer = nlayer; // Updated layers
+    // Delete CCs of which size is smaller than min_size
+    Eigen::VectorXi ck_delete = Eigen::VectorXi::Zero(ncc);
+    for (size_t i = 0; i < nlayer.size(); ++i) {
+        for (size_t j = 0; j < nlayer[i].size(); ++j) {
+            int ii = nlayer[i][j];
+            if (ii != 0 && length_cc[ii] < duration(ii,1) && ck_delete[ii] == 0) { // Assuming min_size is duration(ii,1)
+                if (nparent[ii] != -1) {
+                    std::vector<int> jj = nchildren[nparent[ii]];
+                    Eigen::VectorXi ck(jj.size());
+                    for (size_t k = 0; k < jj.size(); ++k) {
+                        ck(k) = (length_cc[jj[k]] >= duration(jj[k],1)) ? 1 : 0;
+                    }
+                    if (ck.sum() <= 1) {
+                        ii = nparent[ii];
+                        if (ck.sum() == 1) {
+                            // Find the index with ck == 1
+                            int tind = -1;
+                            for (size_t k = 0; k < ck.size(); ++k) {
+                                if (ck(k) == 1) {
+                                    tind = jj[k];
+                                    break;
+                                }
+                            }
+                            if (tind != -1) {
+                                nchildren[ii] = nchildren[tind];
+                                for (const auto& child : nchildren[ii]) {
+                                    nparent[child] = ii;
+                                }
+                                // Update duration
+                                nduration(ii, 0) = std::max(nduration(ii, 0), nduration(tind, 0));
+                                nduration(ii, 1) = std::min(nduration(ii, 1), nduration(tind, 1));
+                            }
+                        } else {
+                            // Update duration
+                            double max_dur = -std::numeric_limits<double>::infinity();
+                            double min_dur = std::numeric_limits<double>::infinity();
+                            for (const auto& j_val : jj) {
+                                max_dur = std::max(max_dur, nduration(j_val, 0));
+                                min_dur = std::min(min_dur, nduration(j_val, 1));
+                            }
+                            nduration(ii, 0) = max_dur;
+                            nduration(ii, 1) = min_dur;
+                            nchildren[ii].clear();
+                        }
+                        // Update nE
+                        nE.row(ii).setZero();
+                        nE.col(ii).setZero();
+                        nE(ii, ii) = nduration(ii, 0);
 
-        // Iterate over the layers to update positions
-        for (size_t i = 0; i < nlayer.size(); ++i) {
-            for (size_t j = 0; j < nlayer[i].size(); ++j) {
-                int ii = nlayer[i][j];
-                if (i == 0) {
-                    // First layer: sort based on duration
-                    nvertical_y(ii, 0) = std::min(duration(ii, 0), duration(ii, 1));
-                    nvertical_y(ii, 1) = std::max(duration(ii, 0), duration(ii, 1));
-                    nhorizontal_x(ii, 0) = 0.0;
-                    nhorizontal_x(ii, 1) = 0.0;
-                    nhorizontal_y(ii, 0) = 0.0;
-                    nhorizontal_y(ii, 1) = 0.0;
-                    ndots(ii, 0) = nvertical_x(ii, 0);
-                    ndots(ii, 1) = nvertical_y(ii, 1);
+                        // Delete all children of the parent
+                        for (const auto& j_val : jj) {
+                            ck_delete[j_val] = 1;
+                            nCC[j_val].clear();
+                            nchildren[j_val].clear();
+                            nparent[j_val] = -1;
+                            nE.row(j_val).setZero();
+                            nE.col(j_val).setZero();
+                            nduration.row(j_val).setZero();
+                            length_cc[j_val] = 0;
+                            // Remove from layer
+                            for (auto& layer_vec : nlayer) {
+                                std::replace(layer_vec.begin(), layer_vec.end(), j_val, 0);
+                            }
+                        }
+                    } else {
+                        // Mark for deletion
+                        ck_delete[ii] = 1;
+                        if (ck.sum() <= static_cast<int>(ncc)) {
+                            // Remove ii from its parent's children
+                            auto& siblings = nchildren[nparent[ii]];
+                            siblings.erase(std::remove(siblings.begin(), siblings.end(), ii), siblings.end());
+                        }
+                        // Clear CC
+                        nCC[ii].clear();
+                        nchildren[ii].clear();
+                        nparent[ii] = -1;
+                        nE.row(ii).setZero();
+                        nE.col(ii).setZero();
+                        nduration.row(ii).setZero();
+                        length_cc[ii] = 0;
+                        // Remove from layer
+                        for (auto& layer_vec : nlayer) {
+                            std::replace(layer_vec.begin(), layer_vec.end(), ii, 0);
+                        }
+                    }
+                }
+            }
+
+            // Layer update
+            nlayer.clear();
+            // Recompute layers after deletion
+            // Find CCs with no parent (history size == 0)
+            ind_past.clear();
+            for (size_t i = 0; i < ncc; ++i) {
+                if (chistory[i].empty() && nduration.row(i).sum() != 0) {
+                    ind_past.push_back(static_cast<int>(i));
+                }
+            }
+            nlayer.emplace_back(ind_past);
+
+            // Iteratively find other layers
+            while (ind_past.size() < ind_notempty.size()) {
+                std::vector<int> tind;
+                for (size_t i = 0; i < ncc; ++i) {
+                    if (!chistory[i].empty() && is_subset(chistory[i], ind_past)) {
+                        tind.push_back(static_cast<int>(i));
+                    }
+                }
+                // Remove already included indices
+                std::vector<int> ttind;
+                for (const auto& idx : tind) {
+                    if (std::find(ind_past.begin(), ind_past.end(), idx) == ind_past.end()) {
+                        ttind.push_back(idx);
+                    }
+                }
+
+                if (!ttind.empty()) {
+                    nlayer.emplace_back(ttind);
+                    ind_past.insert(ind_past.end(), ttind.begin(), ttind.end());
                 } else {
-                    // Subsequent layers
-                    std::vector<double> tx;
-                    for (const auto& child : history[ii]) {
-                        tx.push_back(nvertical_x(child, 0));
-                    }
-
-                    if (!tx.empty()) {
-                        double mean_tx = std::accumulate(tx.begin(), tx.end(), 0.0) / tx.size();
-                        double min_tx = *std::min_element(tx.begin(), tx.end());
-                        double max_tx = *std::max_element(tx.begin(), tx.end());
-
-                        // Assign vertical x-coordinates
-                        nvertical_x(ii, 0) = mean_tx;
-                        nvertical_x(ii, 1) = mean_tx;
-
-                        // Assign horizontal x-coordinates
-                        nhorizontal_x(ii, 0) = min_tx;
-                        nhorizontal_x(ii, 1) = max_tx;
-
-                        // Assign dot x-coordinate
-                        ndots(ii, 0) = mean_tx;
-                    }
-
-                    // Assign dot y-coordinate and vertical y-coordinates
-                    ndots(ii, 1) = duration(ii, 0);
-                    nvertical_y(ii, 0) = duration(ii, 0);
-                    nvertical_y(ii, 1) = duration(ii, 1);
-
-                    // Assign horizontal y-coordinates (constant at duration[ii,0])
-                    nhorizontal_y(ii, 0) = duration(ii, 0);
-                    nhorizontal_y(ii, 1) = duration(ii, 0);
+                    break; // Prevent infinite loop in case of inconsistencies
                 }
             }
-        }
 
-        return std::make_tuple(nvertical_x, nvertical_y, nhorizontal_x, nhorizontal_y, ndots, nlayer);
+            // Compute length_duration and length_cc again
+            length_duration = nduration.col(0).transpose() - nduration.col(1).transpose();
+            length_cc.assign(ncc, 0);
+            for (size_t i = 0; i < ncc; ++i) {
+                length_cc[i] = nCC[i].size();
+            }
+
+            // Sort CCs based on duration in descending order
+            std::vector<std::pair<int, double>> sval_ind;
+            for (size_t i = 0; i < ncc; ++i) {
+                sval_ind.emplace_back(static_cast<int>(i), length_duration(i));
+            }
+            std::sort(sval_ind.begin(), sval_ind.end(),
+                      [](const std::pair<int, double>& a, const std::pair<int, double>& b) -> bool {
+                          return a.second > b.second;
+                      });
+
+            // Extract sorted indices
+            std::vector<int> sind;
+            for (const auto& pair : sval_ind) {
+                if (pair.second > 0) {
+                    sind.push_back(pair.first);
+                }
+            }
+
+            // Select CCs with the longest duration
+            while (!sind.empty()) {
+                int ii = sind[0];
+                // Find all CCs in ind_notempty that are subsets of nCC[ii]
+                std::vector<int> jj;
+                for (const auto& e : ind_notempty) {
+                    bool is_subset_e = true;
+                    for (const auto& node : nCC[e]) {
+                        if (std::find(nCC[ii].begin(), nCC[ii].end(), node) == nCC[ii].end()) {
+                            is_subset_e = false;
+                            break;
+                        }
+                    }
+                    if (is_subset_e && e != ii) {
+                        jj.push_back(e);
+                    }
+                }
+
+                // Find parent candidates
+                std::vector<int> iparent;
+                for (const auto& e : ind_notempty) {
+                    bool condition = false;
+                    for (const auto& node : nCC[e]) {
+                        if (std::find(nCC[ii].begin(), nCC[ii].end(), node) == nCC[ii].end()) {
+                            condition = true;
+                            break;
+                        }
+                    }
+                    if (condition && e != ii && std::find(jj.begin(), jj.end(), e) == jj.end()) {
+                        iparent.push_back(e);
+                    }
+                }
+
+                // Update duration
+                double max_dur = -std::numeric_limits<double>::infinity();
+                double min_dur = std::numeric_limits<double>::infinity();
+                for (const auto& j_val : jj) {
+                    max_dur = std::max(max_dur, nduration(j_val, 0));
+                    min_dur = std::min(min_dur, nduration(j_val, 1));
+                }
+                nduration(ii, 0) = std::max(nduration(ii, 0), max_dur);
+                nduration(ii, 1) = std::min(nduration(ii, 1), min_dur);
+                nchildren[ii].clear();
+                nE.row(ii).setZero();
+                nE.col(ii).setZero();
+                nE(ii, ii) = nduration(ii, 0);
+
+                // Delete children
+                for (const auto& j_val : jj) {
+                    nCC[j_val].clear();
+                    nchildren[j_val].clear();
+                    nparent[j_val] = -1;
+                    nE.row(j_val).setZero();
+                    nE.col(j_val).setZero();
+                    nduration.row(j_val).setZero();
+                }
+
+                // Remove ii from sind
+                sind.erase(sind.begin());
+
+                // Remove jj from sind if present
+                sind.erase(std::remove_if(sind.begin(), sind.end(),
+                                          [&](int x) { return std::find(jj.begin(), jj.end(), x) != jj.end(); }),
+                           sind.end());
+            }
+
+            // Ensure that all layers do not contain zero entries
+            for (auto& layer_vec : nlayer) {
+                layer_vec.erase(std::remove(layer_vec.begin(), layer_vec.end(), 0), layer_vec.end());
+            }
+
+            return std::make_tuple(nCC, nE, nduration, nchildren);
     }
 }
