@@ -10,7 +10,7 @@ from .parallel_computing import *
 
 def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list=None, group_name='batch',
                            fwhm=2.5, min_size=5, thres_per=30, jaccard_type='default',
-                           num_workers=os.cpu_count(), progress_bar=True):
+                           num_workers=os.cpu_count()):
     '''
     ## Calculate Jaccard index between topological connected components of feature pairs and return dataframe
         : if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
@@ -36,7 +36,6 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
 
     * J_result_name: the name of the jaccard index data file name
     * num_workers: number of workers to use for multiprocessing
-    * progress_bar: whether to show the progress bar during multiprocessing
 
     ### Output
     * df_top_total: dataframe that contains spatial overlap measures represented by (Jmax, Jmean, Jmmx, Jmmy) for the feature pairs 
@@ -224,7 +223,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     # Start the multiprocessing for extracting adjacency matrix and mask
     print("Calculation of adjacency matrix and mask")
     adjacency_mask = parallel_with_progress_extract_adjacency(loc_list, spatial_type=spatial_type, 
-                                                              fwhm=fwhm, num_workers=num_workers//1.5)
+                                                              fwhm=fwhm, num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
     if spatial_type=='visium':
         feat_A_mask_pair = [(feat[:,feat_idx].reshape((-1,1)), adjacency_mask[grp_idx][0], adjacency_mask[grp_idx][1]) \
                             for grp_idx, feat in enumerate(val_list) for feat_idx in range(feat.shape[1])]
@@ -239,7 +238,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
                                                         masks = [feat[2] for feat in feat_A_mask_pair],
                                                         spatial_type=spatial_type,
                                                         min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
-                                                        num_workers=num_workers//1.5)
+                                                        num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
 
     # Make dataframe for the similarity between feature 1 and 2 across the groups
     print('Calculation of composite jaccard indexes between feature pairs')
@@ -289,7 +288,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
                                                         CCy_loc_sums=[feat[1] for feat in CCxy_loc_mat_list],
                                                         feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
                                                         feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
-                                                        num_workers=num_workers//1.5)
+                                                        num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
     # Create dataframe for J metrics
     output_j = pd.DataFrame(output_j, columns=['J_comp'])
     # Create dataframe with pairwise topological similarity measures
