@@ -2,16 +2,23 @@
 #include <limits>    // for std::numeric_limits
 #include <algorithm> // for std::sort
 #include <cmath>     // for M_PI
+#include <stdexcept> // for std::invalid_argument
+#include <tuple>
+#include <vector>
+#include <Eigen/Sparse>
+#include <Eigen/Dense>
 
 // Function to compute adjacency matrix and Gaussian smoothing mask based on spatial locations
-std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spatial(const Eigen::MatrixXd& loc, const std::string& spatial_type, double fwhm) {
+std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spatial(
+    const Eigen::MatrixXd& loc, const std::string& spatial_type, double fwhm) {
+    
     int p = loc.rows();
-    Eigen::MatrixXd A(p, p);
-    Eigen::MatrixXd arr_mod(p, p);
+    Eigen::MatrixXd A = Eigen::MatrixXd::Zero(p, p);
+    Eigen::MatrixXd arr_mod = Eigen::MatrixXd::Zero(p, p);
     double sigma = fwhm / 2.355;
 
     if (spatial_type == "visium") {
-        // Calculate pairwise distances using Euclidean norm
+        // Calculate pairwise Euclidean distances
         for (int i = 0; i < p; ++i) {
             for (int j = i + 1; j < p; ++j) {
                 double dist = (loc.row(i) - loc.row(j)).norm();
@@ -29,13 +36,13 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
         }
 
         // Gaussian smoothing
-        arr_mod = (1 / (2 * M_PI * sigma * sigma)) * (-A.array().square() / (2 * sigma * sigma)).exp();
+        arr_mod = (1.0 / (2.0 * M_PI * sigma * sigma)) * (-A.array().square() / (2.0 * sigma * sigma)).exp();
 
-        // Calculate minimum distance where A > 0
+        // Calculate minimum non-zero distance
         double min_distance = std::numeric_limits<double>::infinity();
         for (int i = 0; i < p; ++i) {
             for (int j = 0; j < p; ++j) {
-                if (A(i, j) > 0 && A(i, j) < min_distance) {
+                if (A(i, j) > 0 && A(i, j) < min_distance && A(i, j) != std::numeric_limits<double>::infinity()) {
                     min_distance = A(i, j);
                 }
             }
@@ -51,27 +58,33 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
         Eigen::SparseMatrix<double> A_sparse = A.sparseView();
         return std::make_tuple(A_sparse, arr_mod);
     } else if (spatial_type == "imageST") {
+        // Determine grid size
         int rows = static_cast<int>(loc.col(1).maxCoeff()) + 1;
         int cols = static_cast<int>(loc.col(0).maxCoeff()) + 1;
         Eigen::SparseMatrix<double> adjacency(rows * cols, rows * cols);
 
-        // Logic for constructing adjacency matrix for imageST
+        // Construct adjacency matrix for imageST
         for (int i = 0; i < loc.rows(); ++i) {
             int x = static_cast<int>(loc(i, 0));
             int y = static_cast<int>(loc(i, 1));
             int current = x * cols + y;
 
+            // Connect to left neighbor
             if (x - 1 >= 0) {
                 int neighbor1 = (x - 1) * cols + y;
                 adjacency.insert(current, neighbor1) = 1.0;
                 adjacency.insert(neighbor1, current) = 1.0;
             }
+
+            // Connect to top neighbor
             if (y - 1 >= 0) {
                 int neighbor2 = x * cols + (y - 1);
                 adjacency.insert(current, neighbor2) = 1.0;
                 adjacency.insert(neighbor2, current) = 1.0;
             }
         }
+
+        adjacency.makeCompressed(); // Optimize the sparse matrix
 
         // Subset the adjacency matrix to include only valid rows/cols
         std::vector<int> valid_indices;
@@ -80,11 +93,27 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
         }
 
         Eigen::SparseMatrix<double> adjacency_subset(valid_indices.size(), valid_indices.size());
-        for (size_t i = 0; i < valid_indices.size(); ++i) {
-            for (size_t j = 0; j < valid_indices.size(); ++j) {
-                adjacency_subset.insert(i, j) = adjacency.coeff(valid_indices[i], valid_indices[j]);
+        std::vector<Eigen::Triplet<double>> tripletList;
+        tripletList.reserve(adjacency.nonZeros());
+
+        for (int k = 0; k < adjacency.outerSize(); ++k) {
+            for (Eigen::SparseMatrix<double>::InnerIterator it(adjacency, k); it; ++it) {
+                int row = it.row();
+                int col = it.col();
+
+                // Check if both row and col are in valid_indices
+                auto it_row = std::find(valid_indices.begin(), valid_indices.end(), row);
+                auto it_col = std::find(valid_indices.begin(), valid_indices.end(), col);
+                if (it_row != valid_indices.end() && it_col != valid_indices.end()) {
+                    int new_row = std::distance(valid_indices.begin(), it_row);
+                    int new_col = std::distance(valid_indices.begin(), it_col);
+                    tripletList.emplace_back(new_row, new_col, it.value());
+                }
             }
         }
+
+        adjacency_subset.setFromTriplets(tripletList.begin(), tripletList.end());
+        adjacency_subset.makeCompressed();
 
         return std::make_tuple(adjacency_subset, Eigen::MatrixXd());
     } else {
@@ -93,31 +122,42 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
 }
 
 // Placeholder function declarations - Implement these or link them properly
-std::tuple<std::vector<std::vector<int>>, std::vector<int>, std::vector<int>, std::vector<int>> make_original_dendrogram_cc(const Eigen::VectorXd&, const Eigen::SparseMatrix<double>&, const std::vector<double>&);
-std::tuple<std::vector<int>, std::vector<int>, std::vector<int>> make_smoothed_dendrogram(const std::vector<std::vector<int>>&, const std::vector<int>&, const std::vector<int>&, const std::vector<int>&, const Eigen::ArrayXd&);
-std::tuple<std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>> make_dendrogram_bar(const std::vector<int>&, const std::vector<int>&);
+std::tuple<std::vector<std::vector<int>>, std::vector<int>, std::vector<int>, std::vector<int>> make_original_dendrogram_cc(
+    const Eigen::VectorXd&, const Eigen::SparseMatrix<double>&, const std::vector<double>&);
+
+std::tuple<std::vector<int>, std::vector<int>, std::vector<int>> make_smoothed_dendrogram(
+    const std::vector<std::vector<int>>&, const std::vector<int>&, const std::vector<int>&, const std::vector<int>&, const Eigen::ArrayXd&);
+
+std::tuple<std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>> make_dendrogram_bar(
+    const std::vector<int>&, const std::vector<int>&);
 
 // Corrected function to extract connected components
-std::vector<std::vector<int>> extract_connected_comp(const Eigen::VectorXd& tx, const Eigen::SparseMatrix<double>& A_sparse, const std::vector<double>& threshold_x, int num_spots, int min_size) {
+std::vector<std::vector<int>> extract_connected_comp(
+    const Eigen::VectorXd& tx, const Eigen::SparseMatrix<double>& A_sparse, const std::vector<double>& threshold_x, int num_spots, int min_size) {
+    
     auto [cCC_x, cE_x, cduration_x, chistory_x] = make_original_dendrogram_cc(tx, A_sparse, threshold_x);
     auto [nCC_x, nduration_x, nhistory_x] = make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, Eigen::ArrayXd::LinSpaced(2, min_size, num_spots));
     auto [cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, nlayer_x] = make_dendrogram_bar(chistory_x, cduration_x);
 
     std::vector<std::vector<int>> CCx;
     for (size_t i = 0; i < nlayer_x.size(); ++i) {
-        CCx.push_back({nCC_x[i]});
+        CCx.emplace_back(std::vector<int>{nCC_x[i]});
     }
     return CCx;
 }
 
 // Function to extract the connected location matrix
-Eigen::SparseMatrix<int> extract_connected_loc_mat(const std::vector<std::vector<int>>& CC, int num_spots, const std::string& format) {
+Eigen::SparseMatrix<int> extract_connected_loc_mat(
+    const std::vector<std::vector<int>>& CC, int num_spots, const std::string& format) {
+    
     Eigen::MatrixXi CC_loc_arr = Eigen::MatrixXi::Zero(num_spots, CC.size());
 
     for (size_t num = 0; num < CC.size(); ++num) {
         const auto& element = CC[num];
         for (int idx : element) {
-            CC_loc_arr(idx, num) = num + 1;
+            if (idx >= 0 && idx < num_spots) { // Safety check
+                CC_loc_arr(idx, num) = static_cast<int>(num) + 1;
+            }
         }
     }
 
@@ -129,8 +169,10 @@ Eigen::SparseMatrix<int> extract_connected_loc_mat(const std::vector<std::vector
 }
 
 // Adjusted function to filter connected component locations based on expression values
-Eigen::SparseMatrix<int> filter_connected_loc_exp(const Eigen::SparseMatrix<int>& CC_loc_mat, const Eigen::VectorXd& feat_data, int thres_per) {
-    Eigen::VectorXd CC_mat_sum = CC_loc_mat * Eigen::VectorXd::Ones(CC_loc_mat.cols());
+Eigen::SparseMatrix<int> filter_connected_loc_exp(
+    const Eigen::SparseMatrix<int>& CC_loc_mat, const Eigen::VectorXd& feat_data, int thres_per) {
+    
+    Eigen::VectorXd CC_mat_sum = CC_loc_mat.cast<double>() * Eigen::VectorXd::Ones(CC_loc_mat.cols());
 
     std::vector<std::pair<int, double>> CC_mean;
     for (int i = 0; i < CC_loc_mat.cols(); ++i) {
@@ -144,13 +186,24 @@ Eigen::SparseMatrix<int> filter_connected_loc_exp(const Eigen::SparseMatrix<int>
         return lhs.second > rhs.second;
     });
 
-    int cutoff = static_cast<int>(CC_mean.size() * (1 - thres_per / 100.0));
+    int cutoff = static_cast<int>(CC_mean.size() * (1.0 - thres_per / 100.0));
+    if (cutoff < 0) cutoff = 0;
+    if (cutoff > static_cast<int>(CC_mean.size())) cutoff = static_cast<int>(CC_mean.size());
     CC_mean.resize(cutoff);
 
     Eigen::SparseMatrix<int> CC_loc_mat_fin(CC_loc_mat.rows(), CC_mean.size());
+    std::vector<Eigen::Triplet<int>> tripletList;
+    tripletList.reserve(CC_loc_mat.nonZeros());
+
     for (size_t idx = 0; idx < CC_mean.size(); ++idx) {
-        CC_loc_mat_fin.col(idx) = CC_loc_mat.col(CC_mean[idx].first);
+        int original_col = CC_mean[idx].first;
+        for (Eigen::SparseMatrix<int>::InnerIterator it(CC_loc_mat, original_col); it; ++it) {
+            tripletList.emplace_back(it.row(), idx, it.value());
+        }
     }
+
+    CC_loc_mat_fin.setFromTriplets(tripletList.begin(), tripletList.end());
+    CC_loc_mat_fin.makeCompressed();
 
     return CC_loc_mat_fin;
 }
@@ -166,7 +219,16 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
 
     int p = feat.size();
 
-    Eigen::VectorXd smooth = (spatial_type == "visium") ? (mask * feat).array() / feat.sum() : feat;
+    Eigen::VectorXd smooth;
+    if (spatial_type == "visium") {
+        double feat_sum = feat.sum();
+        if (feat_sum == 0) {
+            throw std::invalid_argument("Sum of 'feat' vector is zero, cannot divide by zero.");
+        }
+        smooth = (mask * feat).array() / feat_sum;
+    } else {
+        smooth = feat;
+    }
 
     Eigen::VectorXd t = smooth.cwiseMax(0);
     std::vector<double> threshold(t.data(), t.data() + t.size());
