@@ -2,7 +2,6 @@ import numpy as np
 import tqdm
 from parallelize import parallel_extract_adjacency, parallel_topological_comp, parallel_jaccard_composite
 
-
 def parallel_with_progress_extract_adjacency(locs, spatial_type="visium", fwhm=2.5, num_workers=4):
     """
     Parallel computation for extracting adjacency matrix and Gaussian smoothing mask.
@@ -99,6 +98,6 @@ def parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums, feat_xs
 # CCy_loc_sums = [numpy arrays for CCy locations]
 
 # Example calls:
-# result_extract_adjacency = parallel_with_progress_bar_extract_adjacency(locs)
-# result_topological_comp = parallel_with_progress_bar_topological_comp(feats, A_matrices, masks)
-# result_jaccard_composite = parallel_with_progress_bar_jaccard_composite(CCx_loc_sums, CCy_loc_sums)
+# result_extract_adjacency = parallel_with_progress_extract_adjacency(locs)
+# result_topological_comp = parallel_with_progress_topological_comp(feats, A_matrices, masks)
+# result_jaccard_composite = parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums)
