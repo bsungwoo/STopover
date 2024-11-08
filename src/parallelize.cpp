@@ -154,7 +154,7 @@ std::vector<double> parallel_jaccard_composite(
 }
 
 // Expose to Python via Pybind11
-PYBIND11_MODULE(parallelize, m) {  // Module name within the STopover package
+PYBIND11_MODULE(STopover.parallelize, m) {  // Module name within the STopover package
     m.def("parallel_extract_adjacency", &parallel_extract_adjacency, "Parallelized extract_adjacency_spatial function",
           py::arg("locs"), py::arg("spatial_type") = "visium", py::arg("fwhm") = 2.5, 
           py::arg("num_workers") = 4, py::arg("progress_callback"));
