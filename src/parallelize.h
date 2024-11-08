@@ -5,6 +5,8 @@
 #include <vector>
 #include <tuple>
 #include <string>
+#include <queue>                   // Added to use std::queue
+#include <functional>             // Added to use std::function
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <Eigen/Sparse>
