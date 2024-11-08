@@ -1,5 +1,3 @@
-# setup.py
-
 import os
 import sys
 import subprocess
@@ -14,16 +12,11 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pybind11"])
     import pybind11  # Re-import after installation
 
-def install_eigen_with_conda():
+def install_eigen_with_conda(conda_prefix):
     """
     Install Eigen using Conda if it's not already installed.
     """
-    conda_prefix = os.environ.get('CONDA_PREFIX')
-    if not conda_prefix:
-        conda_prefix = sys.prefix  # Fallback to sys.prefix if CONDA_PREFIX is not set
-
     eigen_include = os.path.join(conda_prefix, 'include', 'eigen3')
-
     if not os.path.exists(os.path.join(eigen_include, "Eigen", "Core")):
         print("Eigen library not found. Attempting to install with Conda...")
         try:
@@ -31,33 +24,42 @@ def install_eigen_with_conda():
         except subprocess.CalledProcessError:
             raise RuntimeError("Conda installation of Eigen failed. "
                                "Ensure conda is installed or install Eigen manually.")
-    
-    # Re-verify after installation
-    if not os.path.exists(os.path.join(eigen_include, "Eigen", "Core")):
-        raise FileNotFoundError(
-            f"Eigen library not found in expected directory: {eigen_include}\n"
-            f"Please install Eigen via Conda:\n"
-            f"    conda install -c conda-forge eigen\n"
-            f"Or ensure that Eigen is installed in the directory."
-        )
-    
+        
+        # Re-verify after installation
+        if not os.path.exists(os.path.join(eigen_include, "Eigen", "Core")):
+            raise FileNotFoundError(
+                f"Eigen library not found in expected directory after installation: {eigen_include}\n"
+                f"Please ensure Eigen is installed in the directory."
+            )
     return eigen_include
 
 def find_eigen_include():
     """
     Dynamically find the Eigen include directory within the active Conda environment.
+    Allows user override via EIGEN_INCLUDE environment variable.
     """
+    # Allow user to specify Eigen include path via environment variable
+    user_eigen = os.environ.get('EIGEN_INCLUDE')
+    if user_eigen and os.path.exists(os.path.join(user_eigen, "Eigen", "Core")):
+        print(f"Using Eigen include directory from EIGEN_INCLUDE environment variable: {user_eigen}")
+        return user_eigen
+    
+    # Attempt to use CONDA_PREFIX
     conda_prefix = os.environ.get('CONDA_PREFIX')
     if conda_prefix:
+        print(f"Detected CONDA_PREFIX: {conda_prefix}")
         eigen_include = os.path.join(conda_prefix, 'include', 'eigen3')
     else:
+        # Fallback to sys.prefix
+        print(f"CONDA_PREFIX not set. Using sys.prefix: {sys.prefix}")
         eigen_include = os.path.join(sys.prefix, 'include', 'eigen3')
     
     # Verify that the Eigen directory exists
     if not os.path.exists(os.path.join(eigen_include, "Eigen", "Core")):
         # Attempt to install Eigen
-        eigen_include = install_eigen_with_conda()
+        eigen_include = install_eigen_with_conda(conda_prefix if conda_prefix else sys.prefix)
     
+    print(f"Using Eigen include directory: {eigen_include}")
     return eigen_include
 
 # Dynamically find Eigen include directory
