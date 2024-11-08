@@ -30,7 +30,7 @@ install_eigen_with_conda()
 # Define the extension module with all necessary source files
 ext_modules = [
     Extension(
-        "parallelize",  # Renamed to 'parallelize'
+        "parallelize",  # Module name matches PYBIND11_MODULE
         sources=[
             "src/type_conversion.cpp",
             "src/topological_comp.cpp",
