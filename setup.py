@@ -30,7 +30,7 @@ install_eigen_with_conda()
 # Define the extension module with all necessary source files
 ext_modules = [
     Extension(
-        "spatial_analysis",  # Name of the generated Python module
+        "parallelize",  # Renamed to 'parallelize'
         sources=[
             "src/type_conversion.cpp",
             "src/topological_comp.cpp",
@@ -44,7 +44,7 @@ ext_modules = [
             pybind11.get_include(),
             pybind11.get_include(user=True),
             EIGEN_INCLUDE_DIR,  # Explicit Eigen directory
-            'src/'
+            "src"  # Assuming headers are in 'src'
         ],
         language="c++",
         extra_compile_args=["-O3", "-Wall", "-std=c++17", "-fopenmp", f"-I{EIGEN_INCLUDE_DIR}", "-v"],
