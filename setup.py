@@ -1,3 +1,5 @@
+# setup.py
+
 import os
 import sys
 import subprocess
@@ -8,23 +10,30 @@ from setuptools.command.build_ext import build_ext
 try:
     import pybind11
 except ImportError:
+    print("Pybind11 not found. Installing pybind11...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pybind11"])
     import pybind11  # Re-import after installation
 
-def find_eigen_include():
+def install_eigen_with_conda():
     """
-    Dynamically find the Eigen include directory within the active Conda environment.
+    Install Eigen using Conda if it's not already installed.
     """
-    # Attempt to use CONDA_PREFIX
     conda_prefix = os.environ.get('CONDA_PREFIX')
-    if conda_prefix:
-        eigen_include = os.path.join(conda_prefix, 'include', 'eigen3')
-    else:
-        # Fallback to sys.prefix
-        eigen_include = os.path.join(sys.prefix, 'include', 'eigen3')
+    if not conda_prefix:
+        conda_prefix = sys.prefix  # Fallback to sys.prefix if CONDA_PREFIX is not set
+
+    eigen_include = os.path.join(conda_prefix, 'include', 'eigen3')
+
+    if not os.path.exists(os.path.join(eigen_include, "Eigen", "Core")):
+        print("Eigen library not found. Attempting to install with Conda...")
+        try:
+            subprocess.check_call(["conda", "install", "-y", "-c", "conda-forge", "eigen"])
+        except subprocess.CalledProcessError:
+            raise RuntimeError("Conda installation of Eigen failed. "
+                               "Ensure conda is installed or install Eigen manually.")
     
-    # Verify that the Eigen directory exists
-    if not os.path.exists(eigen_include):
+    # Re-verify after installation
+    if not os.path.exists(os.path.join(eigen_include, "Eigen", "Core")):
         raise FileNotFoundError(
             f"Eigen library not found in expected directory: {eigen_include}\n"
             f"Please install Eigen via Conda:\n"
@@ -34,29 +43,25 @@ def find_eigen_include():
     
     return eigen_include
 
-# Attempt to import pybind11 and install if not found
-try:
-    import pybind11
-except ImportError:
-    print("Pybind11 not found. Installing pybind11...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "pybind11"])
-    import pybind11  # Re-import after installation
+def find_eigen_include():
+    """
+    Dynamically find the Eigen include directory within the active Conda environment.
+    """
+    conda_prefix = os.environ.get('CONDA_PREFIX')
+    if conda_prefix:
+        eigen_include = os.path.join(conda_prefix, 'include', 'eigen3')
+    else:
+        eigen_include = os.path.join(sys.prefix, 'include', 'eigen3')
+    
+    # Verify that the Eigen directory exists
+    if not os.path.exists(os.path.join(eigen_include, "Eigen", "Core")):
+        # Attempt to install Eigen
+        eigen_include = install_eigen_with_conda()
+    
+    return eigen_include
 
 # Dynamically find Eigen include directory
 EIGEN_INCLUDE_DIR = find_eigen_include()
-
-# Function to install Eigen with conda if it's not already in the specified directory
-def install_eigen_with_conda():
-    if not os.path.exists(os.path.join(EIGEN_INCLUDE_DIR, "Eigen", "Core")):
-        print("Eigen library not found. Attempting to install with Conda...")
-        try:
-            subprocess.check_call(["conda", "install", "-y", "-c", "conda-forge", "eigen"])
-        except subprocess.CalledProcessError:
-            raise RuntimeError("Conda installation of Eigen failed. "
-                               "Ensure conda is installed or install Eigen manually.")
-
-# Ensure Eigen is installed before proceeding
-install_eigen_with_conda()
 
 # Define the extension module with all necessary source files
 ext_modules = [
@@ -74,7 +79,7 @@ ext_modules = [
         include_dirs=[
             pybind11.get_include(),
             pybind11.get_include(user=True),
-            EIGEN_INCLUDE_DIR,  # Explicit Eigen directory
+            EIGEN_INCLUDE_DIR,  # Correct Eigen directory
             "src"  # Assuming headers are in 'src'
         ],
         language="c++",
