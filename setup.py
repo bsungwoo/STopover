@@ -15,55 +15,105 @@ except ImportError:
 def install_eigen_with_conda(conda_prefix):
     """
     Install Eigen using Conda if it's not already installed.
+    
+    Args:
+        conda_prefix (str): The prefix path of the active Conda environment.
+        
+    Returns:
+        str: The path to the Eigen include directory.
+        
+    Raises:
+        RuntimeError: If Conda installation fails.
+        FileNotFoundError: If Eigen is not found after installation.
     """
+    print("Attempting to install Eigen via Conda...")
+    try:
+        subprocess.check_call(["conda", "install", "-y", "-c", "conda-forge", "eigen"])
+    except subprocess.CalledProcessError:
+        raise RuntimeError("Conda installation of Eigen failed. "
+                           "Ensure Conda is installed and accessible, or install Eigen manually.")
+
     eigen_include = os.path.join(conda_prefix, 'include', 'eigen3')
     if not os.path.exists(os.path.join(eigen_include, "Eigen", "Core")):
-        print("Eigen library not found. Attempting to install with Conda...")
-        try:
-            subprocess.check_call(["conda", "install", "-y", "-c", "conda-forge", "eigen"])
-        except subprocess.CalledProcessError:
-            raise RuntimeError("Conda installation of Eigen failed. "
-                               "Ensure conda is installed or install Eigen manually.")
-        
-        # Re-verify after installation
-        if not os.path.exists(os.path.join(eigen_include, "Eigen", "Core")):
-            raise FileNotFoundError(
-                f"Eigen library not found in expected directory after installation: {eigen_include}\n"
-                f"Please ensure Eigen is installed in the directory."
-            )
+        raise FileNotFoundError(
+            f"Eigen library not found in expected directory after installation: {eigen_include}\n"
+            f"Please ensure Eigen is installed in the directory."
+        )
+    print(f"Eigen successfully installed in: {eigen_include}")
     return eigen_include
 
 def find_eigen_include():
     """
-    Dynamically find the Eigen include directory within the active Conda environment.
+    Dynamically find the Eigen include directory within the active Conda environment or system paths.
     Allows user override via EIGEN_INCLUDE environment variable.
-    """
-    # Allow user to specify Eigen include path via environment variable
-    user_eigen = os.environ.get('EIGEN_INCLUDE')
-    if user_eigen and os.path.exists(os.path.join(user_eigen, "Eigen", "Core")):
-        print(f"Using Eigen include directory from EIGEN_INCLUDE environment variable: {user_eigen}")
-        return user_eigen
     
-    # Attempt to use CONDA_PREFIX
+    Returns:
+        str: The path to the Eigen include directory.
+        
+    Raises:
+        FileNotFoundError: If Eigen is not found in any of the expected directories.
+    """
+    # 1. Allow user to specify Eigen include path via environment variable
+    user_eigen = os.environ.get('EIGEN_INCLUDE')
+    if user_eigen:
+        eigen_include = user_eigen
+        if os.path.exists(os.path.join(eigen_include, "Eigen", "Core")):
+            print(f"Using Eigen include directory from EIGEN_INCLUDE: {eigen_include}")
+            return eigen_include
+        else:
+            raise FileNotFoundError(
+                f"Eigen library not found in the directory specified by EIGEN_INCLUDE: {eigen_include}\n"
+                f"Please ensure the path is correct or unset EIGEN_INCLUDE to auto-detect."
+            )
+
+    # 2. Check Conda environment
     conda_prefix = os.environ.get('CONDA_PREFIX')
     if conda_prefix:
-        print(f"Detected CONDA_PREFIX: {conda_prefix}")
         eigen_include = os.path.join(conda_prefix, 'include', 'eigen3')
-    else:
-        # Fallback to sys.prefix
-        print(f"CONDA_PREFIX not set. Using sys.prefix: {sys.prefix}")
-        eigen_include = os.path.join(sys.prefix, 'include', 'eigen3')
-    
-    # Verify that the Eigen directory exists
-    if not os.path.exists(os.path.join(eigen_include, "Eigen", "Core")):
-        # Attempt to install Eigen
-        eigen_include = install_eigen_with_conda(conda_prefix if conda_prefix else sys.prefix)
-    
-    print(f"Using Eigen include directory: {eigen_include}")
-    return eigen_include
+        if os.path.exists(os.path.join(eigen_include, "Eigen", "Core")):
+            print(f"Found Eigen include directory in Conda environment: {eigen_include}")
+            return eigen_include
+        else:
+            # Attempt to install Eigen via Conda
+            eigen_include = install_eigen_with_conda(conda_prefix)
+            return eigen_include
+
+    # 3. Check sys.prefix (useful for virtualenv or non-Conda environments)
+    eigen_include = os.path.join(sys.prefix, 'include', 'eigen3')
+    if os.path.exists(os.path.join(eigen_include, "Eigen", "Core")):
+        print(f"Found Eigen include directory in sys.prefix: {eigen_include}")
+        return eigen_include
+
+    # 4. Check standard system paths
+    standard_paths = [
+        '/usr/include/eigen3',
+        '/usr/local/include/eigen3',
+        '/opt/include/eigen3',
+    ]
+    for path in standard_paths:
+        if os.path.exists(os.path.join(path, "Eigen", "Core")):
+            print(f"Found Eigen include directory in standard path: {path}")
+            return path
+
+    # 5. Attempt to install Eigen via Conda if possible
+    if conda_prefix:
+        eigen_include = install_eigen_with_conda(conda_prefix)
+        return eigen_include
+
+    # 6. If Eigen still not found, raise error
+    raise FileNotFoundError(
+        "Eigen library not found in any of the expected directories.\n"
+        "Please install Eigen via Conda:\n"
+        "    conda install -c conda-forge eigen\n"
+        "Or specify the Eigen include directory via the EIGEN_INCLUDE environment variable."
+    )
 
 # Dynamically find Eigen include directory
-EIGEN_INCLUDE_DIR = find_eigen_include()
+try:
+    EIGEN_INCLUDE_DIR = find_eigen_include()
+except FileNotFoundError as e:
+    print(str(e))
+    sys.exit(1)
 
 # Define the extension module with all necessary source files
 ext_modules = [
