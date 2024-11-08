@@ -3,8 +3,10 @@
 #include "utils.h" // Include the shared utilities
 #include <algorithm> // For std::find, std::min, std::max, etc.
 #include <numeric>   // For std::accumulate
+#include <vector>
+#include <tuple>
+#include <Eigen/Dense>
 #include <iostream>
-#include <limits>    // For std::numeric_limits
 
 namespace STopoverUtils {
 
@@ -60,11 +62,13 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
     std::vector<int> all_indices(ncc);
     std::iota(all_indices.begin(), all_indices.end(), 0);
     std::vector<int> ind_empty;
-    // Ensure both vectors are sorted before set_difference
-    std::sort(all_indices.begin(), all_indices.end());
-    std::sort(ind_notempty.begin(), ind_notempty.end());
-    std::set_difference(all_indices.begin(), all_indices.end(),
-                        ind_notempty.begin(), ind_notempty.end(),
+    // Sort both vectors before set_difference
+    std::vector<int> sorted_all_indices = all_indices;
+    std::sort(sorted_all_indices.begin(), sorted_all_indices.end());
+    std::vector<int> sorted_ind_notempty = ind_notempty;
+    std::sort(sorted_ind_notempty.begin(), sorted_ind_notempty.end());
+    std::set_difference(sorted_all_indices.begin(), sorted_all_indices.end(),
+                        sorted_ind_notempty.begin(), sorted_ind_notempty.end(),
                         std::back_inserter(ind_empty));
 
     // Identify leaf CCs (no history and not empty)
@@ -210,8 +214,13 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
         // Process the first layer
         for (const auto& ii : nlayer[0]) {
             // Sort duration[ii, :] in ascending order
-            Eigen::Vector2d sorted_duration = duration.row(ii).array().sort();
-            nvertical_y.row(ii) = sorted_duration;
+            // Since there are only two elements, use min and max
+            double first = duration(ii, 0);
+            double second = duration(ii, 1);
+            double min_dur = std::min(first, second);
+            double max_dur = std::max(first, second);
+            nvertical_y(ii, 0) = min_dur;
+            nvertical_y(ii, 1) = max_dur;
 
             nhorizontal_x.row(ii).setZero();
             nhorizontal_y.row(ii).setZero();
