@@ -233,67 +233,69 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     
     # Start the multiprocessing for finding connected components of each feature
     print("Calculation of connected components for each feature")
-    output_cc = parallel_with_progress_topological_comp(feats=[feat[0] for feat in feat_A_mask_pair],
-                                                        A_matrices=[feat[1] for feat in feat_A_mask_pair],
-                                                        masks = [feat[2] for feat in feat_A_mask_pair],
-                                                        spatial_type=spatial_type,
-                                                        min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
-                                                        num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
+    print(feat_A_mask_pair)
+    return feat_A_mask_pair, data
+    # output_cc = parallel_with_progress_topological_comp(feats=[feat[0] for feat in feat_A_mask_pair],
+    #                                                     A_matrices=[feat[1] for feat in feat_A_mask_pair],
+    #                                                     masks = [feat[2] for feat in feat_A_mask_pair],
+    #                                                     spatial_type=spatial_type,
+    #                                                     min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
+    #                                                     num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
 
-    # Make dataframe for the similarity between feature 1 and 2 across the groups
-    print('Calculation of composite jaccard indexes between feature pairs')
-    CCxy_loc_mat_list = []; output_cc_loc=[]
-    feat_num_sum = 0
-    for num, element in enumerate(group_list):
-        df_subset = df_top_total[df_top_total[group_name]==element]
-        # Find the subset of the given data
-        data_sub = data[data.obs[group_name]==element]
-        # Add the connected component location of all features in each group
-        feat_num = val_list[num].shape[1]
-        arr_cc_loc = np.concatenate(output_cc[feat_num_sum:(feat_num_sum+feat_num)], axis=1)
-        df_cc_loc = pd.DataFrame(arr_cc_loc)
-        feat_num_sum += feat_num
+    # # Make dataframe for the similarity between feature 1 and 2 across the groups
+    # print('Calculation of composite jaccard indexes between feature pairs')
+    # CCxy_loc_mat_list = []; output_cc_loc=[]
+    # feat_num_sum = 0
+    # for num, element in enumerate(group_list):
+    #     df_subset = df_top_total[df_top_total[group_name]==element]
+    #     # Find the subset of the given data
+    #     data_sub = data[data.obs[group_name]==element]
+    #     # Add the connected component location of all features in each group
+    #     feat_num = val_list[num].shape[1]
+    #     arr_cc_loc = np.concatenate(output_cc[feat_num_sum:(feat_num_sum+feat_num)], axis=1)
+    #     df_cc_loc = pd.DataFrame(arr_cc_loc)
+    #     feat_num_sum += feat_num
 
-        # Reconstruct combined feature list for each group
-        comb_feat_list = pd.concat([df_subset['Feat_1'], df_subset['Feat_2']],
-                                    axis=0, ignore_index=True).drop_duplicates().tolist()
-        # Assign column names and index
-        df_cc_loc.columns = ['Comb_CC_'+str(i) for i in comb_feat_list]
-        df_cc_loc.index = data[data.obs[group_name]==group_list[num]].obs.index
-        output_cc_loc.append(df_cc_loc)
+    #     # Reconstruct combined feature list for each group
+    #     comb_feat_list = pd.concat([df_subset['Feat_1'], df_subset['Feat_2']],
+    #                                 axis=0, ignore_index=True).drop_duplicates().tolist()
+    #     # Assign column names and index
+    #     df_cc_loc.columns = ['Comb_CC_'+str(i) for i in comb_feat_list]
+    #     df_cc_loc.index = data[data.obs[group_name]==group_list[num]].obs.index
+    #     output_cc_loc.append(df_cc_loc)
 
-        for index in range(len(df_subset)):
-            CCx_loc_mat = arr_cc_loc[:,df_subset['Index_1'].iloc[index]]
-            CCy_loc_mat = arr_cc_loc[:,df_subset['Index_2'].iloc[index]]
-            if jaccard_type!="default":
-                feat_x_val = val_list[num][:,df_subset['Index_1'].iloc[index]].reshape((-1,1))
-                feat_y_val = val_list[num][:,df_subset['Index_2'].iloc[index]].reshape((-1,1))
-            if jaccard_type=="default": CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,None,None))
-            else: CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,feat_x_val,feat_y_val))
+    #     for index in range(len(df_subset)):
+    #         CCx_loc_mat = arr_cc_loc[:,df_subset['Index_1'].iloc[index]]
+    #         CCy_loc_mat = arr_cc_loc[:,df_subset['Index_2'].iloc[index]]
+    #         if jaccard_type!="default":
+    #             feat_x_val = val_list[num][:,df_subset['Index_1'].iloc[index]].reshape((-1,1))
+    #             feat_y_val = val_list[num][:,df_subset['Index_2'].iloc[index]].reshape((-1,1))
+    #         if jaccard_type=="default": CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,None,None))
+    #         else: CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,feat_x_val,feat_y_val))
 
-    # Get the output for connected component location and save
-    data_mod = data
-    output_cc_loc = pd.concat(output_cc_loc, axis=0).fillna(0).astype(int).astype('category')
-    # Check if there is overlapping columns
-    import re
-    pattern = re.compile("^.*_prev[0-9]+$")
-    data_count = [int(i.split("_prev")[1]) for i in data_mod.obs.columns if pattern.match(i)]
-    if len(data_count) > 0: data_count = sorted(data_count)[-1] + 1
-    else: data_count = 1
-    # Add the connected component location information to the .obs
-    data_mod.obs = data_mod.obs.join(output_cc_loc, lsuffix='_prev'+str(data_count))
+    # # Get the output for connected component location and save
+    # data_mod = data
+    # output_cc_loc = pd.concat(output_cc_loc, axis=0).fillna(0).astype(int).astype('category')
+    # # Check if there is overlapping columns
+    # import re
+    # pattern = re.compile("^.*_prev[0-9]+$")
+    # data_count = [int(i.split("_prev")[1]) for i in data_mod.obs.columns if pattern.match(i)]
+    # if len(data_count) > 0: data_count = sorted(data_count)[-1] + 1
+    # else: data_count = 1
+    # # Add the connected component location information to the .obs
+    # data_mod.obs = data_mod.obs.join(output_cc_loc, lsuffix='_prev'+str(data_count))
 
-    # Get the output for jaccard
-    output_j = parallel_with_progress_jaccard_composite(CCx_loc_sums=[feat[0] for feat in CCxy_loc_mat_list], 
-                                                        CCy_loc_sums=[feat[1] for feat in CCxy_loc_mat_list],
-                                                        feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
-                                                        feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
-                                                        num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
-    # Create dataframe for J metrics
-    output_j = pd.DataFrame(output_j, columns=['J_comp'])
-    # Create dataframe with pairwise topological similarity measures
-    df_top_total = pd.concat([df_top_total.iloc[:,:-2], output_j], axis=1)
+    # # Get the output for jaccard
+    # output_j = parallel_with_progress_jaccard_composite(CCx_loc_sums=[feat[0] for feat in CCxy_loc_mat_list], 
+    #                                                     CCy_loc_sums=[feat[1] for feat in CCxy_loc_mat_list],
+    #                                                     feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
+    #                                                     feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
+    #                                                     num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
+    # # Create dataframe for J metrics
+    # output_j = pd.DataFrame(output_j, columns=['J_comp'])
+    # # Create dataframe with pairwise topological similarity measures
+    # df_top_total = pd.concat([df_top_total.iloc[:,:-2], output_j], axis=1)
 
-    print("End of the whole process: %.2f seconds" % (time.time()-start_time))
+    # print("End of the whole process: %.2f seconds" % (time.time()-start_time))
 
-    return df_top_total, data_mod
+    # return df_top_total, data_mod
