@@ -1,5 +1,4 @@
 #include "parallelize.h"
-#include "type_conversion.h"  // Include the conversion header
 #include "topological_comp.h"
 #include "jaccard.h"
 
