@@ -44,7 +44,7 @@ ext_modules = [
             pybind11.get_include(),
             pybind11.get_include(user=True),
             EIGEN_INCLUDE_DIR,  # Explicit Eigen directory
-            'src/', 'src/eigen3' 
+            'src/'
         ],
         language="c++",
         extra_compile_args=["-O3", "-Wall", "-std=c++17", "-fopenmp", f"-I{EIGEN_INCLUDE_DIR}", "-v"],

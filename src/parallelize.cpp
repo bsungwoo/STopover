@@ -126,8 +126,7 @@ std::vector<double> parallel_jaccard_composite(
     return output;
 }
 
-// Expose to Python via Pybind11
-PYBIND11_MODULE(spatial_analysis, m) {
+PYBIND11_MODULE(parallelize, m) {  // Changed to 'parallelize'
     m.def("parallel_extract_adjacency", &parallel_extract_adjacency, "Parallelized extract_adjacency_spatial function",
           py::arg("locs"), py::arg("spatial_type") = "visium", py::arg("fwhm") = 2.5, 
           py::arg("num_workers") = 4, py::arg("progress_callback"));
