@@ -223,6 +223,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     # Start the multiprocessing for extracting adjacency matrix and mask
     loc_feat_pair = [(loc_list[grp_idx], feat[:,feat_idx].reshape((-1,1))) \
         for grp_idx, feat in enumerate(val_list) for feat_idx in range(feat.shape[1])]
+    print(loc_feat_pair)
     
     # Start the multiprocessing for finding connected components of each feature
     print("Calculation of connected components for each feature")
@@ -231,7 +232,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
                                                         spatial_type=spatial_type,
                                                         min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
                                                         num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
-    return output_cc, data
+    return (loc_feat_pair, output_cc), data
     # # Make dataframe for the similarity between feature 1 and 2 across the groups
     # print('Calculation of composite jaccard indexes between feature pairs')
     # CCxy_loc_mat_list = []; output_cc_loc=[]
