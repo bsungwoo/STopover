@@ -11,8 +11,39 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pybind11"])
     import pybind11  # Re-import after installation
 
-# Explicit path to the Eigen include directory
-EIGEN_INCLUDE_DIR = "/opt/conda/envs/STopover_test/include/eigen3"
+def find_eigen_include():
+    """
+    Dynamically find the Eigen include directory within the active Conda environment.
+    """
+    # Attempt to use CONDA_PREFIX
+    conda_prefix = os.environ.get('CONDA_PREFIX')
+    if conda_prefix:
+        eigen_include = os.path.join(conda_prefix, 'include', 'eigen3')
+    else:
+        # Fallback to sys.prefix
+        eigen_include = os.path.join(sys.prefix, 'include', 'eigen3')
+    
+    # Verify that the Eigen directory exists
+    if not os.path.exists(eigen_include):
+        raise FileNotFoundError(
+            f"Eigen library not found in expected directory: {eigen_include}\n"
+            f"Please install Eigen via Conda:\n"
+            f"    conda install -c conda-forge eigen\n"
+            f"Or ensure that Eigen is installed in the directory."
+        )
+    
+    return eigen_include
+
+# Attempt to import pybind11 and install if not found
+try:
+    import pybind11
+except ImportError:
+    print("Pybind11 not found. Installing pybind11...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pybind11"])
+    import pybind11  # Re-import after installation
+
+# Dynamically find Eigen include directory
+EIGEN_INCLUDE_DIR = find_eigen_include()
 
 # Function to install Eigen with conda if it's not already in the specified directory
 def install_eigen_with_conda():
