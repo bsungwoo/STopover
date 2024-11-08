@@ -14,7 +14,7 @@
 
 namespace py = pybind11;
 
-// ThreadPool implementation
+// ThreadPool implementation (constructor and destructor)
 ThreadPool::ThreadPool(size_t threads) : stop(false) {
     for (size_t i = 0; i < threads; ++i) {
         workers.emplace_back([this] {
@@ -91,7 +91,7 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
         // Convert inputs using appropriate conversion functions
         Eigen::VectorXd feat = feats[i].cast<Eigen::VectorXd>();
         
-        // Convert SciPy sparse matrix to Eigen::SparseMatrix<double> and pass as is
+        // Convert SciPy sparse matrix to Eigen::SparseMatrix<double>
         Eigen::SparseMatrix<double> A_matrix_double = scipy_sparse_to_eigen_sparse(A_matrices[i]);
         
         Eigen::MatrixXd mask = masks[i].cast<Eigen::MatrixXd>();
@@ -117,8 +117,11 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
 
 // Parallel function for jaccard_composite with type conversion and progress callback
 std::vector<double> parallel_jaccard_composite(
-    const std::vector<py::array_t<double>>& CCx_loc_sums, const std::vector<py::array_t<double>>& CCy_loc_sums,
-    const std::vector<py::array_t<double>>& feat_xs, const std::vector<py::array_t<double>>& feat_ys, int num_workers,
+    const std::vector<py::array_t<double>>& CCx_loc_sums, 
+    const std::vector<py::array_t<double>>& CCy_loc_sums,
+    const std::vector<py::array_t<double>>& feat_xs, 
+    const std::vector<py::array_t<double>>& feat_ys, 
+    int num_workers,
     py::function progress_callback) {
 
     ThreadPool pool(num_workers);

@@ -7,6 +7,8 @@
 #include <vector>
 #include <string>
 
+// Function declarations with consistent types
+
 // Function to compute adjacency matrix and Gaussian smoothing mask based on spatial locations
 std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spatial(
     const Eigen::MatrixXd& loc, const std::string& spatial_type = "visium", double fwhm = 2.5);
