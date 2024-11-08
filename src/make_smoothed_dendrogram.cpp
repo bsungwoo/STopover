@@ -2,13 +2,24 @@
 #include <algorithm>
 #include <iostream>
 #include <set>
-#include <vector>
+#include <numeric>
 
 // Helper function to check if all elements of subset are in superset
 bool is_subset(const std::vector<int>& subset, const std::vector<int>& superset) {
     return std::all_of(subset.begin(), subset.end(), [&](int x) {
         return std::find(superset.begin(), superset.end(), x) != superset.end();
     });
+}
+
+// Helper function to compute intersection size (optional)
+size_t intersection_size(const std::vector<int>& a, const std::vector<int>& b) {
+    std::set<int> set_a(a.begin(), a.end());
+    std::set<int> set_b(b.begin(), b.end());
+    std::vector<int> intersection;
+    std::set_intersection(set_a.begin(), set_a.end(),
+                          set_b.begin(), set_b.end(),
+                          std::back_inserter(intersection));
+    return intersection.size();
 }
 
 std::tuple<
@@ -25,26 +36,27 @@ make_smoothed_dendrogram(
     const Eigen::Vector2d& lim_size
 ) {
     // Remove unused variables
-    // double max_size = lim_size(1);
+    // double max_size = lim_size(1); // Unused
     double min_size = lim_size(0);
     
-    // Ensure ncc is size_t to match vector sizes
+    // Use size_t for indices
     size_t ncc = cCC.size();
 
+    // Compute length_duration and length_cc
     Eigen::VectorXd length_duration = cduration.col(0).transpose() - cduration.col(1).transpose();
-    std::vector<int> length_cc(ncc);
+    std::vector<int> length_cc(ncc, 0);
     for (size_t i = 0; i < ncc; ++i) {
-        length_cc[i] = cCC[i].size();
+        length_cc[i] = static_cast<int>(cCC[i].size());
     }
 
     // Layer of dendrogram
     std::vector<std::vector<int>> nlayer;
 
-    // Find CCs with no parent
+    // Find CCs with no parent (history size == 0)
     std::vector<int> ind_past;
-    std::vector<int> length_history(ncc);
+    std::vector<int> length_history(ncc, 0);
     for (size_t i = 0; i < ncc; ++i) {
-        length_history[i] = chistory[i].size();
+        length_history[i] = static_cast<int>(chistory[i].size());
     }
 
     // Identify non-empty CCs
@@ -65,7 +77,7 @@ make_smoothed_dendrogram(
 
     // Identify leaf CCs (no history and not empty)
     for (size_t i = 0; i < ncc; ++i) {
-        if (length_history[i] == 0 && 
+        if (length_history[i] == 0 &&
             std::find(ind_empty.begin(), ind_empty.end(), static_cast<int>(i)) == ind_empty.end()) {
             ind_past.push_back(static_cast<int>(i));
         }
@@ -80,6 +92,7 @@ make_smoothed_dendrogram(
                 tind.push_back(static_cast<int>(i));
             }
         }
+
         // Remove already included indices
         std::vector<int> ttind;
         for (const auto& idx : tind) {
@@ -108,7 +121,7 @@ make_smoothed_dendrogram(
     for (size_t i = 0; i < ncc; ++i) {
         if (!nchildren[i].empty()) {
             for (const auto& child : nchildren[i]) {
-                if (child >=0 && child < static_cast<int>(ncc)) { // Ensure child index is valid
+                if (child >= 0 && static_cast<size_t>(child) < ncc) { // Ensure child index is valid
                     nparent[child] = static_cast<int>(i);
                 }
             }
@@ -139,7 +152,7 @@ make_smoothed_dendrogram(
                         if (ck.sum() == 1) {
                             // Find the index with ck == 1
                             int tind = -1;
-                            for (size_t k = 0; k < ck.size(); ++k) {
+                            for (size_t k = 0; k < jj.size(); ++k) {
                                 if (ck(k) == 1) {
                                     tind = jj[k];
                                     break;
@@ -207,20 +220,6 @@ make_smoothed_dendrogram(
                             std::replace(layer_vec.begin(), layer_vec.end(), ii, 0);
                         }
                     }
-                } else {
-                    // If no parent, just mark for deletion
-                    ck_delete[ii] = 1;
-                    nCC[ii].clear();
-                    nchildren[ii].clear();
-                    nparent[ii] = -1;
-                    nE.row(ii).setZero();
-                    nE.col(ii).setZero();
-                    nduration.row(ii).setZero();
-                    length_cc[ii] = 0;
-                    // Remove from layer
-                    for (auto& layer_vec : nlayer) {
-                        std::replace(layer_vec.begin(), layer_vec.end(), ii, 0);
-                    }
                 }
             }
         }
@@ -228,7 +227,7 @@ make_smoothed_dendrogram(
         // Layer update
         nlayer.clear();
         // Recompute layers after deletion
-        // Find CCs with no parent (history size == 0)
+        // Find CCs with no parent (history size == 0) and not empty
         ind_past.clear();
         for (size_t i = 0; i < ncc; ++i) {
             if (chistory[i].empty() && nduration.row(i).sum() != 0) {
@@ -265,7 +264,7 @@ make_smoothed_dendrogram(
         length_duration = nduration.col(0).transpose() - nduration.col(1).transpose();
         length_cc.assign(ncc, 0);
         for (size_t i = 0; i < ncc; ++i) {
-            length_cc[i] = nCC[i].size();
+            length_cc[i] = static_cast<int>(nCC[i].size());
         }
 
         // Sort CCs based on duration in descending order
@@ -292,6 +291,7 @@ make_smoothed_dendrogram(
             // Find all CCs in ind_notempty that are subsets of nCC[ii]
             std::vector<int> jj;
             for (const auto& e : ind_notempty) {
+                if (e == ii) continue;
                 bool is_subset_e = true;
                 for (const auto& node : nCC[e]) {
                     if (std::find(nCC[ii].begin(), nCC[ii].end(), node) == nCC[ii].end()) {
@@ -299,14 +299,15 @@ make_smoothed_dendrogram(
                         break;
                     }
                 }
-                if (is_subset_e && e != ii) {
+                if (is_subset_e) {
                     jj.push_back(e);
                 }
             }
 
-            // Find parent candidates
+            // Find parent candidates (if any)
             std::vector<int> iparent;
             for (const auto& e : ind_notempty) {
+                if (e == ii) continue;
                 bool condition = false;
                 for (const auto& node : nCC[e]) {
                     if (std::find(nCC[ii].begin(), nCC[ii].end(), node) == nCC[ii].end()) {
@@ -314,7 +315,7 @@ make_smoothed_dendrogram(
                         break;
                     }
                 }
-                if (condition && e != ii && std::find(jj.begin(), jj.end(), e) == jj.end()) {
+                if (condition && std::find(jj.begin(), jj.end(), e) == jj.end()) {
                     iparent.push_back(e);
                 }
             }
@@ -352,5 +353,7 @@ make_smoothed_dendrogram(
                        sind.end());
         }
 
+        // Ensure all code paths return a value
         return std::make_tuple(nCC, nE, nduration, nchildren);
+    }
 }
