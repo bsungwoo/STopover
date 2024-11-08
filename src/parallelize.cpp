@@ -54,7 +54,7 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
     // Dispatch parallel tasks
     for (size_t i = 0; i < feats.size(); ++i) {
         // Convert the input Python object (NumPy array) to Eigen::MatrixXd
-        Eigen::MatrixXd loc = loc_py.cast<Eigen::MatrixXd>();
+        Eigen::MatrixXd loc = locs[i].cast<Eigen::MatrixXd>();
 
         // Convert inputs using appropriate conversion functions
         Eigen::VectorXd feat = feats[i].cast<Eigen::VectorXd>();
