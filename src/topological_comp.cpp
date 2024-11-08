@@ -150,6 +150,7 @@ std::tuple<std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int
 
 // Corrected function to extract connected components
 std::vector<std::vector<int>> extract_connected_comp(
+    const Eigen::MatrixXd& loc, const std::string& spatial_type, double fwhm,
     const Eigen::VectorXd& tx, const Eigen::SparseMatrix<double>& A_sparse, 
     const std::vector<double>& threshold_x, int num_spots, int min_size) {
     
@@ -232,15 +233,18 @@ Eigen::SparseMatrix<int> filter_connected_loc_exp(
 
 // Function for topological connected component analysis
 std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_comp_res(
-    const Eigen::VectorXd& feat, const Eigen::SparseMatrix<double>& A, const Eigen::MatrixXd& mask,
-    const std::string& spatial_type, int min_size, int thres_per, const std::string& return_mode) {
+    const Eigen::MatrixXd& loc, const std::string& spatial_type, double fwhm,
+    const Eigen::VectorXd& feat, int min_size, int thres_per, const std::string& return_mode) {
 
     if (return_mode != "all" && return_mode != "cc_loc" && return_mode != "jaccard_cc_list") {
         throw std::invalid_argument("'return_mode' should be among 'all', 'cc_loc', or 'jaccard_cc_list'");
     }
 
-    int p = feat.size();
+    // Extract adjacency matrix and mask
+    auto [A, mask] = extract_adjacency_spatial(loc, spatial_type, fwhm);
 
+    // Smooth the feature values with given mask
+    int p = feat.size();
     Eigen::VectorXd smooth;
     if (spatial_type == "visium") {
         double feat_sum = feat.sum();

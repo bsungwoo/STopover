@@ -38,7 +38,7 @@ Eigen::SparseMatrix<int> filter_connected_loc_exp(
 
 // Function for topological connected component analysis
 std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_comp_res(
-    const Eigen::VectorXd& feat, const Eigen::SparseMatrix<double>& A, const Eigen::MatrixXd& mask,
-    const std::string& spatial_type, int min_size, int thres_per, const std::string& return_mode);
+    const Eigen::MatrixXd& loc, const std::string& spatial_type, double fwhm,
+    const Eigen::VectorXd& feat, int min_size, int thres_per, const std::string& return_mode);
 
 #endif // TOPOLOGICAL_COMP_H

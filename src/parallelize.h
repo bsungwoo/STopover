@@ -66,20 +66,12 @@ auto ThreadPool::enqueue(F&& f, Args&&... args)
     return res;
 }
 
-// Function declarations with consistent types
-
-// Parallel function for extract_adjacency_spatial
-std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> parallel_extract_adjacency(
-    const std::vector<py::object>& locs, 
-    const std::string& spatial_type, double fwhm, int num_workers,
-    py::function progress_callback);
-
 // Parallel function for topological_comp_res
 std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>> parallel_topological_comp(
+    const std::vector<py::object>& locs, 
+    const std::string& spatial_type, double fwhm,
     const std::vector<py::array_t<double>>& feats,  
-    const std::vector<py::object>& A_matrices,      
-    const std::vector<py::array_t<double>>& masks,
-    const std::string& spatial_type, int min_size, int thres_per, const std::string& return_mode, int num_workers,
+    int min_size, int thres_per, const std::string& return_mode, int num_workers,
     py::function progress_callback);
 
 // Parallel function for jaccard_composite

@@ -28,16 +28,17 @@ def parallel_with_progress_extract_adjacency(locs, spatial_type="visium", fwhm=2
     return result
 
 
-def parallel_with_progress_topological_comp(feats, A_matrices, masks, spatial_type="visium", min_size=5, thres_per=30, return_mode="all", num_workers=4):
+def parallel_with_progress_topological_comp(locs, feats, spatial_type="visium", fwhm=2.5,
+                                            min_size=5, thres_per=30, return_mode="all", num_workers=4):
     """
     Parallel computation for topological component extraction.
     Progress is shown using a tqdm progress bar.
     
     Args:
+        locs (list): List of locations (NumPy arrays) to compute adjacency matrix for.
         feats (list): List of feature arrays (NumPy arrays).
-        A_matrices (list): List of adjacency matrices (scipy sparse CSR matrices).
-        masks (list): List of Gaussian smoothing masks (NumPy arrays).
         spatial_type (str): Type of spatial data.
+        fwhm (float): Full-width half-maximum for Gaussian smoothing.
         min_size (int): Minimum size of connected component.
         thres_per (int): Percentile threshold for filtering connected components.
         return_mode (str): Return mode.
@@ -53,7 +54,7 @@ def parallel_with_progress_topological_comp(feats, A_matrices, masks, spatial_ty
             pbar.update(1)
         
         # Call the C++ function in parallel, passing the progress callback
-        result = parallel_topological_comp(feats, A_matrices, masks, spatial_type, min_size, thres_per, return_mode, num_workers, update_progress)
+        result = parallel_topological_comp(locs, spatial_type, fwhm, feats, min_size, thres_per, return_mode, num_workers, update_progress)
 
     return result
 

@@ -41,45 +41,12 @@ ThreadPool::~ThreadPool() {
         worker.join();
 }
 
-// Parallel function implementations...
-
-// Example: Implement parallel_extract_adjacency
-std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> parallel_extract_adjacency(
-    const std::vector<py::object>& locs, 
-    const std::string& spatial_type, double fwhm, int num_workers,
-    py::function progress_callback) {
-
-    ThreadPool pool(num_workers);
-    std::vector<std::future<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>>> results;
-
-    // Dispatch parallel tasks
-    for (const auto& loc_py : locs) {
-        // Convert the input Python object (NumPy array) to Eigen::MatrixXd
-        Eigen::MatrixXd loc = loc_py.cast<Eigen::MatrixXd>();
-        results.emplace_back(pool.enqueue(extract_adjacency_spatial, loc, spatial_type, fwhm));
-
-        // Call the progress callback
-        if (progress_callback) {
-            progress_callback();
-        }
-    }
-
-    // Collect the results
-    std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> output;
-    output.reserve(results.size());
-    for (auto& result : results) {
-        output.emplace_back(result.get());
-    }
-
-    return output;
-}
-
 // Parallel function for topological_comp_res with type conversion and progress callback
 std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>> parallel_topological_comp(
+    const std::vector<py::object>& locs, 
+    const std::string& spatial_type, double fwhm,
     const std::vector<py::array_t<double>>& feats,  
-    const std::vector<py::object>& A_matrices,      
-    const std::vector<py::array_t<double>>& masks,
-    const std::string& spatial_type, int min_size, int thres_per, const std::string& return_mode, int num_workers,
+    int min_size, int thres_per, const std::string& return_mode, int num_workers,
     py::function progress_callback) {
 
     ThreadPool pool(num_workers);
@@ -87,16 +54,14 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
 
     // Dispatch parallel tasks
     for (size_t i = 0; i < feats.size(); ++i) {
+        // Convert the input Python object (NumPy array) to Eigen::MatrixXd
+        Eigen::MatrixXd loc = loc_py.cast<Eigen::MatrixXd>();
+
         // Convert inputs using appropriate conversion functions
         Eigen::VectorXd feat = feats[i].cast<Eigen::VectorXd>();
-        
-        // Convert SciPy sparse matrix to Eigen::SparseMatrix<double>
-        Eigen::SparseMatrix<double> A_matrix_double = scipy_sparse_to_eigen_sparse(A_matrices[i]);
-        
-        Eigen::MatrixXd mask = masks[i].cast<Eigen::MatrixXd>();
 
         // Enqueue the task
-        results.emplace_back(pool.enqueue(topological_comp_res, feat, A_matrix_double, mask, spatial_type, min_size, thres_per, return_mode));
+        results.emplace_back(pool.enqueue(topological_comp_res, loc, spatial_type, fwhm, feat, min_size, thres_per, return_mode));
         
         // Call the progress callback
         if (progress_callback) {
@@ -155,13 +120,9 @@ std::vector<double> parallel_jaccard_composite(
 
 // Expose to Python via Pybind11
 PYBIND11_MODULE(parallelize, m) {  // Module name within the STopover package
-    m.def("parallel_extract_adjacency", &parallel_extract_adjacency, "Parallelized extract_adjacency_spatial function",
-          py::arg("locs"), py::arg("spatial_type") = "visium", py::arg("fwhm") = 2.5, 
-          py::arg("num_workers") = 4, py::arg("progress_callback"));
-    
     m.def("parallel_topological_comp", &parallel_topological_comp, "Parallelized topological_comp_res function",
-          py::arg("feats"), py::arg("A_matrices"), py::arg("masks"), py::arg("spatial_type") = "visium", 
-          py::arg("min_size") = 5, py::arg("thres_per") = 30, py::arg("return_mode") = "all", 
+          py::arg("locs"), py::arg("spatial_type") = "visium", py::arg("fwhm") = 2.5, 
+          py::arg("feats"), py::arg("min_size") = 5, py::arg("thres_per") = 30, py::arg("return_mode") = "all", 
           py::arg("num_workers") = 4, py::arg("progress_callback"));
     
     m.def("parallel_jaccard_composite", &parallel_jaccard_composite, "Parallelized jaccard_composite function",
