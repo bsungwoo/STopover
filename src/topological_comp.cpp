@@ -157,7 +157,7 @@ std::vector<std::vector<int>> extract_connected_comp(
     Eigen::MatrixXd cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x;
     std::vector<std::vector<int>> clayer_x;
     std::tie(cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, clayer_x) = 
-        make_dendrogram_bar(chistory_x, cduration_x);
+        make_dendrogram_bar(chistory_x, cduration_x, Eigen::MatrixXd(), Eigen::MatrixXd(), Eigen::MatrixXd(), Eigen::MatrixXd(), Eigen::MatrixXd());
     
     // Step 3b: Estimate Smoothed Dendrogram Bars for Plotting
     // Call make_dendrogram_bar with smoothed history and duration, along with initial bar coordinates
@@ -202,13 +202,13 @@ std::vector<std::vector<int>> extract_connected_comp(
 Eigen::SparseMatrix<double> extract_connected_loc_mat(
     const std::vector<std::vector<int>>& CC, int num_spots, const std::string& format) {
     
-    Eigen::MatrixXi CC_loc_arr = Eigen::MatrixXi::Zero(num_spots, CC.size());
+    Eigen::MatrixXd CC_loc_arr = Eigen::MatrixXd::Zero(num_spots, CC.size());
 
     for (size_t num = 0; num < CC.size(); ++num) {
         const auto& element = CC[num];
         for (int idx : element) {
             if (idx >= 0 && idx < num_spots) { // Safety check
-                CC_loc_arr(idx, num) = static_cast<int>(num) + 1;
+                CC_loc_arr(idx, num) = static_cast<double>(num) + 1.0; // Use double
             }
         }
     }
@@ -224,7 +224,7 @@ Eigen::SparseMatrix<double> extract_connected_loc_mat(
 Eigen::SparseMatrix<double> filter_connected_loc_exp(
     const Eigen::SparseMatrix<double>& CC_loc_mat, const Eigen::VectorXd& feat_data, int thres_per) {
     
-    // Cast CC_loc_mat to double for multiplication
+    // Compute sum of each column (assuming columns represent connected components)
     Eigen::VectorXd CC_mat_sum = CC_loc_mat.cast<double>() * Eigen::VectorXd::Ones(CC_loc_mat.cols());
 
     std::vector<std::pair<int, double>> CC_mean;
@@ -236,8 +236,8 @@ Eigen::SparseMatrix<double> filter_connected_loc_exp(
     }
 
     // Sort components based on expression values in descending order
-    std::sort(CC_mean.begin(), CC_mean.end(), [](const auto& lhs, const auto& rhs) {
-        return lhs.second > rhs.second;
+    std::sort(CC_mean.begin(), CC_mean.end(), [](const std::pair<int, double>& a, const std::pair<int, double>& b) -> bool {
+        return a.second > b.second;
     });
 
     // Determine cutoff based on threshold percentage
@@ -248,7 +248,7 @@ Eigen::SparseMatrix<double> filter_connected_loc_exp(
 
     // Create a new sparse matrix with filtered components
     Eigen::SparseMatrix<double> CC_loc_mat_fin(CC_loc_mat.rows(), CC_mean.size());
-    std::vector<Eigen::Triplet<int>> tripletList;
+    std::vector<Eigen::Triplet<double>> tripletList;
     tripletList.reserve(CC_loc_mat.nonZeros());
 
     for (size_t idx = 0; idx < CC_mean.size(); ++idx) {
