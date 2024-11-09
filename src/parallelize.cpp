@@ -144,8 +144,7 @@ std::vector<double> parallel_jaccard_composite_py(
         }
     }
 
-    // Now, call the existing parallel_jaccard_composite function
-    // Assuming you have a ThreadPool implementation
+    // Initialize ThreadPool
     ThreadPool pool(num_workers);
     std::vector<std::future<double>> results;
     results.reserve(list_size);

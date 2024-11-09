@@ -4,17 +4,17 @@
 #include <Eigen/Dense> // Include Eigen's Dense module
 
 /**
- * @brief Calculates the Jaccard composite index for each set of input vectors.
+ * @brief Calculates the Jaccard composite index for a set of input vectors.
  *
  * @param CCx_loc_sum Eigen::VectorXd representing connected component location sums for feature x.
  * @param CCy_loc_sum Eigen::VectorXd representing connected component location sums for feature y.
  * @param feat_x Eigen::VectorXd representing feature x values.
  * @param feat_y Eigen::VectorXd representing feature y values.
- * @return Eigen::VectorXd containing the Jaccard composite indices.
+ * @return double containing the Jaccard composite index.
  */
-Eigen::VectorXd jaccard_composite(const Eigen::VectorXd& CCx_loc_sum, 
-                                  const Eigen::VectorXd& CCy_loc_sum,
-                                  const Eigen::VectorXd& feat_x, 
-                                  const Eigen::VectorXd& feat_y);
+double jaccard_composite(const Eigen::VectorXd& CCx_loc_sum, 
+                         const Eigen::VectorXd& CCy_loc_sum,
+                         const Eigen::VectorXd& feat_x, 
+                         const Eigen::VectorXd& feat_y);
 
 #endif // JACCARD_H
