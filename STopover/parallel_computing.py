@@ -21,6 +21,14 @@ def parallel_with_progress_topological_comp(locs, feats, spatial_type="visium", 
     Returns:
         list: A list of topological components for each feature.
     """
+    # Reshape feats to one-dimensional arrays
+    feats = [feat.reshape(-1) if feat.ndim > 1 else feat for feat in feats]
+    
+    # Optionally, verify shapes
+    for i, feat in enumerate(feats):
+        if feat.ndim != 1:
+            raise ValueError(f"feats[{i}] is not one-dimensional after reshape.")
+        
     # Create a progress bar
     with tqdm.tqdm(total=len(feats)) as pbar:
         # Define a Python callback function to update progress
