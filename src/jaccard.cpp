@@ -1,6 +1,6 @@
 #include "jaccard.h"
 #include <algorithm> // For std::min, std::max
-#include <Eigen/Dense>
+#include <Eigen/Core>
 
 // Function to calculate the Jaccard composite index from arrays of connected component locations
 Eigen::VectorXd jaccard_composite(const Eigen::VectorXd& CCx_loc_sum, const Eigen::VectorXd& CCy_loc_sum,
