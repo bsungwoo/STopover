@@ -131,14 +131,26 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
     }
 }
 
-// Corrected function to extract connected components
+// topological_comp.cpp
+
 std::vector<std::vector<int>> extract_connected_comp(
     const Eigen::VectorXd& tx, const Eigen::SparseMatrix<double>& A_sparse, 
     const std::vector<double>& threshold_x, int num_spots, int min_size) {
     
+    // Ensure make_original_dendrogram_cc returns std::vector<std::vector<int>> for history
     auto [cCC_x, cE_x, cduration_x, chistory_x] = make_original_dendrogram_cc(tx, A_sparse, threshold_x);
+    
+    // Ensure make_smoothed_dendrogram returns appropriate types
     auto [nCC_x, nduration_x, nhistory_x] = make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, Eigen::ArrayXd::LinSpaced(2, min_size, num_spots));
-    auto [cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, nlayer_x] = make_dendrogram_bar(chistory_x, cduration_x);
+    
+    // Convert cduration_x (std::vector<int>) to Eigen::MatrixXd
+    Eigen::MatrixXd duration_matrix(nduration_x.size(), 1);
+    for (size_t i = 0; i < nduration_x.size(); ++i) {
+        duration_matrix(i, 0) = static_cast<double>(nduration_x[i]);
+    }
+    
+    // Call make_dendrogram_bar with correct types
+    auto [cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, nlayer_x] = make_dendrogram_bar(chistory_x, duration_matrix);
 
     std::vector<std::vector<int>> CCx;
     for (size_t i = 0; i < nlayer_x.size(); ++i) {
