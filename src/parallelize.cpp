@@ -45,6 +45,22 @@ ThreadPool::~ThreadPool() {
         worker.join();
 }
 
+// Helper function to convert py::array_t<double> to Eigen::VectorXd
+Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
+    // Ensure the array is one-dimensional
+    if (array.ndim() != 1) {
+        throw std::invalid_argument("All input arrays must be one-dimensional.");
+    }
+
+    // Get buffer info
+    py::buffer_info buf = array.request();
+
+    // Create Eigen::Map without copying data
+    Eigen::VectorXd vec = Eigen::Map<Eigen::VectorXd>(static_cast<double*>(buf.ptr), buf.shape[0]);
+
+    return vec;
+}
+
 // Parallel function for topological_comp_res with type conversion and progress callback
 std::vector<Eigen::VectorXd> parallel_topological_comp(
     const std::vector<py::object>& locs, 
@@ -54,7 +70,7 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     py::function progress_callback) {
 
     ThreadPool pool(num_workers);
-    std::vector<std::future<Eigen::VectorXd>> results;
+    std::vector<std::future<std::pair<size_t, Eigen::VectorXd>>> results;
 
     // Dispatch parallel tasks
     for (size_t i = 0; i < feats.size(); ++i) {
@@ -90,22 +106,6 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     }
 
     return output;
-}
-
-// Helper function to convert py::array_t<double> to Eigen::VectorXd
-Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
-    // Ensure the array is one-dimensional
-    if (array.ndim() != 1) {
-        throw std::invalid_argument("All input arrays must be one-dimensional.");
-    }
-
-    // Get buffer info
-    py::buffer_info buf = array.request();
-
-    // Create Eigen::Map without copying data
-    Eigen::VectorXd vec = Eigen::Map<Eigen::VectorXd>(static_cast<double*>(buf.ptr), buf.shape[0]);
-
-    return vec;
 }
 
 // Updated parallel_jaccard_composite function to handle lists of NumPy arrays
