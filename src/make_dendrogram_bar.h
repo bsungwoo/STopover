@@ -1,4 +1,3 @@
-// make_dendrogram_bar.h
 #ifndef MAKE_DENDROGRAM_BAR_H
 #define MAKE_DENDROGRAM_BAR_H
 
@@ -6,7 +5,6 @@
 #include <tuple>
 #include <Eigen/Dense>
 
-namespace STopoverUtils {
 
 /**
  * @brief Constructs a dendrogram bar based on provided history and duration matrices.
@@ -28,7 +26,5 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
                     const Eigen::MatrixXd& chorizontal_x = Eigen::MatrixXd(),
                     const Eigen::MatrixXd& chorizontal_y = Eigen::MatrixXd(),
                     const Eigen::MatrixXd& cdots = Eigen::MatrixXd());
-
-} // namespace STopoverUtils
 
 #endif // MAKE_DENDROGRAM_BAR_H

@@ -8,8 +8,6 @@
 #include <Eigen/Dense>
 #include <iostream>
 
-namespace STopoverUtils {
-
 /**
  * @brief Constructs a dendrogram bar based on provided history and duration matrices.
  *
@@ -264,5 +262,3 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
     // Return the constructed matrices and layers
     return std::make_tuple(nvertical_x, nvertical_y, nhorizontal_x, nhorizontal_y, ndots, nlayer_out);
 }
-
-} // namespace STopoverUtils
