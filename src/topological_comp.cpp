@@ -131,8 +131,6 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
     }
 }
 
-// topological_comp.cpp
-
 std::vector<std::vector<int>> extract_connected_comp(
     const Eigen::VectorXd& tx, const Eigen::SparseMatrix<double>& A_sparse, 
     const std::vector<double>& threshold_x, int num_spots, int min_size) {

@@ -13,15 +13,6 @@
 std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spatial(
     const Eigen::MatrixXd& loc, const std::string& spatial_type = "visium", double fwhm = 2.5);
 
-// Placeholder function declarations - Implement these or link them properly
-std::tuple<std::vector<std::vector<int>>, std::vector<int>, std::vector<int>, std::vector<int>> make_original_dendrogram_cc(
-    const Eigen::VectorXd&, const Eigen::SparseMatrix<double>&, const std::vector<double>&);
-
-std::tuple<std::vector<int>, std::vector<int>, std::vector<int>> make_smoothed_dendrogram(
-    const std::vector<std::vector<int>>&, const std::vector<int>&, const std::vector<int>&, const std::vector<int>&, const Eigen::ArrayXd&);
-
-std::tuple<std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>> make_dendrogram_bar(
-    const std::vector<int>&, const std::vector<int>&);
 
 // Corrected function to extract connected components
 std::vector<std::vector<int>> extract_connected_comp(
