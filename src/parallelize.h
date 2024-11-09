@@ -76,10 +76,10 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
 
 // Parallel function for jaccard_composite
 std::vector<double> parallel_jaccard_composite(
-    const std::vector<py::array_t<double>>& CCx_loc_sums, 
-    const std::vector<py::array_t<double>>& CCy_loc_sums,
-    const std::vector<py::array_t<double>>& feat_xs, 
-    const std::vector<py::array_t<double>>& feat_ys, 
+    const std::vector<double>& CCx_loc_sums, 
+    const std::vector<double>& CCy_loc_sums,
+    const std::vector<double>& feat_xs, 
+    const std::vector<double>& feat_ys, 
     int num_workers,
     py::function progress_callback);
 
