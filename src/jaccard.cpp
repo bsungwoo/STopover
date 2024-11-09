@@ -1,11 +1,13 @@
-#include "jaccard.h"
-#include <algorithm> // For std::min, std::max
-#include <iostream>
-#include <Eigen/Core>
+#include "jaccard.h"          // Include the header file
+#include <algorithm>          // For std::min, std::max
+#include <iostream>           // Optional: For debugging or logging
+#include <stdexcept>          // For std::invalid_argument
 
 // Function to calculate the Jaccard composite index from arrays of connected component locations
-Eigen::VectorXd jaccard_composite(const Eigen::VectorXd& CCx_loc_sum, const Eigen::VectorXd& CCy_loc_sum,
-                                  const Eigen::VectorXd& feat_x, const Eigen::VectorXd& feat_y) {
+Eigen::VectorXd jaccard_composite(const Eigen::VectorXd& CCx_loc_sum, 
+                                  const Eigen::VectorXd& CCy_loc_sum,
+                                  const Eigen::VectorXd& feat_x, 
+                                  const Eigen::VectorXd& feat_y) {
     // Ensure all inputs are the same size
     if (CCx_loc_sum.size() != CCy_loc_sum.size() ||
         CCx_loc_sum.size() != feat_x.size() ||
@@ -35,11 +37,9 @@ Eigen::VectorXd jaccard_composite(const Eigen::VectorXd& CCx_loc_sum, const Eige
             jaccard_indices[i] = (union_sum != 0.0) ? (1.0 - (intersection / union_sum)) : 0.0;
         } else {
             // Compute weighted Jaccard index
-            // Normalize feature values between 0 and 1 to prevent division by zero
             double min_feat = std::min(x_feat, y_feat);
             double max_feat = std::max(x_feat, y_feat);
 
-            // Handle the case where all feature values are equal
             if (max_feat - min_feat == 0.0) {
                 jaccard_indices[i] = 0.0;
                 continue;
