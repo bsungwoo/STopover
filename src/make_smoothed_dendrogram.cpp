@@ -7,6 +7,22 @@
 #include <tuple>
 #include <limits>
 
+namespace STopoverUtils {
+
+/**
+ * @brief Constructs a smoothed dendrogram based on provided history and duration matrices.
+ *
+ * @param cCC Vector of connected components (each component is a vector of integers).
+ * @param cE Adjacency matrix or similar representation (Eigen::MatrixXd).
+ * @param cduration Matrix containing duration information (Eigen::MatrixXd).
+ * @param chistory Vector of connected components history (each component is a vector of integers).
+ * @param lim_size Vector of two elements specifying [min_size, max_size].
+ * @return A tuple containing:
+ *         - nCC: Updated vector of connected components.
+ *         - nE: Updated adjacency matrix.
+ *         - nduration: Updated duration matrix.
+ *         - nchildren: Updated vector of connected components history.
+ */
 std::tuple<std::vector<std::vector<int>>, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<std::vector<int>>>
 make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                          const Eigen::MatrixXd& cE,
@@ -14,32 +30,33 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                          const std::vector<std::vector<int>>& chistory,
                          const Eigen::Vector2d& lim_size) {
 
-    using namespace STopoverUtils; // To access helper functions
-
+    // Extract min and max size
     double min_size = lim_size(0);
     // double max_size = lim_size(1); // Unused variable removed
 
-    size_t ncc = cCC.size();
+    Eigen::Index ncc = static_cast<Eigen::Index>(cCC.size());
 
-    Eigen::VectorXd length_duration = cduration.col(0).transpose() - cduration.col(1).transpose();
-    std::vector<int> length_cc(ncc);
-    for (size_t i = 0; i < ncc; ++i) {
-        length_cc[i] = cCC[i].size();
+    // Compute length_duration = cduration[:,0] - cduration[:,1]
+    Eigen::VectorXd length_duration = cduration.col(0) - cduration.col(1);
+
+    // Compute length_cc = [len(x) for x in cCC]
+    std::vector<int> length_cc(ncc, 0);
+    for (Eigen::Index i = 0; i < ncc; ++i) {
+        length_cc[i] = static_cast<int>(cCC[i].size());
     }
 
     // Layer of dendrogram
     std::vector<std::vector<int>> nlayer;
 
-    // Find CCs with no parent
-    std::vector<int> ind_past;
-    std::vector<int> length_history(ncc);
-    for (size_t i = 0; i < ncc; ++i) {
-        length_history[i] = chistory[i].size();
+    // Find CCs with no parent (history size == 0)
+    std::vector<int> length_history(ncc, 0);
+    for (Eigen::Index i = 0; i < ncc; ++i) {
+        length_history[i] = static_cast<int>(chistory[i].size());
     }
 
     // Identify non-empty CCs
     std::vector<int> ind_notempty;
-    for (size_t i = 0; i < ncc; ++i) {
+    for (Eigen::Index i = 0; i < ncc; ++i) {
         if (cduration.row(i).sum() != 0) {
             ind_notempty.push_back(static_cast<int>(i));
         }
@@ -47,14 +64,15 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
 
     // Identify empty CCs
     std::vector<int> ind_empty;
-    for (size_t i = 0; i < ncc; ++i) {
+    for (Eigen::Index i = 0; i < ncc; ++i) {
         if (std::find(ind_notempty.begin(), ind_notempty.end(), static_cast<int>(i)) == ind_notempty.end()) {
             ind_empty.push_back(static_cast<int>(i));
         }
     }
 
     // Identify leaf CCs (no history and not empty)
-    for (size_t i = 0; i < ncc; ++i) {
+    std::vector<int> ind_past;
+    for (Eigen::Index i = 0; i < ncc; ++i) {
         if (length_history[i] == 0 &&
             std::find(ind_empty.begin(), ind_empty.end(), static_cast<int>(i)) == ind_empty.end()) {
             ind_past.push_back(static_cast<int>(i));
@@ -63,9 +81,9 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
     nlayer.emplace_back(ind_past);
 
     // Iteratively find other layers
-    while (ind_past.size() < ind_notempty.size()) {
+    while (static_cast<int>(ind_past.size()) < static_cast<int>(ind_notempty.size())) {
         std::vector<int> tind;
-        for (size_t i = 0; i < ncc; ++i) {
+        for (Eigen::Index i = 0; i < ncc; ++i) {
             if (length_history[i] > 0 && is_subset(chistory[i], ind_past)) {
                 tind.push_back(static_cast<int>(i));
             }
@@ -96,16 +114,16 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
 
     std::vector<int> ilayer(ncc, -1);
 
-    for (size_t i = 0; i < ncc; ++i) {
+    for (Eigen::Index i = 0; i < ncc; ++i) {
         if (!nchildren[i].empty()) {
             for (const auto& child : nchildren[i]) {
-                if (child >=0 && child < static_cast<int>(ncc)) { // Ensure child index is valid
+                if (child >= 0 && child < ncc) { // Ensure child index is valid
                     nparent[child] = static_cast<int>(i);
                 }
             }
         }
         // Find which layer the current CC belongs to
-        for (size_t j = 0; j < nlayer.size(); ++j) {
+        for (Eigen::Index j = 0; j < static_cast<Eigen::Index>(nlayer.size()); ++j) {
             if (std::find(nlayer[j].begin(), nlayer[j].end(), static_cast<int>(i)) != nlayer[j].end()) {
                 ilayer[i] = static_cast<int>(j);
                 break;
@@ -115,14 +133,14 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
 
     // Delete CCs of which size is smaller than min_size
     Eigen::VectorXi ck_delete = Eigen::VectorXi::Zero(ncc);
-    for (size_t i = 0; i < nlayer.size(); ++i) {
-        for (size_t j = 0; j < nlayer[i].size(); ++j) {
+    for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(nlayer.size()); ++i) {
+        for (Eigen::Index j = 0; j < static_cast<Eigen::Index>(nlayer[i].size()); ++j) {
             int ii = nlayer[i][j];
-            if (ii != 0 && length_cc[ii] < min_size && ck_delete[ii] == 0) { // Assuming min_size is duration(ii,1)
+            if (ii != 0 && static_cast<double>(length_cc[ii]) < min_size && ck_delete[ii] == 0) { // Assuming min_size is duration(ii,1)
                 if (nparent[ii] != -1) {
                     std::vector<int> jj = nchildren[nparent[ii]];
                     Eigen::VectorXi ck(jj.size());
-                    for (size_t k = 0; k < jj.size(); ++k) {
+                    for (Eigen::Index k = 0; k < jj.size(); ++k) {
                         ck(k) = (length_cc[jj[k]] >= min_size) ? 1 : 0;
                     }
                     if (ck.sum() <= 1) {
@@ -130,7 +148,7 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                         if (ck.sum() == 1) {
                             // Find the index with ck == 1
                             int tind = -1;
-                            for (size_t k = 0; k < ck.size(); ++k) {
+                            for (Eigen::Index k = 0; k < ck.size(); ++k) {
                                 if (ck(k) == 1) {
                                     tind = jj[k];
                                     break;
@@ -206,7 +224,7 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
             // Recompute layers after deletion
             // Find CCs with no parent (history size == 0)
             ind_past.clear();
-            for (size_t i = 0; i < ncc; ++i) {
+            for (Eigen::Index i = 0; i < ncc; ++i) {
                 if (chistory[i].empty() && nduration.row(i).sum() != 0) {
                     ind_past.push_back(static_cast<int>(i));
                 }
@@ -214,9 +232,9 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
             nlayer.emplace_back(ind_past);
 
             // Iteratively find other layers
-            while (ind_past.size() < ind_notempty.size()) {
+            while (static_cast<int>(ind_past.size()) < static_cast<int>(ind_notempty.size())) {
                 std::vector<int> tind;
-                for (size_t i = 0; i < ncc; ++i) {
+                for (Eigen::Index i = 0; i < ncc; ++i) {
                     if (!chistory[i].empty() && is_subset(chistory[i], ind_past)) {
                         tind.push_back(static_cast<int>(i));
                     }
@@ -238,15 +256,15 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
             }
 
             // Compute length_duration and length_cc again
-            length_duration = nduration.col(0).transpose() - nduration.col(1).transpose();
+            length_duration = nduration.col(0) - nduration.col(1);
             length_cc.assign(ncc, 0);
-            for (size_t i = 0; i < ncc; ++i) {
-                length_cc[i] = nCC[i].size();
+            for (Eigen::Index i = 0; i < ncc; ++i) {
+                length_cc[i] = static_cast<int>(nCC[i].size());
             }
 
             // Sort CCs based on duration in descending order
             std::vector<std::pair<int, double>> sval_ind;
-            for (size_t i = 0; i < ncc; ++i) {
+            for (Eigen::Index i = 0; i < ncc; ++i) {
                 sval_ind.emplace_back(static_cast<int>(i), length_duration(i));
             }
             std::sort(sval_ind.begin(), sval_ind.end(),
@@ -333,5 +351,12 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                 layer_vec.erase(std::remove(layer_vec.begin(), layer_vec.end(), 0), layer_vec.end());
             }
 
-            return std::make_tuple(nCC, nE, nduration, nchildren);
-}
+            // Exit the loop after processing
+            break;
+        }
+
+        // Ensure that all code paths return a value
+        return std::make_tuple(nCC, nE, nduration, nchildren);
+    }
+
+} // namespace STopoverUtils
