@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>        // For automatic conversion of STL containers
-#include <pybind11/eigen.h>      // Not needed for std::vector<double>
+#include <pybind11/numpy.h>      // For handling NumPy arrays
 #include <future>                // For std::future
 #include <vector>
 
@@ -128,14 +128,68 @@ std::vector<double> parallel_jaccard_composite(
     return output;
 }
 
+// New binding function that accepts lists of NumPy arrays
+std::vector<double> parallel_jaccard_composite_py(
+    py::list CCx_loc_sums, 
+    py::list CCy_loc_sums,
+    py::list feat_xs, 
+    py::list feat_ys, 
+    int num_workers,
+    py::function progress_callback) {
+
+    if (CCx_loc_sums.size() != CCy_loc_sums.size() ||
+        CCx_loc_sums.size() != feat_xs.size() ||
+        CCx_loc_sums.size() != feat_ys.size()) {
+        throw std::invalid_argument("All input lists must have the same length.");
+    }
+
+    std::vector<double> CCx_loc_sums_vec;
+    std::vector<double> CCy_loc_sums_vec;
+    std::vector<double> feat_xs_vec;
+    std::vector<double> feat_ys_vec;
+
+    // Function to extract a single float from a NumPy array
+    auto extract_single_float = [](py::object obj) -> double {
+        py::array_t<double> arr = obj.cast<py::array_t<double>>();
+        py::buffer_info buf = arr.request();
+        if (buf.size != 1) {
+            throw std::invalid_argument("Each array must contain exactly one float.");
+        }
+        double value = *static_cast<double*>(buf.ptr);
+        return value;
+    };
+
+    // Extract floats from each list
+    for (size_t i = 0; i < CCx_loc_sums.size(); ++i) {
+        try {
+            double CCx_sum = extract_single_float(CCx_loc_sums[i]);
+            double CCy_sum = extract_single_float(CCy_loc_sums[i]);
+            double feat_x = extract_single_float(feat_xs[i]);
+            double feat_y = extract_single_float(feat_ys[i]);
+
+            CCx_loc_sums_vec.push_back(CCx_sum);
+            CCy_loc_sums_vec.push_back(CCy_sum);
+            feat_xs_vec.push_back(feat_x);
+            feat_ys_vec.push_back(feat_y);
+        }
+        catch (const py::cast_error& e) {
+            throw std::invalid_argument("All elements in input lists must be NumPy arrays of type float64 with a single element.");
+        }
+    }
+
+    // Now call the existing parallel_jaccard_composite function
+    return parallel_jaccard_composite(CCx_loc_sums_vec, CCy_loc_sums_vec, feat_xs_vec, feat_ys_vec, num_workers, progress_callback);
+}
+
+
 // Expose to Python via Pybind11
 PYBIND11_MODULE(parallelize, m) {  // Module name within the STopover package
     m.def("parallel_topological_comp", &parallel_topological_comp, "Parallelized topological_comp_res function",
           py::arg("locs"), py::arg("spatial_type") = "visium", py::arg("fwhm") = 2.5, 
           py::arg("feats"), py::arg("min_size") = 5, py::arg("thres_per") = 30, py::arg("return_mode") = "all", 
           py::arg("num_workers") = 4, py::arg("progress_callback"));
-    
-    m.def("parallel_jaccard_composite", &parallel_jaccard_composite, "Parallelized jaccard_composite function",
-          py::arg("CCx_loc_sums"), py::arg("CCy_loc_sums"), py::arg("feat_xs"), py::arg("feat_ys"), 
-          py::arg("num_workers") = 4, py::arg("progress_callback"));
+
+    m.def("parallel_jaccard_composite", &parallel_jaccard_composite_py, "Parallelized jaccard_composite function accepting lists of NumPy arrays",
+          py::arg("CCx_loc_sums"), py::arg("CCy_loc_sums"), py::arg("feat_xs"), 
+          py::arg("feat_ys"), py::arg("num_workers") = 4, py::arg("progress_callback"));
 }

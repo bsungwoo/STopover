@@ -83,4 +83,13 @@ std::vector<double> parallel_jaccard_composite(
     int num_workers,
     py::function progress_callback);
 
+// Parallel function for jaccard_composite
+std::vector<double> parallel_jaccard_composite_py(
+    py::list CCx_loc_sums, 
+    py::list CCy_loc_sums,
+    py::list feat_xs, 
+    py::list feat_ys, 
+    int num_workers,
+    py::function progress_callback);
+
 #endif // PARALLELIZE_H

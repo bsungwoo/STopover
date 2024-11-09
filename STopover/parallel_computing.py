@@ -58,16 +58,6 @@ def parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums, feat_xs
     if not (len(CCx_loc_sums) == len(CCy_loc_sums) == len(feat_xs) == len(feat_ys)):
         raise ValueError("All input lists must have the same length.")
     
-    # Convert inputs to lists of floats if they are numpy arrays
-    if isinstance(CCx_loc_sums, np.ndarray):
-        CCx_loc_sums = CCx_loc_sums.tolist()
-    if isinstance(CCy_loc_sums, np.ndarray):
-        CCy_loc_sums = CCy_loc_sums.tolist()
-    if isinstance(feat_xs, np.ndarray):
-        feat_xs = feat_xs.tolist()
-    if isinstance(feat_ys, np.ndarray):
-        feat_ys = feat_ys.tolist()
-    
     # Create a progress bar
     with tqdm.tqdm(total=len(CCx_loc_sums)) as pbar:
         # Define a Python callback function to update progress
