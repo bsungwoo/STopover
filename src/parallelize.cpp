@@ -63,11 +63,28 @@ Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
 
 // Parallel function for topological_comp_res with type conversion and progress callback
 std::vector<Eigen::VectorXd> parallel_topological_comp(
-    const std::vector<py::object>& locs, 
+    const std::vector<py::object>& locs,
     const std::string& spatial_type, double fwhm,
-    const std::vector<py::array_t<double>>& feats,  
+    const std::vector<py::array_t<double>>& feats,
     int min_size, int thres_per, const std::string& return_mode, int num_workers,
     py::function progress_callback) {
+
+    // Pre-convert locs and feats to Eigen types
+    std::vector<Eigen::MatrixXd> locs_eigen;
+    std::vector<Eigen::VectorXd> feats_eigen;
+
+    locs_eigen.reserve(locs.size());
+    feats_eigen.reserve(feats.size());
+
+    for (size_t i = 0; i < feats.size(); ++i) {
+        // Convert locs[i] to Eigen::MatrixXd
+        Eigen::MatrixXd loc = locs[i].cast<Eigen::MatrixXd>();
+        locs_eigen.push_back(loc);
+
+        // Convert feats[i] to Eigen::VectorXd
+        Eigen::VectorXd feat = array_to_vector(feats[i]);
+        feats_eigen.push_back(feat);
+    }
 
     ThreadPool pool(num_workers);
     std::vector<std::future<std::pair<size_t, Eigen::VectorXd>>> results;
@@ -76,16 +93,12 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     for (size_t i = 0; i < feats.size(); ++i) {
         // Capture index and inputs by value
         size_t index = i;
-        py::object loc_obj = locs[i];
-        py::array_t<double> feat_array = feats[i];
+        Eigen::MatrixXd loc = locs_eigen[i];
+        Eigen::VectorXd feat = feats_eigen[i];
 
         // Enqueue the task
         results.emplace_back(pool.enqueue([=]() -> std::pair<size_t, Eigen::VectorXd> {
-            // Convert inputs inside the task to avoid issues with object lifetimes
-            Eigen::MatrixXd loc = loc_obj.cast<Eigen::MatrixXd>();
-            Eigen::VectorXd feat = array_to_vector(feat_array);
-
-            // Call the computation function
+            // Perform computations using C++ types
             Eigen::VectorXd res = topological_comp_res(loc, spatial_type, fwhm, feat, min_size, thres_per, return_mode);
             return {index, res};
         }));
@@ -110,10 +123,10 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
 
 // Updated parallel_jaccard_composite function to handle lists of NumPy arrays
 std::vector<double> parallel_jaccard_composite_py(
-    py::list CCx_loc_sums_list, 
+    py::list CCx_loc_sums_list,
     py::list CCy_loc_sums_list,
-    py::list feat_xs_list, 
-    py::list feat_ys_list, 
+    py::list feat_xs_list,
+    py::list feat_ys_list,
     int num_workers,
     py::function progress_callback) {
 
@@ -154,13 +167,12 @@ std::vector<double> parallel_jaccard_composite_py(
         }
     }
 
-    // Initialize ThreadPool
     ThreadPool pool(num_workers);
     std::vector<std::future<std::pair<size_t, double>>> results;
-    results.reserve(list_size);
 
+    // Dispatch parallel tasks
     for (size_t i = 0; i < list_size; ++i) {
-        // Capture by value to ensure thread safety
+        // Capture index and data by value
         size_t index = i;
         Eigen::VectorXd CCx_sum = CCx_loc_sums_vec[i];
         Eigen::VectorXd CCy_sum = CCy_loc_sums_vec[i];
@@ -168,6 +180,7 @@ std::vector<double> parallel_jaccard_composite_py(
         Eigen::VectorXd feat_y = feat_ys_vec[i];
 
         results.emplace_back(pool.enqueue([=]() -> std::pair<size_t, double> {
+            // Perform computations using C++ types
             double jaccard_index = jaccard_composite(CCx_sum, CCy_sum, feat_x, feat_y);
             return {index, jaccard_index};
         }));
