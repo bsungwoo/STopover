@@ -39,27 +39,37 @@ def parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums, feat_xs
     Progress is shown using a tqdm progress bar.
     
     Args:
-        CCx_loc_sums (list or np.ndarray): List of connected component location sums for feature x.
-        CCy_loc_sums (list or np.ndarray): List of connected component location sums for feature y.
-        feat_xs (list or np.ndarray, optional): List of feature x values.
-        feat_ys (list or np.ndarray, optional): List of feature y values.
+        CCx_loc_sums (list or np.ndarray): List of NumPy arrays for connected component location sums for feature x.
+        CCy_loc_sums (list or np.ndarray): List of NumPy arrays for connected component location sums for feature y.
+        feat_xs (list or np.ndarray, optional): List of NumPy arrays for feature x values.
+        feat_ys (list or np.ndarray, optional): List of NumPy arrays for feature y values.
         num_workers (int, optional): Number of parallel workers.
         
     Returns:
         list: A list of Jaccard composite indices.
     """
-    # If feat_xs or feat_ys are not provided, initialize them with zeros or appropriate default values
+    # If feat_xs or feat_ys are not provided, initialize them with zero arrays matching the length
     if feat_xs is None:
-        feat_xs = [0.0] * len(CCx_loc_sums)
+        feat_xs = [np.array([0.0]) for _ in range(len(CCx_loc_sums))]
     if feat_ys is None:
-        feat_ys = [0.0] * len(CCx_loc_sums)
+        feat_ys = [np.array([0.0]) for _ in range(len(CCx_loc_sums))]
     
     # Ensure that all input lists have the same length
     if not (len(CCx_loc_sums) == len(CCy_loc_sums) == len(feat_xs) == len(feat_ys)):
         raise ValueError("All input lists must have the same length.")
     
+    # Convert inputs to lists of NumPy arrays if they are not already
+    if isinstance(CCx_loc_sums, np.ndarray):
+        CCx_loc_sums = CCx_loc_sums.tolist()
+    if isinstance(CCy_loc_sums, np.ndarray):
+        CCy_loc_sums = CCy_loc_sums.tolist()
+    if isinstance(feat_xs, np.ndarray):
+        feat_xs = feat_xs.tolist()
+    if isinstance(feat_ys, np.ndarray):
+        feat_ys = feat_ys.tolist()
+    
     # Create a progress bar
-    with tqdm.tqdm(total=len(CCx_loc_sums)) as pbar:
+    with tqdm(total=len(CCx_loc_sums)) as pbar:
         # Define a Python callback function to update progress
         def update_progress():
             pbar.update(1)
