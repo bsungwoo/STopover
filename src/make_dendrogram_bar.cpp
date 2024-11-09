@@ -1,9 +1,11 @@
 #include "make_dendrogram_bar.h"
-#include <algorithm>
+#include <algorithm>    // For std::iota
+#include <numeric>      // For std::accumulate
 #include <vector>
 #include <tuple>
-#include <Eigen/Sparse>
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
+#include <iostream>     // For std::cerr
 
 /**
  * @brief Constructs a dendrogram bar based on provided history and duration matrices.
