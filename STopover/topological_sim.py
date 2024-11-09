@@ -274,18 +274,19 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     else: data_count = 1
     # Add the connected component location information to the .obs
     data_mod.obs = data_mod.obs.join(output_cc_loc, lsuffix='_prev'+str(data_count))
+    return CCxy_loc_mat_list, data_mod
 
-    # Get the output for jaccard
-    output_j = parallel_with_progress_jaccard_composite(CCx_loc_sums=[feat[0] for feat in CCxy_loc_mat_list], 
-                                                        CCy_loc_sums=[feat[1] for feat in CCxy_loc_mat_list],
-                                                        feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
-                                                        feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
-                                                        num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
-    # Create dataframe for J metrics
-    output_j = pd.DataFrame(output_j, columns=['J_comp'])
-    # Create dataframe with pairwise topological similarity measures
-    df_top_total = pd.concat([df_top_total.iloc[:,:-2], output_j], axis=1)
+    # # Get the output for jaccard
+    # output_j = parallel_with_progress_jaccard_composite(CCx_loc_sums=[feat[0] for feat in CCxy_loc_mat_list], 
+    #                                                     CCy_loc_sums=[feat[1] for feat in CCxy_loc_mat_list],
+    #                                                     feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
+    #                                                     feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
+    #                                                     num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
+    # # Create dataframe for J metrics
+    # output_j = pd.DataFrame(output_j, columns=['J_comp'])
+    # # Create dataframe with pairwise topological similarity measures
+    # df_top_total = pd.concat([df_top_total.iloc[:,:-2], output_j], axis=1)
 
-    print("End of the whole process: %.2f seconds" % (time.time()-start_time))
+    # print("End of the whole process: %.2f seconds" % (time.time()-start_time))
 
-    return df_top_total, data_mod
+    # return df_top_total, data_mod
