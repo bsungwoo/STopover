@@ -21,7 +21,7 @@
  */
 std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<double>, Eigen::MatrixXd, std::vector<std::vector<int>>>
 make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
-                         const Eigen::MatrixXd& cE,
+                         const Eigen::SparseMatrix<double>& cE,
                          const Eigen::MatrixXd& cduration,
                          const std::vector<std::vector<int>>& chistory,
                          const Eigen::Vector2d& lim_size = Eigen::Vector2d(0, std::numeric_limits<double>::infinity()));
