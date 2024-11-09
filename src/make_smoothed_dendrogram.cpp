@@ -4,7 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <tuple>
-#include <Eigen/Sparse> // Include for Eigen::SparseMatrix
+#include <Eigen/Sparse>
 #include <Eigen/Dense>
 #include <numeric>      // For std::accumulate
 #include <iterator>     // For std::set_difference
@@ -40,7 +40,7 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
 
     Eigen::Index ncc = static_cast<Eigen::Index>(cCC.size());
 
-    // Compute length_duration = cduration[:,0] - cduration[:,1]
+    // Compute length_duration = cduration.col(0) - cduration.col(1)
     Eigen::VectorXd length_duration = cduration.col(0) - cduration.col(1);
 
     // Compute length_cc = [len(x) for x in cCC]
@@ -69,7 +69,7 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
     // Identify empty CCs
     std::vector<int> ind_empty;
     std::vector<int> all_indices(ncc);
-    std::iota(all_indices.begin(), all_indices.end(), 0);
+    std::iota(all_indices.begin(), all_indices.end(), 0); // Fixed by including <algorithm>
     std::vector<int> sorted_all_indices = all_indices;
     std::sort(sorted_all_indices.begin(), sorted_all_indices.end());
     std::vector<int> sorted_ind_notempty = ind_notempty;
@@ -175,8 +175,6 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                                 nduration(ii, 1) = std::min(nduration(ii, 1), nduration(tind, 1));
 
                                 // Update nE: Remove connections for 'ii' and 'tind', then set nE(ii, ii)
-                                // To set a row or column to zero in SparseMatrix, we need to remove all non-zero entries
-                                // and then insert the diagonal element
                                 // Remove existing connections
                                 for (Eigen::SparseMatrix<double>::InnerIterator it(nE, ii); it; ++it) {
                                     it.valueRef() = 0.0;
@@ -280,7 +278,7 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                             tind.push_back(static_cast<int>(i));
                         }
                     }
-                    // Remove already included indices
+                    // Remove already included indices and ind_empty
                     std::vector<int> ttind;
                     for (const auto& idx : tind) {
                         if (std::find(ind_past.begin(), ind_past.end(), idx) == ind_past.end() &&
@@ -365,9 +363,16 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                     nduration(ii, 0) = std::max(nduration(ii, 0), max_dur);
                     nduration(ii, 1) = std::min(nduration(ii, 1), min_dur);
                     nchildren[ii].clear();
-                    nE.row(ii).setZero(); // Set entire row to zero
-                    nE.col(ii).setZero(); // Set entire column to zero
-                    nE.coeffRef(ii, ii) = nduration(ii, 0); // Set diagonal
+                    // Remove all elements from row ii
+                    for (Eigen::SparseMatrix<double>::InnerIterator it(nE, ii); it; ++it) {
+                        it.valueRef() = 0.0;
+                    }
+                    // Remove all elements from column ii
+                    for (int row = 0; row < nE.rows(); ++row) {
+                        nE.coeffRef(row, ii) = 0.0;
+                    }
+                    // Set the diagonal element
+                    nE.coeffRef(ii, ii) = nduration(ii, 0);
 
                     // Delete children
                     for (const auto& j_val : jj) {

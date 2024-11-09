@@ -3,8 +3,8 @@
 
 #include <vector>
 #include <tuple>
-#include <Eigen/Sparse>    // Include for Eigen::SparseMatrix
-#include <Eigen/Dense>     // Include for Eigen::MatrixXd and Eigen::Vector2d
+#include <Eigen/Sparse>    // For Eigen::SparseMatrix
+#include <Eigen/Dense>     // For Eigen::MatrixXd and Eigen::Vector2d
 
 /**
  * @brief Constructs a smoothed dendrogram based on provided history and duration matrices.
