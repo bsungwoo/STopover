@@ -136,9 +136,9 @@ std::vector<std::vector<int>> extract_connected_comp(
     const Eigen::VectorXd& tx, const Eigen::SparseMatrix<double>& A_sparse, 
     const std::vector<double>& threshold_x, int num_spots, int min_size) {
     
-    auto [cCC_x, cE_x, cduration_x, chistory_x] = make_original_dendrogram::make_original_dendrogram_cc(tx, A_sparse, threshold_x);
-    auto [nCC_x, nduration_x, nhistory_x] = make_smoothed_dendrogram::make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, Eigen::ArrayXd::LinSpaced(2, min_size, num_spots));
-    auto [cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, nlayer_x] = make_dendrogram_bar::make_dendrogram_bar(chistory_x, cduration_x);
+    auto [cCC_x, cE_x, cduration_x, chistory_x] = make_original_dendrogram_cc(tx, A_sparse, threshold_x);
+    auto [nCC_x, nduration_x, nhistory_x] = make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, Eigen::ArrayXd::LinSpaced(2, min_size, num_spots));
+    auto [cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, nlayer_x] = make_dendrogram_bar(chistory_x, cduration_x);
 
     std::vector<std::vector<int>> CCx;
     for (size_t i = 0; i < nlayer_x.size(); ++i) {
