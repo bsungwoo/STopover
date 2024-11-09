@@ -1,4 +1,3 @@
-// make_dendrogram_bar.cpp
 #include "make_dendrogram_bar.h"
 #include "utils.h" // Include the shared utilities
 #include <algorithm> // For std::find, std::min, std::max, etc.
@@ -60,7 +59,6 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
     std::vector<int> all_indices(ncc);
     std::iota(all_indices.begin(), all_indices.end(), 0);
     std::vector<int> ind_empty;
-    // Sort both vectors before set_difference
     std::vector<int> sorted_all_indices = all_indices;
     std::sort(sorted_all_indices.begin(), sorted_all_indices.end());
     std::vector<int> sorted_ind_notempty = ind_notempty;
@@ -77,10 +75,12 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
             ind_past.push_back(i);
         }
     }
-    nlayer.emplace_back(ind_past);
+    if (!ind_past.empty()) {
+        nlayer.emplace_back(ind_past);
+    }
 
     // Iteratively find other layers
-    while (ind_past.size() < ind_notempty.size()) {
+    while (static_cast<int>(ind_past.size()) < static_cast<int>(ind_notempty.size())) {
         std::vector<int> tind;
         for (int i = 0; i < static_cast<int>(ncc); ++i) {
             if (length_history[i] > 0) {

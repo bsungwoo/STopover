@@ -132,28 +132,67 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
 }
 
 std::vector<std::vector<int>> extract_connected_comp(
-    const Eigen::VectorXd& tx, const Eigen::SparseMatrix<double>& A_sparse, 
-    const std::vector<double>& threshold_x, int num_spots, int min_size) {
+    const Eigen::VectorXd& tx, 
+    const Eigen::SparseMatrix<double>& A_sparse, 
+    const std::vector<double>& threshold_x, 
+    int num_spots, 
+    int min_size) {
     
-    // Ensure make_original_dendrogram_cc returns std::vector<std::vector<int>> for history
+    // Step 1: Compute Connected Components
     auto [cCC_x, cE_x, cduration_x, chistory_x] = make_original_dendrogram_cc(tx, A_sparse, threshold_x);
-    
-    // Ensure make_smoothed_dendrogram returns appropriate types
-    auto [nCC_x, nduration_x, nhistory_x] = make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, Eigen::ArrayXd::LinSpaced(2, min_size, num_spots));
-    
-    // Convert cduration_x (std::vector<int>) to Eigen::MatrixXd
-    Eigen::MatrixXd duration_matrix(nduration_x.size(), 1);
-    for (size_t i = 0; i < nduration_x.size(); ++i) {
-        duration_matrix(i, 0) = static_cast<double>(nduration_x[i]);
-    }
-    
-    // Call make_dendrogram_bar with correct types
-    auto [cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, nlayer_x] = make_dendrogram_bar(chistory_x, duration_matrix);
 
-    std::vector<std::vector<int>> CCx;
-    for (size_t i = 0; i < nlayer_x.size(); ++i) {
-        CCx.emplace_back(std::vector<int>{nCC_x[i]});
+    // Step 2: Smooth the Dendrogram
+    auto [nCC_x, nE_x, nduration_x, nhistory_x] = make_smoothed_dendrogram(
+        cCC_x, 
+        cE_x, 
+        cduration_x, 
+        chistory_x, 
+        Eigen::Vector2d(min_size, num_spots)
+    );
+    
+    // Step 3a: Estimate Initial Dendrogram Bars for Plotting
+    // Call make_dendrogram_bar with original history and duration
+    Eigen::MatrixXd cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x;
+    std::vector<std::vector<int>> clayer_x;
+    std::tie(cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, clayer_x) = 
+        make_dendrogram_bar(chistory_x, cduration_x);
+    
+    // Step 3b: Estimate Smoothed Dendrogram Bars for Plotting
+    // Call make_dendrogram_bar with smoothed history and duration, along with initial bar coordinates
+    Eigen::MatrixXd cvertical_x_new, cvertical_y_new, chorizontal_x_new, chorizontal_y_new, cdots_new;
+    std::vector<std::vector<int>> nlayer_x;
+    std::tie(cvertical_x_new, cvertical_y_new, chorizontal_x_new, chorizontal_y_new, cdots_new, nlayer_x) = 
+        make_dendrogram_bar(
+            nhistory_x, 
+            nduration_x, 
+            cvertical_x_x, 
+            cvertical_y_x, 
+            chorizontal_x_x, 
+            chorizontal_y_x, 
+            cdots_x
+        );
+
+    // Step 4: Extract Connected Components Based on Layer Information
+    // Ensure that nlayer_x has at least one layer
+    if (nlayer_x.empty() || nlayer_x[0].empty()) {
+        // No connected components found; return an empty vector
+        return {};
     }
+    
+    // Extract the first layer indices
+    std::vector<int> sind = nlayer_x[0];
+    std::vector<std::vector<int>> CCx;
+    
+    // Populate CCx with the connected components corresponding to sind
+    for (const auto& i : sind) {
+        if (i >= 0 && i < static_cast<int>(nCC_x.size())) { // Validate index
+            CCx.emplace_back(nCC_x[i]);
+        } else {
+            // Handle invalid indices if necessary
+            std::cerr << "Warning: Index " << i << " is out of bounds for nCC_x with size " << nCC_x.size() << ". Skipping.\n";
+        }
+    }
+    
     return CCx;
 }
 

@@ -19,7 +19,7 @@
  *         - nduration: Updated duration matrix.
  *         - nchildren: Updated vector of connected components history.
  */
-std::tuple<std::vector<std::vector<int>>, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<std::vector<int>>>
+std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<double>, Eigen::MatrixXd, std::vector<std::vector<int>>>
 make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                          const Eigen::MatrixXd& cE,
                          const Eigen::MatrixXd& cduration,

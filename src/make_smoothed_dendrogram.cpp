@@ -6,28 +6,35 @@
 #include <vector>
 #include <tuple>
 #include <limits>
+#include <numeric> // For std::accumulate
+#include <iterator> // For std::set_difference
+
 
 /**
  * @brief Constructs a smoothed dendrogram based on provided history and duration matrices.
  *
+ * This function processes the original dendrogram data to smooth it based on certain criteria,
+ * such as minimum size thresholds. It updates connected components, adjacency matrices,
+ * duration matrices, and history vectors accordingly.
+ *
  * @param cCC Vector of connected components (each component is a vector of integers).
- * @param cE Adjacency matrix or similar representation (Eigen::MatrixXd).
+ * @param cE Sparse adjacency matrix or similar representation (Eigen::SparseMatrix<double>).
  * @param cduration Matrix containing duration information (Eigen::MatrixXd).
  * @param chistory Vector of connected components history (each component is a vector of integers).
  * @param lim_size Vector of two elements specifying [min_size, max_size].
  * @return A tuple containing:
  *         - nCC: Updated vector of connected components.
- *         - nE: Updated adjacency matrix.
+ *         - nE: Updated sparse adjacency matrix.
  *         - nduration: Updated duration matrix.
  *         - nchildren: Updated vector of connected components history.
  */
-std::tuple<std::vector<std::vector<int>>, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<std::vector<int>>>
+std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<double>, Eigen::MatrixXd, std::vector<std::vector<int>>>
 make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
-                         const Eigen::MatrixXd& cE,
+                         const Eigen::SparseMatrix<double>& cE,
                          const Eigen::MatrixXd& cduration,
                          const std::vector<std::vector<int>>& chistory,
                          const Eigen::Vector2d& lim_size) {
-
+    
     // Extract min and max size
     double min_size = lim_size(0);
     // double max_size = lim_size(1); // Unused variable removed
@@ -62,11 +69,15 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
 
     // Identify empty CCs
     std::vector<int> ind_empty;
-    for (Eigen::Index i = 0; i < ncc; ++i) {
-        if (std::find(ind_notempty.begin(), ind_notempty.end(), static_cast<int>(i)) == ind_notempty.end()) {
-            ind_empty.push_back(static_cast<int>(i));
-        }
-    }
+    std::vector<int> all_indices(ncc);
+    std::iota(all_indices.begin(), all_indices.end(), 0);
+    std::vector<int> sorted_all_indices = all_indices;
+    std::sort(sorted_all_indices.begin(), sorted_all_indices.end());
+    std::vector<int> sorted_ind_notempty = ind_notempty;
+    std::sort(sorted_ind_notempty.begin(), sorted_ind_notempty.end());
+    std::set_difference(sorted_all_indices.begin(), sorted_all_indices.end(),
+                        sorted_ind_notempty.begin(), sorted_ind_notempty.end(),
+                        std::back_inserter(ind_empty));
 
     // Identify leaf CCs (no history and not empty)
     std::vector<int> ind_past;
@@ -76,7 +87,9 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
             ind_past.push_back(static_cast<int>(i));
         }
     }
-    nlayer.emplace_back(ind_past);
+    if (!ind_past.empty()) {
+        nlayer.emplace_back(ind_past);
+    }
 
     // Iteratively find other layers
     while (static_cast<int>(ind_past.size()) < static_cast<int>(ind_notempty.size())) {
@@ -87,10 +100,11 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
             }
         }
 
-        // Remove already included indices
+        // Remove already included indices and ind_empty
         std::vector<int> ttind;
         for (const auto& idx : tind) {
-            if (std::find(ind_past.begin(), ind_past.end(), idx) == ind_past.end()) {
+            if (std::find(ind_past.begin(), ind_past.end(), idx) == ind_past.end() &&
+                std::find(ind_empty.begin(), ind_empty.end(), idx) == ind_empty.end()) {
                 ttind.push_back(idx);
             }
         }
@@ -105,7 +119,7 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
 
     // Initialization
     std::vector<std::vector<int>> nCC = cCC;
-    Eigen::MatrixXd nE = cE;
+    Eigen::SparseMatrix<double> nE = cE; // Changed to SparseMatrix<double>
     Eigen::MatrixXd nduration = cduration;
     std::vector<std::vector<int>> nchildren = chistory;
     Eigen::VectorXi nparent = Eigen::VectorXi::Constant(ncc, -1);
@@ -160,6 +174,19 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                                 // Update duration
                                 nduration(ii, 0) = std::max(nduration(ii, 0), nduration(tind, 0));
                                 nduration(ii, 1) = std::min(nduration(ii, 1), nduration(tind, 1));
+
+                                // Update nE: Remove connections for 'ii' and 'tind', then set nE(ii, ii)
+                                // To set a row or column to zero in SparseMatrix, we need to remove all non-zero entries
+                                // and then insert the diagonal element
+                                // Remove existing connections
+                                for (Eigen::SparseMatrix<double>::InnerIterator it(nE, ii); it; ++it) {
+                                    it.valueRef() = 0.0;
+                                }
+                                for (int row = 0; row < nE.rows(); ++row) {
+                                    nE.coeffRef(row, ii) = 0.0;
+                                }
+                                // Set the diagonal element
+                                nE.coeffRef(ii, ii) = nduration(ii, 0);
                             }
                         } else {
                             // Update duration
@@ -173,10 +200,14 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                             nduration(ii, 1) = min_dur;
                             nchildren[ii].clear();
                         }
-                        // Update nE
-                        nE.row(ii).setZero();
-                        nE.col(ii).setZero();
-                        nE(ii, ii) = nduration(ii, 0);
+                        // Update nE: Remove connections for 'ii' and set diagonal
+                        for (Eigen::SparseMatrix<double>::InnerIterator it(nE, ii); it; ++it) {
+                            it.valueRef() = 0.0;
+                        }
+                        for (int row = 0; row < nE.rows(); ++row) {
+                            nE.coeffRef(row, ii) = 0.0;
+                        }
+                        nE.coeffRef(ii, ii) = nduration(ii, 0);
 
                         // Delete all children of the parent
                         for (const auto& j_val : jj) {
@@ -184,11 +215,16 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                             nCC[j_val].clear();
                             nchildren[j_val].clear();
                             nparent[j_val] = -1;
-                            nE.row(j_val).setZero();
-                            nE.col(j_val).setZero();
+                            // Remove connections in nE
+                            for (Eigen::SparseMatrix<double>::InnerIterator it(nE, j_val); it; ++it) {
+                                it.valueRef() = 0.0;
+                            }
+                            for (int row = 0; row < nE.rows(); ++row) {
+                                nE.coeffRef(row, j_val) = 0.0;
+                            }
                             nduration.row(j_val).setZero();
                             length_cc[j_val] = 0;
-                            // Remove from layer
+                            // Remove from layer by setting to zero (handled later)
                             for (auto& layer_vec : nlayer) {
                                 std::replace(layer_vec.begin(), layer_vec.end(), j_val, 0);
                             }
@@ -205,155 +241,170 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                         nCC[ii].clear();
                         nchildren[ii].clear();
                         nparent[ii] = -1;
-                        nE.row(ii).setZero();
-                        nE.col(ii).setZero();
+                        // Remove connections in nE
+                        for (Eigen::SparseMatrix<double>::InnerIterator it(nE, ii); it; ++it) {
+                            it.valueRef() = 0.0;
+                        }
+                        for (int row = 0; row < nE.rows(); ++row) {
+                            nE.coeffRef(row, ii) = 0.0;
+                        }
+                        // Set diagonal to zero
+                        nE.coeffRef(ii, ii) = 0.0;
                         nduration.row(ii).setZero();
                         length_cc[ii] = 0;
-                        // Remove from layer
+                        // Remove from layer by setting to zero (handled later)
                         for (auto& layer_vec : nlayer) {
                             std::replace(layer_vec.begin(), layer_vec.end(), ii, 0);
                         }
                     }
                 }
-            }
 
-            // Layer update
-            nlayer.clear();
-            // Recompute layers after deletion
-            // Find CCs with no parent (history size == 0)
-            ind_past.clear();
-            for (Eigen::Index i = 0; i < ncc; ++i) {
-                if (chistory[i].empty() && nduration.row(i).sum() != 0) {
-                    ind_past.push_back(static_cast<int>(i));
-                }
-            }
-            nlayer.emplace_back(ind_past);
-
-            // Iteratively find other layers
-            while (static_cast<int>(ind_past.size()) < static_cast<int>(ind_notempty.size())) {
-                std::vector<int> tind;
+                // Layer update
+                nlayer.clear();
+                // Recompute layers after deletion
+                // Find CCs with no parent (history size == 0)
+                ind_past.clear();
                 for (Eigen::Index i = 0; i < ncc; ++i) {
-                    if (!chistory[i].empty() && is_subset(chistory[i], ind_past)) {
-                        tind.push_back(static_cast<int>(i));
+                    if (chistory[i].empty() && nduration.row(i).sum() != 0) {
+                        ind_past.push_back(static_cast<int>(i));
                     }
                 }
-                // Remove already included indices
-                std::vector<int> ttind;
-                for (const auto& idx : tind) {
-                    if (std::find(ind_past.begin(), ind_past.end(), idx) == ind_past.end()) {
-                        ttind.push_back(idx);
-                    }
+                if (!ind_past.empty()) {
+                    nlayer.emplace_back(ind_past);
                 }
 
-                if (!ttind.empty()) {
-                    nlayer.emplace_back(ttind);
-                    ind_past.insert(ind_past.end(), ttind.begin(), ttind.end());
-                } else {
-                    break; // Prevent infinite loop in case of inconsistencies
-                }
-            }
-
-            // Compute length_duration and length_cc again
-            length_duration = nduration.col(0) - nduration.col(1);
-            length_cc.assign(ncc, 0);
-            for (Eigen::Index i = 0; i < ncc; ++i) {
-                length_cc[i] = static_cast<int>(nCC[i].size());
-            }
-
-            // Sort CCs based on duration in descending order
-            std::vector<std::pair<int, double>> sval_ind;
-            for (Eigen::Index i = 0; i < ncc; ++i) {
-                sval_ind.emplace_back(static_cast<int>(i), length_duration(i));
-            }
-            std::sort(sval_ind.begin(), sval_ind.end(),
-                      [](const std::pair<int, double>& a, const std::pair<int, double>& b) -> bool {
-                          return a.second > b.second;
-                      });
-
-            // Extract sorted indices
-            std::vector<int> sind;
-            for (const auto& pair : sval_ind) {
-                if (pair.second > 0) {
-                    sind.push_back(pair.first);
-                }
-            }
-
-            // Select CCs with the longest duration
-            while (!sind.empty()) {
-                int ii = sind[0];
-                // Find all CCs in ind_notempty that are subsets of nCC[ii]
-                std::vector<int> jj;
-                for (const auto& e : ind_notempty) {
-                    bool is_subset_e = true;
-                    for (const auto& node : nCC[e]) {
-                        if (std::find(nCC[ii].begin(), nCC[ii].end(), node) == nCC[ii].end()) {
-                            is_subset_e = false;
-                            break;
+                // Iteratively find other layers
+                while (static_cast<int>(ind_past.size()) < static_cast<int>(ind_notempty.size())) {
+                    std::vector<int> tind;
+                    for (Eigen::Index i = 0; i < ncc; ++i) {
+                        if (!chistory[i].empty() && is_subset(chistory[i], ind_past)) {
+                            tind.push_back(static_cast<int>(i));
                         }
                     }
-                    if (is_subset_e && e != ii) {
-                        jj.push_back(e);
-                    }
-                }
-
-                // Find parent candidates
-                std::vector<int> iparent;
-                for (const auto& e : ind_notempty) {
-                    bool condition = false;
-                    for (const auto& node : nCC[e]) {
-                        if (std::find(nCC[ii].begin(), nCC[ii].end(), node) == nCC[ii].end()) {
-                            condition = true;
-                            break;
+                    // Remove already included indices
+                    std::vector<int> ttind;
+                    for (const auto& idx : tind) {
+                        if (std::find(ind_past.begin(), ind_past.end(), idx) == ind_past.end() &&
+                            std::find(ind_empty.begin(), ind_empty.end(), idx) == ind_empty.end()) {
+                            ttind.push_back(idx);
                         }
                     }
-                    if (condition && e != ii && std::find(jj.begin(), jj.end(), e) == jj.end()) {
-                        iparent.push_back(e);
+
+                    if (!ttind.empty()) {
+                        nlayer.emplace_back(ttind);
+                        ind_past.insert(ind_past.end(), ttind.begin(), ttind.end());
+                    } else {
+                        break; // Prevent infinite loop in case of inconsistencies
                     }
                 }
 
-                // Update duration
-                double max_dur = -std::numeric_limits<double>::infinity();
-                double min_dur = std::numeric_limits<double>::infinity();
-                for (const auto& j_val : jj) {
-                    max_dur = std::max(max_dur, nduration(j_val, 0));
-                    min_dur = std::min(min_dur, nduration(j_val, 1));
-                }
-                nduration(ii, 0) = std::max(nduration(ii, 0), max_dur);
-                nduration(ii, 1) = std::min(nduration(ii, 1), min_dur);
-                nchildren[ii].clear();
-                nE.row(ii).setZero();
-                nE.col(ii).setZero();
-                nE(ii, ii) = nduration(ii, 0);
-
-                // Delete children
-                for (const auto& j_val : jj) {
-                    nCC[j_val].clear();
-                    nchildren[j_val].clear();
-                    nparent[j_val] = -1;
-                    nE.row(j_val).setZero();
-                    nE.col(j_val).setZero();
-                    nduration.row(j_val).setZero();
+                // Compute length_duration and length_cc again
+                length_duration = nduration.col(0) - nduration.col(1);
+                length_cc.assign(ncc, 0);
+                for (Eigen::Index i = 0; i < ncc; ++i) {
+                    length_cc[i] = static_cast<int>(nCC[i].size());
                 }
 
-                // Remove ii from sind
-                sind.erase(sind.begin());
+                // Sort CCs based on duration in descending order
+                std::vector<std::pair<int, double>> sval_ind;
+                for (Eigen::Index i = 0; i < ncc; ++i) {
+                    sval_ind.emplace_back(static_cast<int>(i), length_duration(i));
+                }
+                std::sort(sval_ind.begin(), sval_ind.end(),
+                          [](const std::pair<int, double>& a, const std::pair<int, double>& b) -> bool {
+                              return a.second > b.second;
+                          });
 
-                // Remove jj from sind if present
-                sind.erase(std::remove_if(sind.begin(), sind.end(),
-                                          [&](int x) { return std::find(jj.begin(), jj.end(), x) != jj.end(); }),
-                           sind.end());
+                // Extract sorted indices
+                std::vector<int> sind;
+                for (const auto& pair : sval_ind) {
+                    if (pair.second > 0) {
+                        sind.push_back(pair.first);
+                    }
+                }
+
+                // Select CCs with the longest duration
+                while (!sind.empty()) {
+                    int ii = sind[0];
+                    // Find all CCs in ind_notempty that are subsets of nCC[ii]
+                    std::vector<int> jj;
+                    for (const auto& e : ind_notempty) {
+                        bool is_subset_e = true;
+                        for (const auto& node : nCC[e]) {
+                            if (std::find(nCC[ii].begin(), nCC[ii].end(), node) == nCC[ii].end()) {
+                                is_subset_e = false;
+                                break;
+                            }
+                        }
+                        if (is_subset_e && e != ii) {
+                            jj.push_back(e);
+                        }
+                    }
+
+                    // Find parent candidates
+                    std::vector<int> iparent;
+                    for (const auto& e : ind_notempty) {
+                        bool condition = false;
+                        for (const auto& node : nCC[e]) {
+                            if (std::find(nCC[ii].begin(), nCC[ii].end(), node) == nCC[ii].end()) {
+                                condition = true;
+                                break;
+                            }
+                        }
+                        if (condition && e != ii && std::find(jj.begin(), jj.end(), e) == jj.end()) {
+                            iparent.push_back(e);
+                        }
+                    }
+
+                    // Update duration
+                    double max_dur = -std::numeric_limits<double>::infinity();
+                    double min_dur = std::numeric_limits<double>::infinity();
+                    for (const auto& j_val : jj) {
+                        max_dur = std::max(max_dur, nduration(j_val, 0));
+                        min_dur = std::min(min_dur, nduration(j_val, 1));
+                    }
+                    nduration(ii, 0) = std::max(nduration(ii, 0), max_dur);
+                    nduration(ii, 1) = std::min(nduration(ii, 1), min_dur);
+                    nchildren[ii].clear();
+                    nE.row(ii).setZero(); // Set entire row to zero
+                    nE.col(ii).setZero(); // Set entire column to zero
+                    nE.coeffRef(ii, ii) = nduration(ii, 0); // Set diagonal
+
+                    // Delete children
+                    for (const auto& j_val : jj) {
+                        nCC[j_val].clear();
+                        nchildren[j_val].clear();
+                        nparent[j_val] = -1;
+                        // Remove connections in nE
+                        for (Eigen::SparseMatrix<double>::InnerIterator it(nE, j_val); it; ++it) {
+                            it.valueRef() = 0.0;
+                        }
+                        for (int row = 0; row < nE.rows(); ++row) {
+                            nE.coeffRef(row, j_val) = 0.0;
+                        }
+                        nduration.row(j_val).setZero();
+                    }
+
+                    // Remove ii from sind
+                    sind.erase(sind.begin());
+
+                    // Remove jj from sind if present
+                    sind.erase(std::remove_if(sind.begin(), sind.end(),
+                                              [&](int x) { return std::find(jj.begin(), jj.end(), x) != jj.end(); }),
+                               sind.end());
+                }
+
+                // Ensure that all layers do not contain zero entries
+                for (auto& layer_vec : nlayer) {
+                    layer_vec.erase(std::remove(layer_vec.begin(), layer_vec.end(), 0), layer_vec.end());
+                }
+
+                // Exit the loop after processing
+                break;
             }
 
-            // Ensure that all layers do not contain zero entries
-            for (auto& layer_vec : nlayer) {
-                layer_vec.erase(std::remove(layer_vec.begin(), layer_vec.end(), 0), layer_vec.end());
-            }
-
-            // Exit the loop after processing
-            break;
+            // Ensure that all code paths return a value
+            return std::make_tuple(nCC, nE, nduration, nchildren);
         }
-
-        // Ensure that all code paths return a value
-        return std::make_tuple(nCC, nE, nduration, nchildren);
     }
 }
