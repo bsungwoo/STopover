@@ -1,11 +1,9 @@
 #include "make_dendrogram_bar.h"
-#include "utils.h" // Include the shared utilities
-#include <algorithm> // For std::find, std::min, std::max, etc.
-#include <numeric>   // For std::accumulate
+#include <algorithm>
 #include <vector>
 #include <tuple>
+#include <Eigen/Sparse>
 #include <Eigen/Dense>
-#include <iostream>
 
 /**
  * @brief Constructs a dendrogram bar based on provided history and duration matrices.

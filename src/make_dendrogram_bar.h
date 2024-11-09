@@ -3,8 +3,8 @@
 
 #include <vector>
 #include <tuple>
+#include <Eigen/Sparse>
 #include <Eigen/Dense>
-
 
 /**
  * @brief Constructs a dendrogram bar based on provided history and duration matrices.

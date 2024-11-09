@@ -1,14 +1,13 @@
 #include "make_smoothed_dendrogram.h"
-#include "utils.h" // Include the shared utilities
+#include "utils.h" // Include any shared utilities
 #include <algorithm>
 #include <iostream>
-#include <set>
 #include <vector>
 #include <tuple>
-#include <limits>
-#include <numeric> // For std::accumulate
-#include <iterator> // For std::set_difference
-
+#include <Eigen/Sparse> // Include for Eigen::SparseMatrix
+#include <Eigen/Dense>
+#include <numeric>      // For std::accumulate
+#include <iterator>     // For std::set_difference
 
 /**
  * @brief Constructs a smoothed dendrogram based on provided history and duration matrices.
