@@ -8,6 +8,7 @@
 #include <stdexcept> // for std::invalid_argument
 #include <tuple>
 #include <vector>
+#include <iostream>
 #include <Eigen/Sparse>
 #include <Eigen/Dense>
 
