@@ -265,7 +265,7 @@ Eigen::SparseMatrix<double> filter_connected_loc_exp(
 }
 
 // Function for topological connected component analysis
-Eigen::SparseMatrix<double> topological_comp_res(
+Eigen::VectorXd topological_comp_res(
     const Eigen::MatrixXd& loc, const std::string& spatial_type, double fwhm,
     const Eigen::VectorXd& feat, int min_size, int thres_per, const std::string& return_mode) {
 
@@ -298,6 +298,8 @@ Eigen::SparseMatrix<double> topological_comp_res(
 
     Eigen::SparseMatrix<double> CC_loc_mat = extract_connected_loc_mat(CC_list, p, "sparse");
     CC_loc_mat = filter_connected_loc_exp(CC_loc_mat, feat, thres_per);
+    
+    Eigen::VectorXd row_sums = CC_loc_mat * Eigen::VectorXd::Ones(CC_loc_mat.cols());
 
-    return CC_loc_mat;
+    return row_sums;
 }

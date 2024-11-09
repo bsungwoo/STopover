@@ -67,7 +67,7 @@ auto ThreadPool::enqueue(F&& f, Args&&... args)
 }
 
 // Parallel function for topological_comp_res
-std::vector<Eigen::SparseMatrix<double>> parallel_topological_comp(
+std::vector<Eigen::VectorXd> parallel_topological_comp(
     const std::vector<py::object>& locs, 
     const std::string& spatial_type, double fwhm,
     const std::vector<py::array_t<double>>& feats,  

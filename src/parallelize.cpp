@@ -41,7 +41,7 @@ ThreadPool::~ThreadPool() {
 }
 
 // Parallel function for topological_comp_res with type conversion and progress callback
-std::vector<Eigen::SparseMatrix<double>> parallel_topological_comp(
+std::vector<Eigen::VectorXd> parallel_topological_comp(
     const std::vector<py::object>& locs, 
     const std::string& spatial_type, double fwhm,
     const std::vector<py::array_t<double>>& feats,  
@@ -49,7 +49,7 @@ std::vector<Eigen::SparseMatrix<double>> parallel_topological_comp(
     py::function progress_callback) {
 
     ThreadPool pool(num_workers);
-    std::vector<std::future<Eigen::SparseMatrix<double>>> results;
+    std::vector<std::future<Eigen::VectorXd>> results;
 
     // Dispatch parallel tasks
     for (size_t i = 0; i < feats.size(); ++i) {
@@ -69,7 +69,7 @@ std::vector<Eigen::SparseMatrix<double>> parallel_topological_comp(
     }
 
     // Collect the results
-    std::vector<Eigen::SparseMatrix<double>> output;
+    std::vector<Eigen::VectorXd> output;
     output.reserve(results.size());
     for (auto& result : results) {
         output.push_back(result.get());
