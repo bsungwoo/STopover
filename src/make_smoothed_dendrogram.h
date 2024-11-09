@@ -5,8 +5,6 @@
 #include <tuple>
 #include <Eigen/Dense>
 
-namespace STopoverUtils {
-
 /**
  * @brief Constructs a smoothed dendrogram based on provided history and duration matrices.
  *
@@ -27,7 +25,5 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                          const Eigen::MatrixXd& cduration,
                          const std::vector<std::vector<int>>& chistory,
                          const Eigen::Vector2d& lim_size = Eigen::Vector2d(0, std::numeric_limits<double>::infinity()));
-
-} // namespace STopoverUtils
 
 #endif // MAKE_SMOOTHED_DENDROGRAM_H

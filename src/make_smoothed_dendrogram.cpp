@@ -7,8 +7,6 @@
 #include <tuple>
 #include <limits>
 
-namespace STopoverUtils {
-
 /**
  * @brief Constructs a smoothed dendrogram based on provided history and duration matrices.
  *
@@ -359,5 +357,3 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
         return std::make_tuple(nCC, nE, nduration, nchildren);
     }
 }
-
-} // namespace STopoverUtils
