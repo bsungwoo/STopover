@@ -4,7 +4,8 @@
 
 #include <stdexcept>
 #include <pybind11/pybind11.h>
-#include <pybind11/eigen.h>
+#include <pybind11/stl.h>        // For automatic conversion of STL containers
+#include <pybind11/eigen.h>      // For automatic conversion of Eigen types
 
 namespace py = pybind11;
 
@@ -80,28 +81,36 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
 
 // Parallel function for jaccard_composite with type conversion and progress callback
 std::vector<double> parallel_jaccard_composite(
-    const std::vector<py::array_t<double>>& CCx_loc_sums, 
-    const std::vector<py::array_t<double>>& CCy_loc_sums,
-    const std::vector<py::array_t<double>>& feat_xs, 
-    const std::vector<py::array_t<double>>& feat_ys, 
+    const std::vector<double>& CCx_loc_sums, 
+    const std::vector<double>& CCy_loc_sums,
+    const std::vector<double>& feat_xs, 
+    const std::vector<double>& feat_ys, 
     int num_workers,
     py::function progress_callback) {
 
+    if (CCx_loc_sums.size() != CCy_loc_sums.size() ||
+        CCx_loc_sums.size() != feat_xs.size() ||
+        CCx_loc_sums.size() != feat_ys.size()) {
+        throw std::invalid_argument("All input vectors must have the same length.");
+    }
+
     ThreadPool pool(num_workers);
     std::vector<std::future<double>> results;
+    results.reserve(CCx_loc_sums.size());
 
     // Dispatch parallel tasks
     for (size_t i = 0; i < CCx_loc_sums.size(); ++i) {
-        // Convert inputs from NumPy to Eigen
-        Eigen::MatrixXd CCx_loc_sum = CCx_loc_sums[i].cast<Eigen::MatrixXd>();
-        Eigen::MatrixXd CCy_loc_sum = CCy_loc_sums[i].cast<Eigen::MatrixXd>();
-        Eigen::MatrixXd feat_x = feat_xs[i].cast<Eigen::MatrixXd>();
-        Eigen::MatrixXd feat_y = feat_ys[i].cast<Eigen::MatrixXd>();
+        double CCx_sum = CCx_loc_sums[i];
+        double CCy_sum = CCy_loc_sums[i];
+        double feat_x = feat_xs[i];
+        double feat_y = feat_ys[i];
 
-        // Enqueue the task
-        results.emplace_back(pool.enqueue(jaccard_composite, CCx_loc_sum, CCy_loc_sum, feat_x, feat_y));
-        
-        // Call the progress callback
+        // Enqueue the Jaccard computation task
+        results.emplace_back(pool.enqueue([=]() -> double {
+            return jaccard_composite(CCx_sum, CCy_sum, feat_x, feat_y);
+        }));
+
+        // Update progress
         if (progress_callback) {
             progress_callback();
         }
