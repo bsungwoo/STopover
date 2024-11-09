@@ -358,5 +358,6 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
         // Ensure that all code paths return a value
         return std::make_tuple(nCC, nE, nduration, nchildren);
     }
+}
 
 } // namespace STopoverUtils
