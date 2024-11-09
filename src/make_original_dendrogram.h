@@ -11,7 +11,7 @@
 std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx);
 
 // Function to generate connected components from a sparse adjacency matrix
-std::vector<std::set<int>> connected_components_generator(const Eigen::SparseMatrix<int>& A);
+std::vector<std::set<int>> connected_components_generator(const Eigen::SparseMatrix<double>& A);
 
 // Function to create the original dendrogram with connected components
 std::tuple<std::vector<std::vector<int>>, 
@@ -19,7 +19,7 @@ std::tuple<std::vector<std::vector<int>>,
            Eigen::MatrixXd, 
            std::vector<std::vector<int>>>
 make_original_dendrogram_cc(const Eigen::VectorXd& U, 
-                            const Eigen::SparseMatrix<int>& A, 
+                            const Eigen::SparseMatrix<double>& A, 
                             const std::vector<double>& threshold);
 
 #endif // MAKE_ORIGINAL_DENDROGRAM_H

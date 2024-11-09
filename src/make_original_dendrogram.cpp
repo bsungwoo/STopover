@@ -39,17 +39,17 @@ std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_
 /**
  * @brief Generates connected components from a sparse adjacency matrix.
  *
- * @param A Sparse adjacency matrix (Eigen::SparseMatrix<int>).
+ * @param A Sparse adjacency matrix (Eigen::SparseMatrix<double>).
  * @return A vector of sets, each representing a connected component.
  */
-std::vector<std::set<int>> connected_components_generator(const Eigen::SparseMatrix<int>& A) {
+std::vector<std::set<int>> connected_components_generator(const Eigen::SparseMatrix<double>& A) {
     std::vector<std::set<int>> components;
     std::vector<bool> visited(A.rows(), false);
 
     // Convert sparse matrix to adjacency list for efficient traversal
     std::vector<std::vector<int>> edge_list(A.rows(), std::vector<int>());
     for (int k = 0; k < A.outerSize(); ++k) {
-        for (Eigen::SparseMatrix<int>::InnerIterator it(A, k); it; ++it) {
+        for (Eigen::SparseMatrix<double>::InnerIterator it(A, k); it; ++it) {
             edge_list[k].push_back(it.col());
         }
     }
@@ -83,7 +83,7 @@ std::vector<std::set<int>> connected_components_generator(const Eigen::SparseMat
  * @brief Creates the original dendrogram with connected components.
  *
  * @param U Eigen::VectorXd containing some data (e.g., expression values).
- * @param A Sparse adjacency matrix representing connections (Eigen::SparseMatrix<int>).
+ * @param A Sparse adjacency matrix representing connections (Eigen::SparseMatrix<double>).
  * @param threshold Vector of thresholds to define layers.
  * @return A tuple containing:
  *         - CC: Vector of connected components (each component is a vector of integers).
@@ -96,7 +96,7 @@ std::tuple<std::vector<std::vector<int>>,
            Eigen::MatrixXd, 
            std::vector<std::vector<int>>>
 make_original_dendrogram_cc(const Eigen::VectorXd& U, 
-                            const Eigen::SparseMatrix<int>& A, 
+                            const Eigen::SparseMatrix<double>& A, 
                             const std::vector<double>& threshold) {
     int p = U.size();
     std::vector<std::vector<int>> CC(p, std::vector<int>());
@@ -112,7 +112,7 @@ make_original_dendrogram_cc(const Eigen::VectorXd& U,
     // Precompute adjacency list from A
     std::vector<std::vector<int>> edge_list(A.rows(), std::vector<int>());
     for (int k = 0; k < A.outerSize(); ++k) {
-        for (Eigen::SparseMatrix<int>::InnerIterator it(A, k); it; ++it) {
+        for (Eigen::SparseMatrix<double>::InnerIterator it(A, k); it; ++it) {
             edge_list[k].push_back(it.col());
         }
     }
@@ -145,7 +145,7 @@ make_original_dendrogram_cc(const Eigen::VectorXd& U,
                 }
             }
         }
-        Eigen::SparseMatrix<int> A_sub(p, p);
+        Eigen::SparseMatrix<double> A_sub(p, p);
         A_sub.setFromTriplets(tripletList.begin(), tripletList.end());
 
         // Extract connected components for the adjacency matrix
@@ -167,7 +167,7 @@ make_original_dendrogram_cc(const Eigen::VectorXd& U,
 
         // Initialize new connected components
         std::vector<std::vector<int>> nCC(S, std::vector<int>());
-        Eigen::SparseMatrix<int> nA;
+        Eigen::SparseMatrix<double> nA;
         // Note: The Python code uses a DOK matrix, which can be emulated using Eigen's SparseMatrix with triplets
         std::vector<Eigen::Triplet<int>> nA_triplets;
         nA.resize(p, S);
@@ -224,7 +224,7 @@ make_original_dendrogram_cc(const Eigen::VectorXd& U,
             // Create a temporary adjacency matrix including existing neighbors and new components
             int existing_cc = neighbor_cc_indices.size();
             int total_cc = existing_cc + S;
-            Eigen::SparseMatrix<int> nA_tmp(total_cc, total_cc);
+            Eigen::SparseMatrix<double> nA_tmp(total_cc, total_cc);
             std::vector<Eigen::Triplet<int>> nA_tmp_triplets;
             // Set diagonal to 1
             for(int k = 0; k < total_cc; ++k){
@@ -232,7 +232,7 @@ make_original_dendrogram_cc(const Eigen::VectorXd& U,
             }
             // Add connections from nA
             for(int k = 0; k < nA.outerSize(); ++k){
-                for(Eigen::SparseMatrix<int>::InnerIterator it(nA, k); it; ++it){
+                for(Eigen::SparseMatrix<double>::InnerIterator it(nA, k); it; ++it){
                     nA_tmp_triplets.emplace_back(it.row(), it.col() + existing_cc, it.value());
                 }
             }

@@ -199,7 +199,7 @@ std::vector<std::vector<int>> extract_connected_comp(
 }
 
 // Function to extract the connected location matrix
-Eigen::SparseMatrix<int> extract_connected_loc_mat(
+Eigen::SparseMatrix<double> extract_connected_loc_mat(
     const std::vector<std::vector<int>>& CC, int num_spots, const std::string& format) {
     
     Eigen::MatrixXi CC_loc_arr = Eigen::MatrixXi::Zero(num_spots, CC.size());
@@ -221,8 +221,8 @@ Eigen::SparseMatrix<int> extract_connected_loc_mat(
 }
 
 // Adjusted function to filter connected component locations based on expression values
-Eigen::SparseMatrix<int> filter_connected_loc_exp(
-    const Eigen::SparseMatrix<int>& CC_loc_mat, const Eigen::VectorXd& feat_data, int thres_per) {
+Eigen::SparseMatrix<double> filter_connected_loc_exp(
+    const Eigen::SparseMatrix<double>& CC_loc_mat, const Eigen::VectorXd& feat_data, int thres_per) {
     
     // Cast CC_loc_mat to double for multiplication
     Eigen::VectorXd CC_mat_sum = CC_loc_mat.cast<double>() * Eigen::VectorXd::Ones(CC_loc_mat.cols());
@@ -247,13 +247,13 @@ Eigen::SparseMatrix<int> filter_connected_loc_exp(
     CC_mean.resize(cutoff);
 
     // Create a new sparse matrix with filtered components
-    Eigen::SparseMatrix<int> CC_loc_mat_fin(CC_loc_mat.rows(), CC_mean.size());
+    Eigen::SparseMatrix<double> CC_loc_mat_fin(CC_loc_mat.rows(), CC_mean.size());
     std::vector<Eigen::Triplet<int>> tripletList;
     tripletList.reserve(CC_loc_mat.nonZeros());
 
     for (size_t idx = 0; idx < CC_mean.size(); ++idx) {
         int original_col = CC_mean[idx].first;
-        for (Eigen::SparseMatrix<int>::InnerIterator it(CC_loc_mat, original_col); it; ++it) {
+        for (Eigen::SparseMatrix<double>::InnerIterator it(CC_loc_mat, original_col); it; ++it) {
             tripletList.emplace_back(it.row(), static_cast<int>(idx), it.value());
         }
     }
@@ -265,7 +265,7 @@ Eigen::SparseMatrix<int> filter_connected_loc_exp(
 }
 
 // Function for topological connected component analysis
-std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_comp_res(
+std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<double>> topological_comp_res(
     const Eigen::MatrixXd& loc, const std::string& spatial_type, double fwhm,
     const Eigen::VectorXd& feat, int min_size, int thres_per, const std::string& return_mode) {
 
@@ -296,7 +296,7 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
 
     auto CC_list = extract_connected_comp(t, A, threshold, p, min_size);
 
-    Eigen::SparseMatrix<int> CC_loc_mat = extract_connected_loc_mat(CC_list, p, "sparse");
+    Eigen::SparseMatrix<double> CC_loc_mat = extract_connected_loc_mat(CC_list, p, "sparse");
     CC_loc_mat = filter_connected_loc_exp(CC_loc_mat, feat, thres_per);
 
     return std::make_tuple(CC_list, CC_loc_mat);
