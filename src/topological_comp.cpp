@@ -1,4 +1,7 @@
 #include "topological_comp.h"
+#include "make_original_dendrogram.h"
+#include "make_smoothed_dendrogram.h"
+#include "make_dendrogram_bar.h"
 #include <limits>    // for std::numeric_limits
 #include <algorithm> // for std::sort, std::find
 #include <cmath>     // for M_PI
@@ -128,34 +131,14 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
     }
 }
 
-// Placeholder function definitions - Implement these properly
-std::tuple<std::vector<std::vector<int>>, std::vector<int>, std::vector<int>, std::vector<int>> make_original_dendrogram_cc(
-    const Eigen::VectorXd& tx, const Eigen::SparseMatrix<double>& A_sparse, const std::vector<double>& threshold_x) {
-    // Implement the actual logic here
-    return std::make_tuple(std::vector<std::vector<int>>(), std::vector<int>(), std::vector<int>(), std::vector<int>());
-}
-
-std::tuple<std::vector<int>, std::vector<int>, std::vector<int>> make_smoothed_dendrogram(
-    const std::vector<std::vector<int>>& cCC_x, const std::vector<int>& cE_x, const std::vector<int>& cduration_x,
-    const std::vector<int>& chistory_x, const Eigen::ArrayXd& linspaced) {
-    // Implement the actual logic here
-    return std::make_tuple(std::vector<int>(), std::vector<int>(), std::vector<int>());
-}
-
-std::tuple<std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>, std::vector<int>> make_dendrogram_bar(
-    const std::vector<int>& chistory_x, const std::vector<int>& cduration_x) {
-    // Implement the actual logic here
-    return std::make_tuple(std::vector<int>(), std::vector<int>(), std::vector<int>(), std::vector<int>(), std::vector<int>(), std::vector<int>());
-}
-
 // Corrected function to extract connected components
 std::vector<std::vector<int>> extract_connected_comp(
     const Eigen::VectorXd& tx, const Eigen::SparseMatrix<double>& A_sparse, 
     const std::vector<double>& threshold_x, int num_spots, int min_size) {
     
-    auto [cCC_x, cE_x, cduration_x, chistory_x] = make_original_dendrogram_cc(tx, A_sparse, threshold_x);
-    auto [nCC_x, nduration_x, nhistory_x] = make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, Eigen::ArrayXd::LinSpaced(2, min_size, num_spots));
-    auto [cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, nlayer_x] = make_dendrogram_bar(chistory_x, cduration_x);
+    auto [cCC_x, cE_x, cduration_x, chistory_x] = make_original_dendrogram::make_original_dendrogram_cc(tx, A_sparse, threshold_x);
+    auto [nCC_x, nduration_x, nhistory_x] = make_smoothed_dendrogram::make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, Eigen::ArrayXd::LinSpaced(2, min_size, num_spots));
+    auto [cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, nlayer_x] = make_dendrogram_bar::make_dendrogram_bar(chistory_x, cduration_x);
 
     std::vector<std::vector<int>> CCx;
     for (size_t i = 0; i < nlayer_x.size(); ++i) {
