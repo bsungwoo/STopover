@@ -5,7 +5,9 @@
 #include <stdexcept>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>        // For automatic conversion of STL containers
-#include <pybind11/eigen.h>      // For automatic conversion of Eigen types
+#include <pybind11/eigen.h>      // Not needed for std::vector<double>
+#include <future>                // For std::future
+#include <vector>
 
 namespace py = pybind11;
 
