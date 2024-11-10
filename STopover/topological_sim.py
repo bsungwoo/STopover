@@ -261,7 +261,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
                 feat_x_val = val_list[num][:,df_subset['Index_1'].iloc[index]].reshape((-1,1))
                 feat_y_val = val_list[num][:,df_subset['Index_2'].iloc[index]].reshape((-1,1))
             if jaccard_type=="default": 
-                CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,None,None))
+                CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,np.zeros_like(CCx_loc_mat),np.zeros_like(CCy_loc_mat)))
             else: 
                 CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,feat_x_val,feat_y_val))
 
