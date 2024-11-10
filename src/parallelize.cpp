@@ -181,7 +181,7 @@ std::vector<double> parallel_jaccard_composite_py(
 
         results.emplace_back(pool.enqueue([=]() -> std::pair<size_t, double> {
             // Perform computations using C++ types
-            double jaccard_index = jaccard_composite(CCx_sum, CCy_sum, feat_x, feat_y);
+            double jaccard_index = jaccard_composite(CCx_sum, CCy_sum, &feat_x, &feat_y);
             return {index, jaccard_index};
         }));
 
