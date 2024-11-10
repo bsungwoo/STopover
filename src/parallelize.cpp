@@ -45,18 +45,21 @@ ThreadPool::~ThreadPool() {
         worker.join();
 }
 
-// Helper function to convert py::array_t<double> to Eigen::VectorXd
 Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
+    // Request a contiguous buffer
+    py::buffer_info buf = array.request();
+    
     // Ensure the array is one-dimensional
-    if (array.ndim() != 1) {
+    if (buf.ndim != 1) {
         throw std::invalid_argument("All input arrays must be one-dimensional.");
     }
+    
+    size_t size = buf.shape[0];
+    const double* data_ptr = static_cast<const double*>(buf.ptr);
 
-    // Get buffer info
-    py::buffer_info buf = array.request();
-
-    // Create Eigen::Map without copying data
-    Eigen::VectorXd vec = Eigen::Map<Eigen::VectorXd>(static_cast<double*>(buf.ptr), buf.shape[0]);
+    // Copy data into Eigen::VectorXd
+    Eigen::VectorXd vec(size);
+    std::memcpy(vec.data(), data_ptr, size * sizeof(double));
 
     return vec;
 }

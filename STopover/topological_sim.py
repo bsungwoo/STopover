@@ -278,10 +278,10 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     data_mod.obs = data_mod.obs.join(output_cc_loc, lsuffix='_prev'+str(data_count))
 
     # Get the output for jaccard
-    output_j = parallel_with_progress_jaccard_composite(CCx_loc_sums=[feat[0] for feat in CCxy_loc_mat_list], 
-                                                        CCy_loc_sums=[feat[1] for feat in CCxy_loc_mat_list],
-                                                        feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
-                                                        feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
+    output_j = parallel_with_progress_jaccard_composite(CCx_loc_sums=[np.ascontiguousarray(feat[0]) for feat in CCxy_loc_mat_list], 
+                                                        CCy_loc_sums=[np.ascontiguousarray(feat[1]) for feat in CCxy_loc_mat_list],
+                                                        feat_xs=[np.ascontiguousarray(feat[2]) for feat in CCxy_loc_mat_list],
+                                                        feat_ys=[np.ascontiguousarray(feat[3]) for feat in CCxy_loc_mat_list],
                                                         jaccard_type=jaccard_type,
                                                         num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
     feat_x = data_mod.obs['Comb_CC_tS2'].astype(bool)
