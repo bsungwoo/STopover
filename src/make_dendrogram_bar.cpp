@@ -3,6 +3,7 @@
 #include <numeric>      // For std::accumulate
 #include <vector>
 #include <tuple>
+#include <set>
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <iostream>     // For std::cerr
@@ -10,16 +11,22 @@
 /**
  * @brief Constructs a dendrogram bar based on provided history and duration matrices.
  *
- * This function translates the original Python implementation to C++.
+ * This function processes the dendrogram data to compute the coordinates for plotting dendrogram bars.
  *
- * @param history Vector of connected components history.
- * @param duration Matrix containing duration information.
- * @param cvertical_x Vertical X coordinates (optional).
- * @param cvertical_y Vertical Y coordinates (optional).
- * @param chorizontal_x Horizontal X coordinates (optional).
- * @param chorizontal_y Horizontal Y coordinates (optional).
- * @param cdots Dots matrix (optional).
- * @return A tuple containing nvertical_x, nvertical_y, nhorizontal_x, nhorizontal_y, ndots, and nlayer.
+ * @param history Vector of connected components history (each component is a vector of integers).
+ * @param duration Matrix containing duration information (Eigen::MatrixXd).
+ * @param cvertical_x Optional precomputed vertical X coordinates (Eigen::MatrixXd).
+ * @param cvertical_y Optional precomputed vertical Y coordinates (Eigen::MatrixXd).
+ * @param chorizontal_x Optional precomputed horizontal X coordinates (Eigen::MatrixXd).
+ * @param chorizontal_y Optional precomputed horizontal Y coordinates (Eigen::MatrixXd).
+ * @param cdots Optional precomputed dots coordinates (Eigen::MatrixXd).
+ * @return A tuple containing:
+ *         - nvertical_x: Computed vertical X coordinates (Eigen::MatrixXd).
+ *         - nvertical_y: Computed vertical Y coordinates (Eigen::MatrixXd).
+ *         - nhorizontal_x: Computed horizontal X coordinates (Eigen::MatrixXd).
+ *         - nhorizontal_y: Computed horizontal Y coordinates (Eigen::MatrixXd).
+ *         - ndots: Computed dots coordinates (Eigen::MatrixXd).
+ *         - nlayer: Vector of layers, each containing indices of connected components.
  */
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<std::vector<int>>>
 make_dendrogram_bar(const std::vector<std::vector<int>>& history,
@@ -43,8 +50,8 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
     // Find CCs with no parent
     std::vector<int> length_history;
     length_history.reserve(history.size());
-    for (const auto& cc : history) {
-        length_history.push_back(static_cast<int>(cc.size()));
+    for (const auto& h : history) {
+        length_history.push_back(static_cast<int>(h.size()));
     }
 
     // Identify non-empty CCs
@@ -59,12 +66,8 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
     std::vector<int> all_indices(ncc);
     std::iota(all_indices.begin(), all_indices.end(), 0);
     std::vector<int> ind_empty;
-    std::vector<int> sorted_all_indices = all_indices;
-    std::sort(sorted_all_indices.begin(), sorted_all_indices.end());
-    std::vector<int> sorted_ind_notempty = ind_notempty;
-    std::sort(sorted_ind_notempty.begin(), sorted_ind_notempty.end());
-    std::set_difference(sorted_all_indices.begin(), sorted_all_indices.end(),
-                        sorted_ind_notempty.begin(), sorted_ind_notempty.end(),
+    std::set_difference(all_indices.begin(), all_indices.end(),
+                        ind_notempty.begin(), ind_notempty.end(),
                         std::back_inserter(ind_empty));
 
     // Identify leaf CCs (no history and not empty)
@@ -79,25 +82,25 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
         nlayer.emplace_back(ind_past);
     }
 
-    // Iteratively find other layers
+    // Build the dendrogram layers
     while (static_cast<int>(ind_past.size()) < static_cast<int>(ind_notempty.size())) {
         std::vector<int> tind;
         for (int i = 0; i < static_cast<int>(ncc); ++i) {
-            if (length_history[i] > 0) {
-                bool subset = true;
-                for (const auto& elem : history[i]) {
-                    if (std::find(ind_past.begin(), ind_past.end(), elem) == ind_past.end()) {
-                        subset = false;
+            if (!history[i].empty()) {
+                bool is_subset = true;
+                for (const auto& h_elem : history[i]) {
+                    if (std::find(ind_past.begin(), ind_past.end(), h_elem) == ind_past.end()) {
+                        is_subset = false;
                         break;
                     }
                 }
-                if (subset) {
+                if (is_subset) {
                     tind.push_back(i);
                 }
             }
         }
 
-        // Remove already included indices and ind_empty
+        // Remove already included indices and empty indices
         std::vector<int> ttind;
         for (const auto& idx : tind) {
             if (std::find(ind_past.begin(), ind_past.end(), idx) == ind_past.end() &&
@@ -110,47 +113,40 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
             nlayer.emplace_back(ttind);
             ind_past.insert(ind_past.end(), ttind.begin(), ttind.end());
         } else {
-            break; // Prevent infinite loop in case of inconsistencies
+            break; // Prevent infinite loop
         }
     }
 
-    // Initialize output matrices and vectors
-    Eigen::MatrixXd nvertical_x(ncc, 2);
-    Eigen::MatrixXd nvertical_y(ncc, 2);
-    Eigen::MatrixXd nhorizontal_x(ncc, 2);
-    Eigen::MatrixXd nhorizontal_y(ncc, 2);
-    Eigen::MatrixXd ndots(ncc, 2);
-    std::vector<std::vector<int>> nlayer_out = nlayer; // To store layers
+    // Initialize output matrices
+    Eigen::MatrixXd nvertical_x;
+    Eigen::MatrixXd nvertical_y;
+    Eigen::MatrixXd nhorizontal_x;
+    Eigen::MatrixXd nhorizontal_y;
+    Eigen::MatrixXd ndots;
 
     if (is_new) {
         // Initialize matrices with zeros
-        nvertical_x.setZero();
-        nvertical_y.setZero();
-        nhorizontal_x.setZero();
-        nhorizontal_y.setZero();
-        ndots.setZero();
+        nvertical_x = Eigen::MatrixXd::Zero(ncc, 2);
+        nvertical_y = Eigen::MatrixXd::Zero(ncc, 2);
+        nhorizontal_x = Eigen::MatrixXd::Zero(ncc, 2);
+        nhorizontal_y = Eigen::MatrixXd::Zero(ncc, 2);
+        ndots = Eigen::MatrixXd::Zero(ncc, 2);
 
-        // Create a sorted list based on duration[nlayer[0],1] in descending order
+        // Sort the first layer based on duration
         std::vector<std::pair<int, double>> sval_ind;
-        for (auto idx : nlayer[0]) {
+        for (int idx : nlayer[0]) {
             sval_ind.emplace_back(idx, duration(idx, 1));
         }
 
-        // Sort sval_ind in descending order based on the second element (duration value)
+        // Sort in descending order
         std::sort(sval_ind.begin(), sval_ind.end(),
-                  [&](const std::pair<int, double>& a, const std::pair<int, double>& b) -> bool {
+                  [](const std::pair<int, double>& a, const std::pair<int, double>& b) {
                       return a.second > b.second;
                   });
 
-        // Extract sorted indices
-        std::vector<int> sind;
-        for (const auto& pair : sval_ind) {
-            sind.push_back(pair.first);
-        }
-
-        // Assign to nvertical_x, nvertical_y, ndots based on sorted indices
-        for (size_t i = 0; i < sind.size(); ++i) {
-            int ii = sind[i];
+        // Assign positions in the dendrogram
+        for (size_t i = 0; i < sval_ind.size(); ++i) {
+            int ii = sval_ind[i].first;
             nvertical_x(ii, 0) = static_cast<double>(i);
             nvertical_x(ii, 1) = static_cast<double>(i);
             nvertical_y(ii, 0) = duration(ii, 0);
@@ -161,47 +157,39 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
 
         // Process subsequent layers
         for (size_t i = 1; i < nlayer.size(); ++i) {
-            for (size_t j = 0; j < nlayer[i].size(); ++j) {
-                int ii = nlayer[i][j];
-                const std::vector<int>& current_history = history[ii];
-
-                // Extract nvertical_x values for the current history
+            for (int idx : nlayer[i]) {
                 std::vector<double> tx;
-                for (const auto& elem : current_history) {
-                    tx.push_back(nvertical_x(elem, 0));
+                for (int h_idx : history[idx]) {
+                    tx.push_back(nvertical_x(h_idx, 0));
                 }
-
                 if (!tx.empty()) {
-                    double sum_tx = std::accumulate(tx.begin(), tx.end(), 0.0);
-                    double mean_tx = sum_tx / tx.size();
+                    double mean_tx = std::accumulate(tx.begin(), tx.end(), 0.0) / tx.size();
                     double min_tx = *std::min_element(tx.begin(), tx.end());
                     double max_tx = *std::max_element(tx.begin(), tx.end());
 
-                    nvertical_x(ii, 0) = mean_tx;
-                    nvertical_x(ii, 1) = mean_tx;
-                    nhorizontal_x(ii, 0) = min_tx;
-                    nhorizontal_x(ii, 1) = max_tx;
-                    ndots(ii, 0) = mean_tx;
+                    nvertical_x(idx, 0) = mean_tx;
+                    nvertical_x(idx, 1) = mean_tx;
+                    nhorizontal_x(idx, 0) = min_tx;
+                    nhorizontal_x(idx, 1) = max_tx;
+                    ndots(idx, 0) = mean_tx;
                 }
-
-                ndots(ii, 1) = duration(ii, 0);
-                nvertical_y(ii, 0) = duration(ii, 0);
-                nvertical_y(ii, 1) = duration(ii, 1);
-                nhorizontal_y(ii, 0) = duration(ii, 0);
-                nhorizontal_y(ii, 1) = duration(ii, 0);
+                ndots(idx, 1) = duration(idx, 0);
+                nvertical_y(idx, 0) = duration(idx, 0);
+                nvertical_y(idx, 1) = duration(idx, 1);
+                nhorizontal_y(idx, 0) = duration(idx, 0);
+                nhorizontal_y(idx, 1) = duration(idx, 0);
             }
         }
-
     } else {
-        // Use the provided matrices
-        Eigen::MatrixXd nvertical_x = cvertical_x;
-        Eigen::MatrixXd nvertical_y = cvertical_y;
-        Eigen::MatrixXd nhorizontal_x = chorizontal_x;
-        Eigen::MatrixXd nhorizontal_y = chorizontal_y;
-        Eigen::MatrixXd ndots = cdots;
+        // Use provided matrices
+        nvertical_x = cvertical_x;
+        nvertical_y = cvertical_y;
+        nhorizontal_x = chorizontal_x;
+        nhorizontal_y = chorizontal_y;
+        ndots = cdots;
 
         // Set rows corresponding to ind_empty to zero
-        for (const auto& idx : ind_empty) {
+        for (int idx : ind_empty) {
             nvertical_x.row(idx).setZero();
             nvertical_y.row(idx).setZero();
             nhorizontal_x.row(idx).setZero();
@@ -210,55 +198,43 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
         }
 
         // Process the first layer
-        for (const auto& ii : nlayer[0]) {
-            // Sort duration[ii, :] in ascending order
-            // Since there are only two elements, use min and max
-            double first = duration(ii, 0);
-            double second = duration(ii, 1);
-            double min_dur = std::min(first, second);
-            double max_dur = std::max(first, second);
-            nvertical_y(ii, 0) = min_dur;
-            nvertical_y(ii, 1) = max_dur;
-
-            nhorizontal_x.row(ii).setZero();
-            nhorizontal_y.row(ii).setZero();
-            ndots(ii, 0) = nvertical_x(ii, 0);
-            ndots(ii, 1) = nvertical_y(ii, 1);
+        for (int idx : nlayer[0]) {
+            double min_dur = std::min(duration(idx, 0), duration(idx, 1));
+            double max_dur = std::max(duration(idx, 0), duration(idx, 1));
+            nvertical_y(idx, 0) = min_dur;
+            nvertical_y(idx, 1) = max_dur;
+            nhorizontal_x.row(idx).setZero();
+            nhorizontal_y.row(idx).setZero();
+            ndots(idx, 0) = nvertical_x(idx, 0);
+            ndots(idx, 1) = nvertical_y(idx, 1);
         }
 
         // Process subsequent layers
         for (size_t i = 1; i < nlayer.size(); ++i) {
-            for (const auto& ii : nlayer[i]) {
-                const std::vector<int>& current_history = history[ii];
-
-                // Extract nvertical_x values for the current history
+            for (int idx : nlayer[i]) {
                 std::vector<double> tx;
-                for (const auto& elem : current_history) {
-                    tx.push_back(nvertical_x(elem, 0));
+                for (int h_idx : history[idx]) {
+                    tx.push_back(nvertical_x(h_idx, 0));
                 }
-
                 if (!tx.empty()) {
-                    double sum_tx = std::accumulate(tx.begin(), tx.end(), 0.0);
-                    double mean_tx = sum_tx / tx.size();
+                    double mean_tx = std::accumulate(tx.begin(), tx.end(), 0.0) / tx.size();
                     double min_tx = *std::min_element(tx.begin(), tx.end());
                     double max_tx = *std::max_element(tx.begin(), tx.end());
 
-                    nvertical_x(ii, 0) = mean_tx;
-                    nvertical_x(ii, 1) = mean_tx;
-                    nhorizontal_x(ii, 0) = min_tx;
-                    nhorizontal_x(ii, 1) = max_tx;
-                    ndots(ii, 0) = mean_tx;
+                    nvertical_x(idx, 0) = mean_tx;
+                    nvertical_x(idx, 1) = mean_tx;
+                    nhorizontal_x(idx, 0) = min_tx;
+                    nhorizontal_x(idx, 1) = max_tx;
+                    ndots(idx, 0) = mean_tx;
                 }
-
-                ndots(ii, 1) = duration(ii, 0);
-                nvertical_y(ii, 0) = duration(ii, 0);
-                nvertical_y(ii, 1) = duration(ii, 1);
-                nhorizontal_y(ii, 0) = duration(ii, 0);
-                nhorizontal_y(ii, 1) = duration(ii, 0);
+                ndots(idx, 1) = duration(idx, 0);
+                nvertical_y(idx, 0) = duration(idx, 0);
+                nvertical_y(idx, 1) = duration(idx, 1);
+                nhorizontal_y(idx, 0) = duration(idx, 0);
+                nhorizontal_y(idx, 1) = duration(idx, 0);
             }
         }
     }
 
-    // Return the constructed matrices and layers
-    return std::make_tuple(nvertical_x, nvertical_y, nhorizontal_x, nhorizontal_y, ndots, nlayer_out);
+    return std::make_tuple(nvertical_x, nvertical_y, nhorizontal_x, nhorizontal_y, ndots, nlayer);
 }

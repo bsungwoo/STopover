@@ -8,6 +8,7 @@
 #include <tuple>
 #include <numeric> // For std::accumulate
 #include <iterator> // For std::set_difference
+#include <unordered_map>
 
 /**
  * @brief Extracts connected nodes using breadth-first search (BFS).
@@ -91,29 +92,29 @@ std::vector<std::set<int>> connected_components_generator(const Eigen::SparseMat
  *         - duration: Duration matrix (Eigen::MatrixXd).
  *         - history: Vector of connected components history (each component is a vector of integers).
  */
-std::tuple<std::vector<std::vector<int>>, 
-           Eigen::SparseMatrix<double>, 
-           Eigen::MatrixXd, 
+std::tuple<std::vector<std::vector<int>>,
+           Eigen::SparseMatrix<double>,
+           Eigen::MatrixXd,
            std::vector<std::vector<int>>>
-make_original_dendrogram_cc(const Eigen::VectorXd& U, 
-                            const Eigen::SparseMatrix<double>& A, 
+make_original_dendrogram_cc(const Eigen::VectorXd& U,
+                            const Eigen::SparseMatrix<double>& A,
                             const std::vector<double>& threshold) {
     int p = U.size();
-    std::vector<std::vector<int>> CC(p, std::vector<int>());
+    std::vector<std::vector<int>> CC;
     Eigen::SparseMatrix<double> E(p, p);
     E.setZero();
-    Eigen::MatrixXd duration = Eigen::MatrixXd::Zero(p, 2);
-    std::vector<std::vector<int>> history(p, std::vector<int>());
+    Eigen::MatrixXd duration = Eigen::MatrixXd::Zero(p * threshold.size(), 2);
+    std::vector<std::vector<int>> history;
 
     // Initialize variables
     std::vector<int> ck_cc(p, -1);
     int ncc = -1;
 
-    // Precompute adjacency list from A
-    std::vector<std::vector<int>> edge_list(A.rows(), std::vector<int>());
+    // Convert sparse matrix to adjacency list
+    std::vector<std::vector<int>> edge_list(p);
     for (int k = 0; k < A.outerSize(); ++k) {
         for (Eigen::SparseMatrix<double>::InnerIterator it(A, k); it; ++it) {
-            edge_list[k].push_back(it.col());
+            edge_list[it.row()].push_back(it.col());
         }
     }
 
@@ -121,197 +122,200 @@ make_original_dendrogram_cc(const Eigen::VectorXd& U,
         // Choose current voxels that satisfy threshold interval
         std::vector<int> cvoxels;
         if (i == 0) {
-            for(int idx = 0; idx < p; ++idx){
-                if(U(idx) >= threshold[i]){
+            for (int idx = 0; idx < p; ++idx) {
+                if (U(idx) >= threshold[i]) {
                     cvoxels.push_back(idx);
                 }
             }
-        }
-        else {
-            for(int idx = 0; idx < p; ++idx){
-                if(U(idx) >= threshold[i] && U(idx) < threshold[i-1]){
+        } else {
+            for (int idx = 0; idx < p; ++idx) {
+                if (U(idx) >= threshold[i] && U(idx) < threshold[i - 1]) {
                     cvoxels.push_back(idx);
                 }
             }
         }
 
-        // Create submatrix for current cvoxels
-        // Since A is sparse and binary, we can create a submatrix where rows and cols are cvoxels
-        std::vector<Eigen::Triplet<int>> tripletList;
-        for(auto & voxel : cvoxels){
-            for(auto & neighbor : edge_list[voxel]){
-                if(std::find(cvoxels.begin(), cvoxels.end(), neighbor) != cvoxels.end()){
-                    tripletList.emplace_back(voxel, neighbor, 1);
+        if (cvoxels.empty()) {
+            continue;
+        }
+
+        // Map cvoxels to new indices
+        std::unordered_map<int, int> voxel_to_index;
+        for (size_t idx = 0; idx < cvoxels.size(); ++idx) {
+            voxel_to_index[cvoxels[idx]] = idx;
+        }
+
+        // Create submatrix A_sub
+        Eigen::SparseMatrix<double> A_sub(cvoxels.size(), cvoxels.size());
+        std::vector<Eigen::Triplet<double>> tripletList;
+
+        for (size_t idx = 0; idx < cvoxels.size(); ++idx) {
+            int voxel = cvoxels[idx];
+            for (const auto& neighbor : edge_list[voxel]) {
+                auto it = voxel_to_index.find(neighbor);
+                if (it != voxel_to_index.end()) {
+                    int neighbor_idx = it->second;
+                    tripletList.emplace_back(idx, neighbor_idx, 1.0);
                 }
             }
         }
-        Eigen::SparseMatrix<double> A_sub(p, p);
+
         A_sub.setFromTriplets(tripletList.begin(), tripletList.end());
 
-        // Extract connected components for the adjacency matrix
+        // Extract connected components
         std::vector<std::set<int>> CC_profiles = connected_components_generator(A_sub);
 
-        // Filter CC_profiles to include only those with voxels in cvoxels
-        std::vector<std::set<int>> filtered_CC_profiles;
-        for(const auto& cc : CC_profiles){
-            std::set<int> intersection;
-            std::set_intersection(cc.begin(), cc.end(),
-                                  cvoxels.begin(), cvoxels.end(),
-                                  std::inserter(intersection, intersection.begin()));
-            if(!intersection.empty()){
-                filtered_CC_profiles.push_back(intersection);
+        // Map back to original voxel indices
+        std::vector<std::vector<int>> nCC;
+        for (const auto& cc : CC_profiles) {
+            std::vector<int> mapped_cc;
+            for (const auto& idx : cc) {
+                mapped_cc.push_back(cvoxels[idx]);
             }
+            nCC.push_back(mapped_cc);
         }
 
-        size_t S = filtered_CC_profiles.size();
-
-        // Initialize new connected components
-        std::vector<std::vector<int>> nCC(S, std::vector<int>());
-        Eigen::SparseMatrix<double> nA;
-        // Note: The Python code uses a DOK matrix, which can be emulated using Eigen's SparseMatrix with triplets
-        std::vector<Eigen::Triplet<int>> nA_triplets;
-        nA.resize(p, S);
-        nA.reserve(Eigen::VectorXi::Constant(S, 10)); // Estimate non-zeros per column
-
+        size_t S = nCC.size();
+        std::vector<std::vector<int>> nA_rows(S);
         std::vector<int> neighbor_cc_indices;
 
-        for(size_t j = 0; j < S; ++j){
-            nCC[j].assign(filtered_CC_profiles[j].begin(), filtered_CC_profiles[j].end());
+        for (size_t j = 0; j < S; ++j) {
             // Find neighbors of current voxels
             std::set<int> neighbor_voxels;
-            for(const auto & voxel : nCC[j]){
-                for(const auto & neighbor : edge_list[voxel]){
+            for (const auto& voxel : nCC[j]) {
+                for (const auto& neighbor : edge_list[voxel]) {
                     neighbor_voxels.insert(neighbor);
                 }
             }
             // Remove current voxels from neighbors
-            for(const auto & voxel : nCC[j]){
+            for (const auto& voxel : nCC[j]) {
                 neighbor_voxels.erase(voxel);
             }
+
             // Find unique connected component indices of neighbors
             std::unordered_set<int> unique_tcc;
-            for(const auto & voxel : neighbor_voxels){
-                if(ck_cc[voxel] != -1){
-                    unique_tcc.insert(ck_cc[voxel]);
+            for (const auto& voxel : neighbor_voxels) {
+                int cc_idx = ck_cc[voxel];
+                if (cc_idx != -1) {
+                    unique_tcc.insert(cc_idx);
                 }
             }
-            for(const auto & tcc : unique_tcc){
-                nA_triplets.emplace_back(tcc, j, 1);
-                neighbor_cc_indices.push_back(tcc);
-            }
+
+            // Record connections to existing connected components
+            nA_rows[j].assign(unique_tcc.begin(), unique_tcc.end());
+            neighbor_cc_indices.insert(neighbor_cc_indices.end(), unique_tcc.begin(), unique_tcc.end());
         }
-        nA.setFromTriplets(nA_triplets.begin(), nA_triplets.end());
 
         // Remove duplicates from neighbor_cc_indices
         std::sort(neighbor_cc_indices.begin(), neighbor_cc_indices.end());
         neighbor_cc_indices.erase(std::unique(neighbor_cc_indices.begin(), neighbor_cc_indices.end()), neighbor_cc_indices.end());
 
-        if(neighbor_cc_indices.empty()){
+        if (neighbor_cc_indices.empty()) {
             // No existing neighbors, create new connected components
-            for(size_t j = 0; j < S; ++j){
+            for (size_t j = 0; j < S; ++j) {
                 ncc += 1;
-                CC[ncc] = nCC[j];
+                CC.push_back(nCC[j]);
                 std::sort(CC[ncc].begin(), CC[ncc].end());
-                for(const auto & voxel : CC[ncc]){
+                for (const auto& voxel : CC[ncc]) {
                     ck_cc[voxel] = ncc;
                 }
                 duration(ncc, 0) = threshold[i];
-                E.coeffRef(ncc, ncc) = threshold[i];
-                history[ncc] = {}; // No history
+                E.insert(ncc, ncc) = threshold[i];
+                history.emplace_back(); // Empty history
             }
-        }
-        else{
-            // Create a temporary adjacency matrix including existing neighbors and new components
-            int existing_cc = neighbor_cc_indices.size();
-            int total_cc = existing_cc + S;
-            Eigen::SparseMatrix<double> nA_tmp(total_cc, total_cc);
-            std::vector<Eigen::Triplet<int>> nA_tmp_triplets;
+        } else {
+            // Merge with existing connected components
+            // Build adjacency matrix for connected components
+            int total_cc = neighbor_cc_indices.size() + S;
+            Eigen::SparseMatrix<double> nA(total_cc, total_cc);
+            std::vector<Eigen::Triplet<double>> nA_triplets;
+
             // Set diagonal to 1
-            for(int k = 0; k < total_cc; ++k){
-                nA_tmp_triplets.emplace_back(k, k, 1);
+            for (int k = 0; k < total_cc; ++k) {
+                nA_triplets.emplace_back(k, k, 1.0);
             }
-            // Add connections from nA
-            for(int k = 0; k < nA.outerSize(); ++k){
-                for(Eigen::SparseMatrix<double>::InnerIterator it(nA, k); it; ++it){
-                    nA_tmp_triplets.emplace_back(it.row(), it.col() + existing_cc, it.value());
+
+            // Add connections from nA_rows
+            for (size_t j = 0; j < S; ++j) {
+                int row_idx = neighbor_cc_indices.size() + j;
+                for (const auto& col_cc_idx : nA_rows[j]) {
+                    auto it = std::find(neighbor_cc_indices.begin(), neighbor_cc_indices.end(), col_cc_idx);
+                    if (it != neighbor_cc_indices.end()) {
+                        int col_idx = std::distance(neighbor_cc_indices.begin(), it);
+                        nA_triplets.emplace_back(row_idx, col_idx, 1.0);
+                        nA_triplets.emplace_back(col_idx, row_idx, 1.0);
+                    }
                 }
             }
-            nA_tmp.setFromTriplets(nA_tmp_triplets.begin(), nA_tmp_triplets.end());
 
-            // Estimate connected components of clusters
-            std::vector<std::set<int>> combined_CC_profiles = connected_components_generator(nA_tmp);
-            size_t combined_S = combined_CC_profiles.size();
+            nA.setFromTriplets(nA_triplets.begin(), nA_triplets.end());
 
-            for(size_t j = 0; j < combined_S; ++j){
-                std::set<int> tind = combined_CC_profiles[j];
-                std::vector<int> tind_vector(tind.begin(), tind.end());
+            // Extract connected components
+            std::vector<std::set<int>> combined_CC_profiles = connected_components_generator(nA);
 
-                // Split tind into tind1 and tind2 based on existing_cc
+            for (const auto& cc : combined_CC_profiles) {
                 std::vector<int> tind1;
                 std::vector<int> tind2;
-                for(const auto & idx : tind_vector){
-                    if(idx < existing_cc){
+                for (const auto& idx : cc) {
+                    if (idx < static_cast<int>(neighbor_cc_indices.size())) {
                         tind1.push_back(neighbor_cc_indices[idx]);
-                    }
-                    else{
-                        tind2.push_back(idx - existing_cc);
+                    } else {
+                        tind2.push_back(idx - neighbor_cc_indices.size());
                     }
                 }
 
-                if(tind1.size() == 1){
+                if (tind1.size() == 1) {
                     // Merge into existing connected component
-                    int existing_index = tind1[0];
-                    for(const auto & e : tind2){
-                        CC[existing_index].insert(CC[existing_index].end(), nCC[e].begin(), nCC[e].end());
-                        std::sort(CC[existing_index].begin(), CC[existing_index].end());
-                        CC[existing_index].erase(std::unique(CC[existing_index].begin(), CC[existing_index].end()), CC[existing_index].end());
-                        for(const auto & voxel : nCC[e]){
-                            ck_cc[voxel] = existing_index;
+                    int existing_idx = tind1[0];
+                    for (const auto& e : tind2) {
+                        CC[existing_idx].insert(CC[existing_idx].end(), nCC[e].begin(), nCC[e].end());
+                        std::sort(CC[existing_idx].begin(), CC[existing_idx].end());
+                        CC[existing_idx].erase(std::unique(CC[existing_idx].begin(), CC[existing_idx].end()), CC[existing_idx].end());
+                        for (const auto& voxel : nCC[e]) {
+                            ck_cc[voxel] = existing_idx;
                         }
                     }
-                }
-                else{
+                } else {
                     // Create a new connected component
                     ncc += 1;
                     std::set<int> new_cc;
-                    for(const auto & existing_index : tind1){
-                        new_cc.insert(CC[existing_index].begin(), CC[existing_index].end());
+                    for (const auto& existing_idx : tind1) {
+                        new_cc.insert(CC[existing_idx].begin(), CC[existing_idx].end());
                     }
-                    for(const auto & e : tind2){
+                    for (const auto& e : tind2) {
                         new_cc.insert(nCC[e].begin(), nCC[e].end());
                     }
-                    CC[ncc] = std::vector<int>(new_cc.begin(), new_cc.end());
+                    CC.emplace_back(new_cc.begin(), new_cc.end());
                     std::sort(CC[ncc].begin(), CC[ncc].end());
-                    for(const auto & voxel : CC[ncc]){
+                    for (const auto& voxel : CC[ncc]) {
                         ck_cc[voxel] = ncc;
                     }
                     duration(ncc, 0) = threshold[i];
 
                     // Update E matrix
-                    for(const auto & existing_index : tind1){
-                        // Assuming E is being updated similarly to Python's behavior
-                        // This part may need more detailed implementation based on specific requirements
-                        E.coeffRef(ncc, existing_index) = threshold[i];
-                        E.coeffRef(existing_index, ncc) = threshold[i];
+                    for (const auto& existing_idx : tind1) {
+                        E.insert(ncc, existing_idx) = threshold[i];
+                        E.insert(existing_idx, ncc) = threshold[i];
                     }
-                    E.coeffRef(ncc, ncc) = threshold[i];
+                    E.insert(ncc, ncc) = threshold[i];
 
                     // Update history
-                    for(const auto & existing_index : tind1){
-                        history[ncc].push_back(existing_index);
+                    std::vector<int> hist;
+                    for (const auto& existing_idx : tind1) {
+                        hist.push_back(existing_idx);
                     }
+                    history.push_back(hist);
                 }
             }
         }
     }
 
     // Remove empty lists from the end
-    int rev_count = p;
-    for(int index = p-1; index >=0; --index){
-        if(CC[index].empty()){
-            rev_count -=1;
-        }
-        else{
+    int rev_count = CC.size();
+    for (int index = CC.size() - 1; index >= 0; --index) {
+        if (CC[index].empty()) {
+            rev_count -= 1;
+        } else {
             break;
         }
     }
