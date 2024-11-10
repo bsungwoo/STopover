@@ -37,20 +37,18 @@ make_dendrogram_bar(
         length_history[i] = history[i].size();
     }
 
+    // Identify non-empty and empty indices based on the validity of duration values
     std::vector<int> ind_notempty;
-    for (int i = 0; i < ncc; ++i) {
-        if (duration.row(i).sum() != 0) {
-            ind_notempty.push_back(i);
-        }
-    }
-
     std::vector<int> ind_empty;
     for (int i = 0; i < ncc; ++i) {
-        if (duration.row(i).sum() == 0) {
+        if (!std::isnan(duration(i, 0)) && !std::isnan(duration(i, 1))) {
+            ind_notempty.push_back(i);
+        } else {
             ind_empty.push_back(i);
         }
     }
 
+    // Leaf CCs
     std::vector<int> ind_past;
     for (int i = 0; i < ncc; ++i) {
         if (length_history[i] == 0 &&
@@ -60,6 +58,7 @@ make_dendrogram_bar(
     }
     nlayer.push_back(ind_past);
 
+    // Build layers
     while (ind_past.size() < ind_notempty.size()) {
         std::vector<bool> tind(ncc, false);
         for (int i = 0; i < ncc; ++i) {
@@ -69,7 +68,7 @@ make_dendrogram_bar(
                 ind_past.begin(), ind_past.end(),
                 std::back_inserter(intersect)
             );
-            tind[i] = (intersect.size() == history[i].size());
+            tind[i] = (!history[i].empty()) && (intersect.size() == history[i].size());
         }
 
         std::vector<int> ttind;
@@ -153,19 +152,26 @@ make_dendrogram_bar(
         nhorizontal_y = chorizontal_y;
         ndots = cdots;
 
+        // Ensure matrices have the correct sizes
+        if (nvertical_x.rows() != ncc) nvertical_x.conservativeResize(ncc, 2);
+        if (nvertical_y.rows() != ncc) nvertical_y.conservativeResize(ncc, 2);
+        if (nhorizontal_x.rows() != ncc) nhorizontal_x.conservativeResize(ncc, 2);
+        if (nhorizontal_y.rows() != ncc) nhorizontal_y.conservativeResize(ncc, 2);
+        if (ndots.rows() != ncc) ndots.conservativeResize(ncc, 2);
+
         for (int idx : ind_empty) {
-            nvertical_x.row(idx).setZero();
-            nvertical_y.row(idx).setZero();
-            nhorizontal_x.row(idx).setZero();
-            nhorizontal_y.row(idx).setZero();
-            ndots.row(idx).setZero();
+            nvertical_x.row(idx).setConstant(std::numeric_limits<double>::quiet_NaN());
+            nvertical_y.row(idx).setConstant(std::numeric_limits<double>::quiet_NaN());
+            nhorizontal_x.row(idx).setConstant(std::numeric_limits<double>::quiet_NaN());
+            nhorizontal_y.row(idx).setConstant(std::numeric_limits<double>::quiet_NaN());
+            ndots.row(idx).setConstant(std::numeric_limits<double>::quiet_NaN());
         }
 
         for (size_t j = 0; j < nlayer[0].size(); ++j) {
             int ii = nlayer[0][j];
             nvertical_y.row(ii) = duration.row(ii).transpose();
-            nhorizontal_x.row(ii).setZero();
-            nhorizontal_y.row(ii).setZero();
+            nhorizontal_x.row(ii).setConstant(std::numeric_limits<double>::quiet_NaN());
+            nhorizontal_y.row(ii).setConstant(std::numeric_limits<double>::quiet_NaN());
             ndots.row(ii) = Eigen::Vector2d(nvertical_x(ii, 0), nvertical_y(ii, 1));
         }
 
