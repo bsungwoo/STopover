@@ -5,8 +5,8 @@
 // Function to calculate the Jaccard composite index
 double jaccard_composite(const Eigen::VectorXd& CCx_loc_sum,
                          const Eigen::VectorXd& CCy_loc_sum,
-                         const Eigen::VectorXd* feat_x = nullptr,
-                         const Eigen::VectorXd* feat_y = nullptr) {
+                         const Eigen::VectorXd* feat_x,
+                         const Eigen::VectorXd* feat_y) {
     // Ensure input vectors have the same size
     if (CCx_loc_sum.size() != CCy_loc_sum.size()) {
         throw std::invalid_argument("CCx_loc_sum and CCy_loc_sum must have the same length.");
