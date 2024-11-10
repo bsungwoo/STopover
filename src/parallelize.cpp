@@ -239,7 +239,7 @@ std::vector<double> parallel_jaccard_composite_py(
 // Expose to Python via Pybind11
 PYBIND11_MODULE(parallelize, m) {  // Module name within the STopover package
     m.def("parallel_topological_comp", &parallel_topological_comp, "Parallelized topological_comp_res function",
-          py::arg("locs"), py::arg("fwhm") = 2.5, py::arg("feats"), py::arg("spatial_type") = "visium", 
+          py::arg("locs"), py::arg("spatial_type") = "visium", py::arg("fwhm") = 2.5, py::arg("feats"), 
           py::arg("min_size") = 5, py::arg("thres_per") = 30, py::arg("return_mode") = "all", 
           py::arg("num_workers") = 4, py::arg("progress_callback"));
 
