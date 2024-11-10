@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <numeric>
 #include <set>
+#include <iostream>
 
 std::tuple<
     std::vector<std::vector<int>>,
@@ -14,7 +15,7 @@ make_smoothed_dendrogram(
     const Eigen::SparseMatrix<double>& cE,
     const Eigen::MatrixXd& cduration,
     const std::vector<std::vector<int>>& chistory,
-    const Eigen::Vector2d& lim_size
+    const Eigen::Vector2d lim_size
 )
 {
     double min_size = lim_size[0];
@@ -49,7 +50,7 @@ make_smoothed_dendrogram(
     // Leaf CCs
     std::vector<int> ind_past;
     for (int i = 0; i < ncc; ++i) {
-        if (length_history[i] == 0) {
+        if (length_history[i] == 0 && length_cc[i] > 0) {
             ind_past.push_back(i);
         }
     }
@@ -68,27 +69,16 @@ make_smoothed_dendrogram(
             tind[i] = (intersect.size() == chistory[i].size()) ? 1 : 0;
         }
 
-        std::vector<int> where_tind_eq_1;
+        std::vector<int> ttind;
         for (int i = 0; i < ncc; ++i) {
-            if (tind[i] == 1) {
-                where_tind_eq_1.push_back(i);
+            if (tind[i] == 1 && std::find(ind_past.begin(), ind_past.end(), i) == ind_past.end()) {
+                ttind.push_back(i);
             }
         }
 
-        std::vector<int> ttind;
-        std::set_difference(
-            where_tind_eq_1.begin(), where_tind_eq_1.end(),
-            ind_past.begin(), ind_past.end(),
-            std::back_inserter(ttind)
-        );
-
         if (!ttind.empty()) {
-            std::sort(ttind.begin(), ttind.end());
-            ttind.erase(std::unique(ttind.begin(), ttind.end()), ttind.end());
             layer.push_back(ttind);
             ind_past.insert(ind_past.end(), ttind.begin(), ttind.end());
-            std::sort(ind_past.begin(), ind_past.end());
-            ind_past.erase(std::unique(ind_past.begin(), ind_past.end()), ind_past.end());
         } else {
             break;
         }
@@ -113,7 +103,7 @@ make_smoothed_dendrogram(
         for (size_t l = 0; l < layer.size(); ++l) {
             if (std::find(layer[l].begin(), layer[l].end(), i) != layer[l].end()) {
                 layer_index = static_cast<int>(l);
-                break; // Presumed to have only one nonzero element for each i
+                break;
             }
         }
         ilayer[i] = layer_index;
@@ -175,6 +165,7 @@ make_smoothed_dendrogram(
                             nchildren[ii].clear();
                         }
 
+                        // Update nE
                         for (Eigen::SparseMatrix<double>::InnerIterator it(nE, ii); it; ++it) {
                             nE.coeffRef(ii, it.col()) = 0.0;
                         }
@@ -279,16 +270,9 @@ make_smoothed_dendrogram(
         }
     }
 
-    std::vector<int> ind_empty;
+    std::vector<int> ind_past;
     for (int i = 0; i < ncc; ++i) {
-        if (nduration.row(i).sum() == 0) {
-            ind_empty.push_back(i);
-        }
-    }
-
-    ind_past.clear();
-    for (int i = 0; i < ncc; ++i) {
-        if (length_history[i] == 0 && std::find(ind_empty.begin(), ind_empty.end(), i) == ind_empty.end()) {
+        if (length_history[i] == 0 && nduration.row(i).sum() != 0) {
             ind_past.push_back(i);
         }
     }
@@ -308,7 +292,7 @@ make_smoothed_dendrogram(
 
         std::vector<int> ttind;
         for (int i = 0; i < ncc; ++i) {
-            if (tind[i] == 1 && std::find(ind_past.begin(), ind_past.end(), i) == ind_past.end() && std::find(ind_empty.begin(), ind_empty.end(), i) == ind_empty.end()) {
+            if (tind[i] == 1 && std::find(ind_past.begin(), ind_past.end(), i) == ind_past.end() && nduration.row(i).sum() != 0) {
                 ttind.push_back(i);
             }
         }
@@ -326,6 +310,7 @@ make_smoothed_dendrogram(
         length_cc[i] = nCC[i].size();
     }
 
+    // Sort connected components by duration length
     std::vector<std::pair<int, double>> sval_ind;
     for (int i = 0; i < length_duration.size(); ++i) {
         sval_ind.emplace_back(i, length_duration[i]);
@@ -341,31 +326,21 @@ make_smoothed_dendrogram(
         }
     }
 
-    int tval = length_cc.maxCoeff();
-    int tind = 0;
-    for (int i = 0; i < length_cc.size(); ++i) {
-        if (length_cc[i] == tval) {
-            tind = i;
-            break;
-        }
-    }
-
-    sind.erase(std::remove(sind.begin(), sind.end(), tind), sind.end());
-    sind.push_back(tind);
-
     // Select CCs with the longest duration
     while (!sind.empty()) {
         int ii = sind.front();
         std::vector<int> jj;
         for (int idx : ind_notempty) {
-            std::vector<int> diff;
-            std::set_difference(
-                nCC[idx].begin(), nCC[idx].end(),
-                nCC[ii].begin(), nCC[ii].end(),
-                std::back_inserter(diff)
-            );
-            if (diff.empty() && idx != ii) {
-                jj.push_back(idx);
+            if (idx != ii) {
+                std::vector<int> diff;
+                std::set_difference(
+                    nCC[idx].begin(), nCC[idx].end(),
+                    nCC[ii].begin(), nCC[ii].end(),
+                    std::back_inserter(diff)
+                );
+                if (diff.empty()) {
+                    jj.push_back(idx);
+                }
             }
         }
 
@@ -384,6 +359,7 @@ make_smoothed_dendrogram(
             }
         }
 
+        // Update nduration and nchildren
         nduration(ii, 0) = nduration(ii, 0);
         nduration(ii, 1) = nduration(ii, 1);
         nchildren[ii].clear();
