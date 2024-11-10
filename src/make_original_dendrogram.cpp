@@ -1,87 +1,63 @@
 #include "make_original_dendrogram.h"
-#include <queue>
-#include <unordered_set>
-#include <algorithm>
-#include <iostream>
-#include <set>
 #include <vector>
+#include <set>
+#include <map>
+#include <algorithm>
+#include <numeric>
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
 #include <tuple>
-#include <numeric> // For std::accumulate
-#include <iterator> // For std::set_difference
 #include <unordered_map>
 
-/**
- * @brief Extracts connected nodes using breadth-first search (BFS).
- *
- * @param edge_list Adjacency list representation of the graph.
- * @param sel_node_idx Index of the selected node to start BFS.
- * @return A set of connected node indices.
- */
-std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx) {
-    std::set<int> cc_set;
-    std::queue<int> next_neighbor;
-    next_neighbor.push(sel_node_idx);
-
-    while (!next_neighbor.empty()) {
-        int curr_neighbor = next_neighbor.front();
-        next_neighbor.pop();
-
-        if (cc_set.find(curr_neighbor) == cc_set.end()) {
-            cc_set.insert(curr_neighbor);
-            for (const int& neighbor : edge_list[curr_neighbor]) {
-                next_neighbor.push(neighbor);
-            }
-        }
-    }
-
-    return cc_set;
-}
+using namespace std;
 
 /**
- * @brief Generates connected components from a sparse adjacency matrix.
+ * @brief Extract connected components from a sparse adjacency matrix.
  *
- * @param A Sparse adjacency matrix (Eigen::SparseMatrix<double>).
+ * @param A_sub The submatrix representing the adjacency between nodes.
  * @return A vector of sets, each representing a connected component.
  */
-std::vector<std::set<int>> connected_components_generator(const Eigen::SparseMatrix<double>& A) {
-    std::vector<std::set<int>> components;
-    std::vector<bool> visited(A.rows(), false);
+vector<set<int>> connected_components_generator(const Eigen::SparseMatrix<double>& A_sub) {
+    int n = A_sub.rows();
+    vector<bool> visited(n, false);
+    vector<set<int>> components;
 
-    // Convert sparse matrix to adjacency list for efficient traversal
-    std::vector<std::vector<int>> edge_list(A.rows(), std::vector<int>());
-    for (int k = 0; k < A.outerSize(); ++k) {
-        for (Eigen::SparseMatrix<double>::InnerIterator it(A, k); it; ++it) {
-            edge_list[k].push_back(it.col());
+    // Convert sparse matrix to adjacency list
+    vector<vector<int>> adj_list(n);
+    for (int k = 0; k < A_sub.outerSize(); ++k) {
+        for (Eigen::SparseMatrix<double>::InnerIterator it(A_sub, k); it; ++it) {
+            adj_list[it.row()].push_back(it.col());
         }
     }
 
-    for (int vertex = 0; vertex < A.rows(); ++vertex) {
-        if (!visited[vertex]) {
-            std::set<int> cc_set;
-            std::queue<int> queue;
-            queue.push(vertex);
+    for (int i = 0; i < n; ++i) {
+        if (!visited[i]) {
+            set<int> component;
+            vector<int> stack = {i};
+            visited[i] = true;
 
-            while (!queue.empty()) {
-                int curr = queue.front();
-                queue.pop();
-                if (!visited[curr]) {
-                    visited[curr] = true;
-                    cc_set.insert(curr);
-                    for (const int& neighbor : edge_list[curr]) {
-                        if (!visited[neighbor]) {
-                            queue.push(neighbor);
-                        }
+            while (!stack.empty()) {
+                int node = stack.back();
+                stack.pop_back();
+                component.insert(node);
+
+                for (int neighbor : adj_list[node]) {
+                    if (!visited[neighbor]) {
+                        visited[neighbor] = true;
+                        stack.push_back(neighbor);
                     }
                 }
             }
-            components.push_back(cc_set);
+
+            components.push_back(component);
         }
     }
+
     return components;
 }
 
 /**
- * @brief Creates the original dendrogram with connected components.
+ * @brief Constructs the original dendrogram with connected components.
  *
  * @param U Eigen::VectorXd containing some data (e.g., expression values).
  * @param A Sparse adjacency matrix representing connections (Eigen::SparseMatrix<double>).
@@ -100,17 +76,17 @@ make_original_dendrogram_cc(const Eigen::VectorXd& U,
                             const Eigen::SparseMatrix<double>& A,
                             const std::vector<double>& threshold) {
     int p = U.size();
-    std::vector<std::vector<int>> CC;
-    Eigen::SparseMatrix<double> E(p, p);
-    E.setZero();
-    Eigen::MatrixXd duration = Eigen::MatrixXd::Zero(p * threshold.size(), 2);
-    std::vector<std::vector<int>> history;
-
-    // Initialize variables
-    std::vector<int> ck_cc(p, -1);
     int ncc = -1;
 
-    // Convert sparse matrix to adjacency list
+    std::vector<std::vector<int>> CC;  // Connected components
+    std::vector<int> ck_cc(p, -1);     // CC index for each node
+    Eigen::MatrixXd duration(p * threshold.size(), 2);
+    duration.setZero();
+    std::vector<std::vector<int>> history;  // History of CCs
+    Eigen::SparseMatrix<double> E(p * threshold.size(), p * threshold.size());
+    E.setZero();
+
+    // Convert adjacency matrix to adjacency list
     std::vector<std::vector<int>> edge_list(p);
     for (int k = 0; k < A.outerSize(); ++k) {
         for (Eigen::SparseMatrix<double>::InnerIterator it(A, k); it; ++it) {
@@ -119,7 +95,7 @@ make_original_dendrogram_cc(const Eigen::VectorXd& U,
     }
 
     for (size_t i = 0; i < threshold.size(); ++i) {
-        // Choose current voxels that satisfy threshold interval
+        // Determine current voxels that satisfy the threshold interval
         std::vector<int> cvoxels;
         if (i == 0) {
             for (int idx = 0; idx < p; ++idx) {
@@ -176,6 +152,8 @@ make_original_dendrogram_cc(const Eigen::VectorXd& U,
         }
 
         size_t S = nCC.size();
+
+        // Process connected components
         std::vector<std::vector<int>> nA_rows(S);
         std::vector<int> neighbor_cc_indices;
 
@@ -300,30 +278,16 @@ make_original_dendrogram_cc(const Eigen::VectorXd& U,
                     E.insert(ncc, ncc) = threshold[i];
 
                     // Update history
-                    std::vector<int> hist;
-                    for (const auto& existing_idx : tind1) {
-                        hist.push_back(existing_idx);
-                    }
-                    history.push_back(hist);
+                    history.emplace_back(tind1);
                 }
             }
         }
     }
 
-    // Remove empty lists from the end
-    int rev_count = CC.size();
-    for (int index = CC.size() - 1; index >= 0; --index) {
-        if (CC[index].empty()) {
-            rev_count -= 1;
-        } else {
-            break;
-        }
-    }
-
-    CC.resize(rev_count);
-    history.resize(rev_count);
-    E.conservativeResize(rev_count, rev_count);
-    duration.conservativeResize(rev_count, 2);
+    // Resize matrices to remove unused rows/columns
+    int total_ncc = CC.size();
+    duration.conservativeResize(total_ncc, 2);
+    E.conservativeResize(total_ncc, total_ncc);
 
     return std::make_tuple(CC, E, duration, history);
 }

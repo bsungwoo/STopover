@@ -1,62 +1,51 @@
 #include "make_dendrogram_bar.h"
-#include <algorithm>    // For std::iota
-#include <numeric>      // For std::accumulate
 #include <vector>
+#include <algorithm>
+#include <numeric>
+#include <Eigen/Dense>
 #include <tuple>
 #include <set>
-#include <Eigen/Dense>
-#include <Eigen/Sparse>
-#include <iostream>     // For std::cerr
+
+using namespace std;
 
 /**
  * @brief Constructs a dendrogram bar based on provided history and duration matrices.
  *
- * This function processes the dendrogram data to compute the coordinates for plotting dendrogram bars.
- *
- * @param history Vector of connected components history (each component is a vector of integers).
- * @param duration Matrix containing duration information (Eigen::MatrixXd).
- * @param cvertical_x Optional precomputed vertical X coordinates (Eigen::MatrixXd).
- * @param cvertical_y Optional precomputed vertical Y coordinates (Eigen::MatrixXd).
- * @param chorizontal_x Optional precomputed horizontal X coordinates (Eigen::MatrixXd).
- * @param chorizontal_y Optional precomputed horizontal Y coordinates (Eigen::MatrixXd).
- * @param cdots Optional precomputed dots coordinates (Eigen::MatrixXd).
- * @return A tuple containing:
- *         - nvertical_x: Computed vertical X coordinates (Eigen::MatrixXd).
- *         - nvertical_y: Computed vertical Y coordinates (Eigen::MatrixXd).
- *         - nhorizontal_x: Computed horizontal X coordinates (Eigen::MatrixXd).
- *         - nhorizontal_y: Computed horizontal Y coordinates (Eigen::MatrixXd).
- *         - ndots: Computed dots coordinates (Eigen::MatrixXd).
- *         - nlayer: Vector of layers, each containing indices of connected components.
+ * @param history Vector of connected components history.
+ * @param duration Matrix containing duration information.
+ * @param cvertical_x Optional precomputed vertical X coordinates.
+ * @param cvertical_y Optional precomputed vertical Y coordinates.
+ * @param chorizontal_x Optional precomputed horizontal X coordinates.
+ * @param chorizontal_y Optional precomputed horizontal Y coordinates.
+ * @param cdots Optional precomputed dots coordinates.
+ * @return A tuple containing nvertical_x, nvertical_y, nhorizontal_x, nhorizontal_y, ndots, and nlayer.
  */
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<std::vector<int>>>
 make_dendrogram_bar(const std::vector<std::vector<int>>& history,
                     const Eigen::MatrixXd& duration,
-                    const Eigen::MatrixXd& cvertical_x,
-                    const Eigen::MatrixXd& cvertical_y,
-                    const Eigen::MatrixXd& chorizontal_x,
-                    const Eigen::MatrixXd& chorizontal_y,
-                    const Eigen::MatrixXd& cdots) {
-
-    // Determine if this is a new dendrogram
+                    const Eigen::MatrixXd& cvertical_x = Eigen::MatrixXd(),
+                    const Eigen::MatrixXd& cvertical_y = Eigen::MatrixXd(),
+                    const Eigen::MatrixXd& chorizontal_x = Eigen::MatrixXd(),
+                    const Eigen::MatrixXd& chorizontal_y = Eigen::MatrixXd(),
+                    const Eigen::MatrixXd& cdots = Eigen::MatrixXd()) {
     bool is_new = (cvertical_x.size() == 0) && (cvertical_y.size() == 0) &&
                   (chorizontal_x.size() == 0) && (chorizontal_y.size() == 0) &&
                   (cdots.size() == 0);
 
-    size_t ncc = duration.rows();
+    int ncc = duration.rows();
 
     // Estimate the depth of dendrogram
     std::vector<std::vector<int>> nlayer;
 
     // Find CCs with no parent
-    std::vector<int> length_history;
-    length_history.reserve(history.size());
-    for (const auto& h : history) {
-        length_history.push_back(static_cast<int>(h.size()));
+    std::vector<int> length_history(ncc);
+    for (int i = 0; i < ncc; ++i) {
+        length_history[i] = static_cast<int>(history[i].size());
     }
 
     // Identify non-empty CCs
     std::vector<int> ind_notempty;
-    for (int i = 0; i < static_cast<int>(ncc); ++i) {
+    for (int i = 0; i < ncc; ++i) {
         if (duration.row(i).sum() != 0) {
             ind_notempty.push_back(i);
         }
@@ -70,22 +59,19 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
                         ind_notempty.begin(), ind_notempty.end(),
                         std::back_inserter(ind_empty));
 
-    // Identify leaf CCs (no history and not empty)
+    // Identify leaf CCs
     std::vector<int> ind_past;
-    for (int i = 0; i < static_cast<int>(ncc); ++i) {
-        if (length_history[i] == 0 &&
-            std::find(ind_empty.begin(), ind_empty.end(), i) == ind_empty.end()) {
+    for (int i = 0; i < ncc; ++i) {
+        if (length_history[i] == 0 && std::find(ind_empty.begin(), ind_empty.end(), i) == ind_empty.end()) {
             ind_past.push_back(i);
         }
     }
-    if (!ind_past.empty()) {
-        nlayer.emplace_back(ind_past);
-    }
+    nlayer.push_back(ind_past);
 
     // Build the dendrogram layers
     while (static_cast<int>(ind_past.size()) < static_cast<int>(ind_notempty.size())) {
         std::vector<int> tind;
-        for (int i = 0; i < static_cast<int>(ncc); ++i) {
+        for (int i = 0; i < ncc; ++i) {
             if (!history[i].empty()) {
                 bool is_subset = true;
                 for (const auto& h_elem : history[i]) {
@@ -117,7 +103,7 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
         }
     }
 
-    // Initialize output matrices
+    // Initialize matrices
     Eigen::MatrixXd nvertical_x;
     Eigen::MatrixXd nvertical_y;
     Eigen::MatrixXd nhorizontal_x;
@@ -125,7 +111,6 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
     Eigen::MatrixXd ndots;
 
     if (is_new) {
-        // Initialize matrices with zeros
         nvertical_x = Eigen::MatrixXd::Zero(ncc, 2);
         nvertical_y = Eigen::MatrixXd::Zero(ncc, 2);
         nhorizontal_x = Eigen::MatrixXd::Zero(ncc, 2);
