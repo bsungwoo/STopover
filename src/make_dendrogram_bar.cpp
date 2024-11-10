@@ -11,14 +11,20 @@ using namespace std;
 /**
  * @brief Constructs a dendrogram bar based on provided history and duration matrices.
  *
- * @param history Vector of connected components history.
- * @param duration Matrix containing duration information.
- * @param cvertical_x Optional precomputed vertical X coordinates.
- * @param cvertical_y Optional precomputed vertical Y coordinates.
- * @param chorizontal_x Optional precomputed horizontal X coordinates.
- * @param chorizontal_y Optional precomputed horizontal Y coordinates.
- * @param cdots Optional precomputed dots coordinates.
- * @return A tuple containing nvertical_x, nvertical_y, nhorizontal_x, nhorizontal_y, ndots, and nlayer.
+ * @param history Vector of connected components history (each component is a vector of integers).
+ * @param duration Matrix containing duration information (Eigen::MatrixXd).
+ * @param cvertical_x Optional precomputed vertical X coordinates (Eigen::MatrixXd).
+ * @param cvertical_y Optional precomputed vertical Y coordinates (Eigen::MatrixXd).
+ * @param chorizontal_x Optional precomputed horizontal X coordinates (Eigen::MatrixXd).
+ * @param chorizontal_y Optional precomputed horizontal Y coordinates (Eigen::MatrixXd).
+ * @param cdots Optional precomputed dots coordinates (Eigen::MatrixXd).
+ * @return A tuple containing:
+ *         - nvertical_x: Computed vertical X coordinates (Eigen::MatrixXd).
+ *         - nvertical_y: Computed vertical Y coordinates (Eigen::MatrixXd).
+ *         - nhorizontal_x: Computed horizontal X coordinates (Eigen::MatrixXd).
+ *         - nhorizontal_y: Computed horizontal Y coordinates (Eigen::MatrixXd).
+ *         - ndots: Computed dots coordinates (Eigen::MatrixXd).
+ *         - nlayer: Vector of layers, each containing indices of connected components.
  */
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<std::vector<int>>>
 make_dendrogram_bar(const std::vector<std::vector<int>>& history,
@@ -66,7 +72,9 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
             ind_past.push_back(i);
         }
     }
-    nlayer.push_back(ind_past);
+    if (!ind_past.empty()) {
+        nlayer.push_back(ind_past);
+    }
 
     // Build the dendrogram layers
     while (static_cast<int>(ind_past.size()) < static_cast<int>(ind_notempty.size())) {
@@ -103,7 +111,7 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
         }
     }
 
-    // Initialize matrices
+    // Initialize output matrices
     Eigen::MatrixXd nvertical_x;
     Eigen::MatrixXd nvertical_y;
     Eigen::MatrixXd nhorizontal_x;
@@ -111,6 +119,7 @@ make_dendrogram_bar(const std::vector<std::vector<int>>& history,
     Eigen::MatrixXd ndots;
 
     if (is_new) {
+        // Initialize matrices with zeros
         nvertical_x = Eigen::MatrixXd::Zero(ncc, 2);
         nvertical_y = Eigen::MatrixXd::Zero(ncc, 2);
         nhorizontal_x = Eigen::MatrixXd::Zero(ncc, 2);

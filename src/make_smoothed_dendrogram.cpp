@@ -34,7 +34,7 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                          const std::vector<std::vector<int>>& chistory,
                          const Eigen::Vector2d& lim_size) {
     double min_size = lim_size[0];
-    double max_size = lim_size[1];
+    // double max_size = lim_size[1]; // Unused in this function
 
     int ncc = static_cast<int>(cCC.size());
 
@@ -79,7 +79,9 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
             ind_past.push_back(i);
         }
     }
-    nlayer.push_back(ind_past);
+    if (!ind_past.empty()) {
+        nlayer.push_back(ind_past);
+    }
 
     // Build the dendrogram layers
     while (static_cast<int>(ind_past.size()) < static_cast<int>(ind_notempty.size())) {
@@ -190,8 +192,17 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                         }
 
                         // Update adjacency matrix nE
-                        nE.row(ii).setZero();
-                        nE.col(ii).setZero();
+                        // Corrected code to remove entries in row ii and column ii
+                        // Remove entries where row == ii or col == ii
+                        for (int k = 0; k < nE.outerSize(); ++k) {
+                            for (Eigen::SparseMatrix<double>::InnerIterator it(nE, k); it; ++it) {
+                                if (it.row() == ii || it.col() == ii) {
+                                    it.valueRef() = 0.0;
+                                }
+                            }
+                        }
+                        nE.prune(0.0); // Remove zero entries
+
                         nE.coeffRef(ii, ii) = nduration(ii, 0);
 
                         // Delete all children of the parent
@@ -211,8 +222,16 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                             nCC[idx].clear();
                             nchildren[idx].clear();
                             nparent[idx] = -1;
-                            nE.row(idx).setZero();
-                            nE.col(idx).setZero();
+                            // Remove entries in nE where row == idx or col == idx
+                            for (int k = 0; k < nE.outerSize(); ++k) {
+                                for (Eigen::SparseMatrix<double>::InnerIterator it(nE, k); it; ++it) {
+                                    if (it.row() == idx || it.col() == idx) {
+                                        it.valueRef() = 0.0;
+                                    }
+                                }
+                            }
+                            nE.prune(0.0); // Remove zero entries
+
                             nduration.row(idx).setZero();
                             length_cc[idx] = 0;
                             // Remove idx from layer
@@ -232,8 +251,16 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                         nCC[ii].clear();
                         nchildren[ii].clear();
                         nparent[ii] = -1;
-                        nE.row(ii).setZero();
-                        nE.col(ii).setZero();
+                        // Remove entries in nE where row == ii or col == ii
+                        for (int k = 0; k < nE.outerSize(); ++k) {
+                            for (Eigen::SparseMatrix<double>::InnerIterator it(nE, k); it; ++it) {
+                                if (it.row() == ii || it.col() == ii) {
+                                    it.valueRef() = 0.0;
+                                }
+                            }
+                        }
+                        nE.prune(0.0); // Remove zero entries
+
                         nduration.row(ii).setZero();
                         length_cc[ii] = 0;
                         // Remove ii from layer
@@ -249,8 +276,16 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
                     nCC[ii].clear();
                     nchildren[ii].clear();
                     nparent[ii] = -1;
-                    nE.row(ii).setZero();
-                    nE.col(ii).setZero();
+                    // Remove entries in nE where row == ii or col == ii
+                    for (int k = 0; k < nE.outerSize(); ++k) {
+                        for (Eigen::SparseMatrix<double>::InnerIterator it(nE, k); it; ++it) {
+                            if (it.row() == ii || it.col() == ii) {
+                                it.valueRef() = 0.0;
+                            }
+                        }
+                    }
+                    nE.prune(0.0); // Remove zero entries
+
                     nduration.row(ii).setZero();
                     length_cc[ii] = 0;
                     // Remove ii from layer
@@ -292,7 +327,9 @@ make_smoothed_dendrogram(const std::vector<std::vector<int>>& cCC,
             ind_past.push_back(i);
         }
     }
-    nlayer.push_back(ind_past);
+    if (!ind_past.empty()) {
+        nlayer.push_back(ind_past);
+    }
 
     // Build the dendrogram layers again
     while (static_cast<int>(ind_past.size()) < static_cast<int>(ind_notempty.size())) {
