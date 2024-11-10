@@ -1,17 +1,17 @@
 #include "jaccard.h"
-#include <iostream>  // Optional: For debugging or logging
-#include <stdexcept> // For std::invalid_argument
+#include <iostream>   // Optional: For debugging or logging
+#include <stdexcept>  // For std::invalid_argument
 
 // Function to calculate the Jaccard composite index
-double jaccard_composite(const Eigen::VectorXd& CCx_loc_sum, 
+double jaccard_composite(const Eigen::VectorXd& CCx_loc_sum,
                          const Eigen::VectorXd& CCy_loc_sum,
-                         const Eigen::VectorXd* feat_x,
-                         const Eigen::VectorXd* feat_y) {
+                         const Eigen::VectorXd* feat_x = nullptr,
+                         const Eigen::VectorXd* feat_y = nullptr) {
     // Ensure input vectors have the same size
     if (CCx_loc_sum.size() != CCy_loc_sum.size()) {
         throw std::invalid_argument("CCx_loc_sum and CCy_loc_sum must have the same length.");
     }
-    
+
     const int N = CCx_loc_sum.size();
 
     // Concatenate CCx_loc_sum and CCy_loc_sum into a matrix
@@ -24,18 +24,21 @@ double jaccard_composite(const Eigen::VectorXd& CCx_loc_sum,
         return 0.0;
     }
 
-    // If feature vectors are not provided
+    // If feature vectors are not provided (jaccard_type == "default")
     if (feat_x == nullptr && feat_y == nullptr) {
         // Convert CCxy_loc_sum to binary (non-zero elements are 1)
         Eigen::ArrayXXi CCxy_binary = (CCxy_loc_sum.array() != 0.0).cast<int>();
 
         // Extract the two binary columns
-        Eigen::ArrayXi col1 = CCxy_binary.col(0);
-        Eigen::ArrayXi col2 = CCxy_binary.col(1);
+        Eigen::ArrayXi col1_binary = CCxy_binary.col(0);
+        Eigen::ArrayXi col2_binary = CCxy_binary.col(1);
 
-        // Compute intersection and union
-        int intersection = ( (col1 == 1) && (col2 == 1) ).count();
-        int union_count = ( (col1 == 1) || (col2 == 1) ).count();
+        // Compute intersection and union counts
+        Eigen::ArrayXi intersection_array = col1_binary * col2_binary;
+        int intersection = intersection_array.sum();
+
+        Eigen::ArrayXi union_array = col1_binary.max(col2_binary);
+        int union_count = union_array.sum();
 
         // Calculate Jaccard similarity
         if (union_count == 0) {
@@ -43,7 +46,9 @@ double jaccard_composite(const Eigen::VectorXd& CCx_loc_sum,
         } else {
             return static_cast<double>(intersection) / static_cast<double>(union_count);
         }
-    } else {
+    }
+    // If feature vectors are provided (jaccard_type == "weighted")
+    else {
         // Ensure both feature vectors are provided
         if (feat_x == nullptr || feat_y == nullptr) {
             throw std::invalid_argument("Both feat_x and feat_y must be provided.");
