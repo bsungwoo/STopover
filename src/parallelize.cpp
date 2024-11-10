@@ -127,8 +127,8 @@ std::vector<double> parallel_jaccard_composite_py(
     py::list CCy_loc_sums_list,
     py::list feat_xs_list,
     py::list feat_ys_list,
-    int num_workers,
     const std::string& jaccard_type,
+    int num_workers,
     py::function progress_callback) {
 
     // Check that all lists have the same size

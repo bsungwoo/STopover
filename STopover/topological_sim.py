@@ -261,7 +261,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
                 feat_x_val = val_list[num][:,df_subset['Index_1'].iloc[index]].reshape((-1,1))
                 feat_y_val = val_list[num][:,df_subset['Index_2'].iloc[index]].reshape((-1,1))
             if jaccard_type=="default": 
-                CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,np.zeros_like(CCx_loc_mat),np.zeros_like(CCy_loc_mat)))
+                CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,None,None))
             else: 
                 CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,feat_x_val,feat_y_val))
 
@@ -282,6 +282,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
                                                         CCy_loc_sums=[feat[1] for feat in CCxy_loc_mat_list],
                                                         feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
                                                         feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
+                                                        jaccard_type=jaccard_type,
                                                         num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
     # Create dataframe for J metrics
     output_j = pd.DataFrame(output_j, columns=['J_comp'])
