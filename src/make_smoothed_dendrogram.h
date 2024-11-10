@@ -19,7 +19,7 @@ make_smoothed_dendrogram(
     const Eigen::SparseMatrix<double>& cE,
     const Eigen::MatrixXd& cduration,
     const std::vector<std::vector<int>>& chistory,
-    const Eigen::Vector2d lim_size = Eigen::Vector2d(0, std::numeric_limits<double>::infinity())
+    const Eigen::Vector2d& lim_size = Eigen::Vector2d(0, std::numeric_limits<double>::infinity())
 );
 
 #endif // MAKE_SMOOTHED_DENDROGRAM_H
