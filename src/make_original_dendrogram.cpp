@@ -1,4 +1,4 @@
-#include "make_original_dendrogram_cc.h"
+#include "make_original_dendrogram.h"
 
 std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx) {
     std::set<int> cc_set;
