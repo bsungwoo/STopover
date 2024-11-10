@@ -80,6 +80,7 @@ std::vector<double> parallel_jaccard_composite(
     const std::vector<Eigen::VectorXd>& CCy_loc_sums,
     const std::vector<Eigen::VectorXd>& feat_xs, 
     const std::vector<Eigen::VectorXd>& feat_ys, 
+    const std::string& jaccard_type = "default",
     int num_workers,
     py::function progress_callback);
 

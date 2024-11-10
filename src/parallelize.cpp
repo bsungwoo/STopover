@@ -128,6 +128,7 @@ std::vector<double> parallel_jaccard_composite_py(
     py::list feat_xs_list,
     py::list feat_ys_list,
     int num_workers,
+    const std::string& jaccard_type,
     py::function progress_callback) {
 
     // Check that all lists have the same size
@@ -181,7 +182,14 @@ std::vector<double> parallel_jaccard_composite_py(
 
         results.emplace_back(pool.enqueue([=]() -> std::pair<size_t, double> {
             // Perform computations using C++ types
-            double jaccard_index = jaccard_composite(CCx_sum, CCy_sum, &feat_x, &feat_y);
+            double jaccard_index; // Declare outside of if-else to ensure scope
+            if (jaccard_type == "default") {
+                jaccard_index = jaccard_composite(CCx_sum, CCy_sum, nullptr, nullptr);
+            } else if (jaccard_type == "weighted") {
+                jaccard_index = jaccard_composite(CCx_sum, CCy_sum, &feat_x, &feat_y);
+            } else {
+                throw std::invalid_argument("Invalid jaccard_type: " + jaccard_type);
+            }
             return {index, jaccard_index};
         }));
 

@@ -41,7 +41,7 @@ def parallel_with_progress_topological_comp(locs, feats, spatial_type="visium", 
     return result
 
 
-def parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums, feat_xs=None, feat_ys=None, num_workers=4):
+def parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums, feat_xs=None, feat_ys=None, jaccard_type="default", num_workers=4):
     """
     Parallel computation for Jaccard composite index.
     Progress is shown using a tqdm progress bar.
@@ -51,6 +51,7 @@ def parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums, feat_xs
         CCy_loc_sums (list or np.ndarray): List of NumPy arrays for connected component location sums for feature y.
         feat_xs (list or np.ndarray, optional): List of NumPy arrays for feature x values.
         feat_ys (list or np.ndarray, optional): List of NumPy arrays for feature y values.
+        jaccard_type (str, optional): Type of Jaccard index to calculate. Either "default" or "weighted".
         num_workers (int, optional): Number of parallel workers.
         
     Returns:
@@ -88,6 +89,7 @@ def parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums, feat_xs
             CCy_loc_sums=CCy_loc_sums,
             feat_xs=feat_xs,
             feat_ys=feat_ys,
+            jaccard_type=jaccard_type,
             num_workers=num_workers,
             progress_callback=update_progress
         )
