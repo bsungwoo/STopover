@@ -23,11 +23,11 @@ using namespace std;
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<std::vector<int>>>
 make_dendrogram_bar(const std::vector<std::vector<int>>& history,
                     const Eigen::MatrixXd& duration,
-                    const Eigen::MatrixXd& cvertical_x = Eigen::MatrixXd(),
-                    const Eigen::MatrixXd& cvertical_y = Eigen::MatrixXd(),
-                    const Eigen::MatrixXd& chorizontal_x = Eigen::MatrixXd(),
-                    const Eigen::MatrixXd& chorizontal_y = Eigen::MatrixXd(),
-                    const Eigen::MatrixXd& cdots = Eigen::MatrixXd()) {
+                    const Eigen::MatrixXd& cvertical_x,
+                    const Eigen::MatrixXd& cvertical_y,
+                    const Eigen::MatrixXd& chorizontal_x,
+                    const Eigen::MatrixXd& chorizontal_y,
+                    const Eigen::MatrixXd& cdots) {
     bool is_new = (cvertical_x.size() == 0) && (cvertical_y.size() == 0) &&
                   (chorizontal_x.size() == 0) && (chorizontal_y.size() == 0) &&
                   (cdots.size() == 0);
