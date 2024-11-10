@@ -226,8 +226,8 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     
     # Start the multiprocessing for finding connected components of each feature
     print("Calculation of connected components for each feature")
-    output_cc = parallel_with_progress_topological_comp(locs = [feat[0] for feat in loc_feat_pair],
-                                                        feats = [feat[1] for feat in loc_feat_pair],
+    output_cc = parallel_with_progress_topological_comp(locs = [np.ascontiguousarray(feat[0]) for feat in loc_feat_pair],
+                                                        feats = [np.ascontiguousarray(feat[1]) for feat in loc_feat_pair],
                                                         spatial_type=spatial_type,
                                                         min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
                                                         num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))

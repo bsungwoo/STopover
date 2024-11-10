@@ -64,15 +64,37 @@ Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
     return vec;
 }
 
-// Parallel function for topological_comp_res with type conversion and progress callback
+Eigen::MatrixXd array_to_matrix(const py::array_t<double>& array) {
+    // Request a buffer (ensure it's contiguous)
+    py::buffer_info buf = array.request();
+    
+    // Ensure the array is two-dimensional
+    if (buf.ndim != 2) {
+        throw std::invalid_argument("All input arrays must be two-dimensional.");
+    }
+    
+    size_t rows = buf.shape[0];
+    size_t cols = buf.shape[1];
+    const double* data_ptr = static_cast<const double*>(buf.ptr);
+
+    // Copy data into Eigen::MatrixXd
+    // Need to handle the memory layout (NumPy is row-major, Eigen is column-major by default)
+    // Map the data with RowMajor and then copy to a column-major matrix
+    Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mat_map(data_ptr, rows, cols);
+    Eigen::MatrixXd mat = mat_map;
+
+    return mat;
+}
+
+// Updated parallel_topological_comp function with data copying
 std::vector<Eigen::VectorXd> parallel_topological_comp(
-    const std::vector<py::object>& locs,
+    const std::vector<py::array_t<double>>& locs,
     const std::string& spatial_type, double fwhm,
     const std::vector<py::array_t<double>>& feats,
     int min_size, int thres_per, const std::string& return_mode, int num_workers,
     py::function progress_callback) {
 
-    // Pre-convert locs and feats to Eigen types
+    // Pre-convert locs and feats to Eigen types by copying data
     std::vector<Eigen::MatrixXd> locs_eigen;
     std::vector<Eigen::VectorXd> feats_eigen;
 
@@ -81,7 +103,7 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
 
     for (size_t i = 0; i < feats.size(); ++i) {
         // Convert locs[i] to Eigen::MatrixXd
-        Eigen::MatrixXd loc = locs[i].cast<Eigen::MatrixXd>();
+        Eigen::MatrixXd loc = array_to_matrix(locs[i]);
         locs_eigen.push_back(loc);
 
         // Convert feats[i] to Eigen::VectorXd
