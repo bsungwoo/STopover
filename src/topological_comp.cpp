@@ -220,18 +220,28 @@ Eigen::SparseMatrix<double> extract_connected_loc_mat(
     }
 }
 
-// Adjusted function to filter connected component locations based on expression values
 Eigen::SparseMatrix<double> filter_connected_loc_exp(
-    const Eigen::SparseMatrix<double>& CC_loc_mat, const Eigen::VectorXd& feat_data, int thres_per) {
+    const Eigen::SparseMatrix<double>& CC_loc_mat, 
+    const Eigen::VectorXd& feat_data, 
+    int thres_per) {
     
-    // Compute sum of each column (assuming columns represent connected components)
-    Eigen::VectorXd CC_mat_sum = CC_loc_mat.cast<double>() * Eigen::VectorXd::Ones(CC_loc_mat.cols());
-
+    // Vector to store the mean expression value of each connected component
     std::vector<std::pair<int, double>> CC_mean;
+    
     for (int i = 0; i < CC_loc_mat.cols(); ++i) {
-        double sum = CC_mat_sum(i);
-        if (sum != 0) {
-            CC_mean.emplace_back(i, feat_data(i));
+        // Get the indices of the spots in this connected component
+        std::vector<int> indices;
+        for (Eigen::SparseMatrix<double>::InnerIterator it(CC_loc_mat, i); it; ++it) {
+            indices.push_back(it.row());
+        }
+        if (!indices.empty()) {
+            // Compute the mean of feat_data over these indices
+            double sum = 0.0;
+            for (int idx : indices) {
+                sum += feat_data(idx);
+            }
+            double mean_value = sum / indices.size();
+            CC_mean.emplace_back(i, mean_value);
         }
     }
 
@@ -241,13 +251,13 @@ Eigen::SparseMatrix<double> filter_connected_loc_exp(
     });
 
     // Determine cutoff based on threshold percentage
-    int cutoff = static_cast<int>(CC_mean.size() * (1.0 - static_cast<double>(thres_per) / 100.0));
+    int cutoff = static_cast<int>(CC_mean.size() * (static_cast<double>(thres_per) / 100.0));
     if (cutoff < 0) cutoff = 0;
     if (cutoff > static_cast<int>(CC_mean.size())) cutoff = static_cast<int>(CC_mean.size());
     CC_mean.resize(cutoff);
 
     // Create a new sparse matrix with filtered components
-    Eigen::SparseMatrix<double> CC_loc_mat_fin(CC_loc_mat.rows(), CC_mean.size());
+    Eigen::SparseMatrix<double> CC_loc_mat_fin(CC_loc_mat.rows(), cutoff);
     std::vector<Eigen::Triplet<double>> tripletList;
     tripletList.reserve(CC_loc_mat.nonZeros());
 
