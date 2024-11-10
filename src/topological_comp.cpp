@@ -305,7 +305,15 @@ Eigen::VectorXd topological_comp_res(
     threshold.erase(std::unique(threshold.begin(), threshold.end()), threshold.end());
 
     auto CC_list = extract_connected_comp(t, A, threshold, p, min_size);
-    std::cout << "The value of CC_list is: " << CC_list << std::endl;
+    // Manually print the contents of CC_list
+    std::cout << "The contents of CC_list:" << std::endl;
+    for (const auto& component : CC_list) {
+        std::cout << "[ ";
+        for (const auto& elem : component) {
+            std::cout << elem << " ";
+        }
+        std::cout << "]" << std::endl;
+    }
 
     Eigen::SparseMatrix<double> CC_loc_mat = extract_connected_loc_mat(CC_list, p, "sparse");
     CC_loc_mat = filter_connected_loc_exp(CC_loc_mat, feat, thres_per);
