@@ -305,12 +305,6 @@ std::vector<int> test_logging_function(int num_tasks, py::function progress_call
     return results;
 }
 
-PYBIND11_MODULE(test_logging, m) {
-    m.def("test_logging_function", &test_logging_function, "Test logging with ThreadPool",
-          py::arg("num_tasks"),
-          py::arg("progress_callback"),
-          py::arg("log_callback"));
-}
 
 // Expose to Python via Pybind11
 PYBIND11_MODULE(parallelize, m) {  // Module name within the STopover package
@@ -322,4 +316,9 @@ PYBIND11_MODULE(parallelize, m) {  // Module name within the STopover package
     m.def("parallel_jaccard_composite", &parallel_jaccard_composite_py, "Parallelized jaccard_composite function accepting lists of NumPy arrays",
           py::arg("CCx_loc_sums"), py::arg("CCy_loc_sums"), py::arg("feat_xs"), py::arg("feat_ys"), 
           py::arg("jaccard_type") = "default", py::arg("num_workers") = 4, py::arg("progress_callback"), py::arg("log_callback"));
+
+    m.def("test_logging_function", &test_logging_function, "Test logging with ThreadPool",
+          py::arg("num_tasks"),
+          py::arg("progress_callback"),
+          py::arg("log_callback"));
 }
