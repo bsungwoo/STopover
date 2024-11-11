@@ -1,6 +1,7 @@
 #include "parallelize.h"
 #include "topological_comp.h"
 #include "jaccard.h"
+#include "thread_pool.h"
 
 #include <iostream>
 #include "thread_safe_queue.h"
@@ -18,38 +19,6 @@
 #include <utility>               // For std::pair
 
 namespace py = pybind11;
-
-// ThreadPool constructor
-ThreadPool::ThreadPool(size_t threads) : stop(false) {
-    for (size_t i = 0; i < threads; ++i) {
-        workers.emplace_back([this] {
-            while (true) {
-                std::function<void()> task;
-                {
-                    std::unique_lock<std::mutex> lock(this->queue_mutex);
-                    // Corrected lambda to return bool
-                    this->condition.wait(lock, [this]{ return this->stop || !this->tasks.empty(); });
-                    if (this->stop && this->tasks.empty())
-                        return;
-                    task = std::move(this->tasks.front());
-                    this->tasks.pop();
-                }
-                task();
-            }
-        });
-    }
-}
-
-// ThreadPool destructor
-ThreadPool::~ThreadPool() {
-    {
-        std::unique_lock<std::mutex> lock(queue_mutex);
-        stop = true;
-    }
-    condition.notify_all();
-    for (std::thread &worker : workers)
-        worker.join();
-}
 
 Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
     // Request a contiguous buffer
@@ -108,6 +77,8 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     // Create a CoutRedirector instance to redirect std::cout to the queue
     CoutRedirector redirector(queue);
 
+    std::cerr << "Starting parallel_topological_comp" << std::endl;
+
     // Pre-convert locs and feats to Eigen types by copying data
     std::vector<Eigen::MatrixXd> locs_eigen;
     std::vector<Eigen::VectorXd> feats_eigen;
@@ -124,6 +95,8 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         Eigen::VectorXd feat = array_to_vector(feats[i]);
         feats_eigen.push_back(feat);
     }
+    
+    std::cerr << "Inputs converted" << std::endl;
     
     ThreadPool pool(num_workers);
     std::vector<std::future<std::pair<size_t, Eigen::VectorXd>>> results;
@@ -148,6 +121,8 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         }
     }
 
+    std::cerr << "All tasks enqueued" << std::endl;
+
     // Collect the results in the correct order
     std::vector<Eigen::VectorXd> output(feats.size());
     for (auto& result_future : results) {
@@ -156,6 +131,8 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         Eigen::VectorXd res = result_pair.second;
         output[index] = res;
     }
+
+    std::cerr << "Results collected" << std::endl;
 
     return output;
 }
