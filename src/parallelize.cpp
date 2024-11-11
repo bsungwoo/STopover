@@ -260,23 +260,23 @@ std::vector<double> parallel_jaccard_composite_py(
 // Function to perform a simple computation and log messages
 std::vector<int> test_logging_function(int num_tasks, py::function progress_callback, py::function log_callback) {
     // Initialize Logger and CoutRedirector
-    ThreadSafeQueue queue;
-    Logger logger(queue, log_callback);
-    CoutRedirector redirector(queue);
+    // ThreadSafeQueue queue;
+    // Logger logger(queue, log_callback);
+    // CoutRedirector redirector(queue);
 
-    std::cerr << "Starting test_logging_function with " << num_tasks << " tasks." << std::endl;
+    // std::cerr << "Starting test_logging_function with " << num_tasks << " tasks." << std::endl;
 
     // Initialize ThreadPool
     ThreadPool pool(4);
     std::vector<std::future<int>> futures;
 
     for(int i = 0; i < num_tasks; ++i) {
-        std::cerr << "Enqueuing task " << i << std::endl;
+        // std::cerr << "Enqueuing task " << i << std::endl;
         futures.emplace_back(pool.enqueue([i]() -> int {
-            std::cout << "Task " << i << " is running" << std::endl;
+            // std::cout << "Task " << i << " is running" << std::endl;
             // Simulate computation
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            std::cout << "Task " << i << " completed" << std::endl;
+            // std::cout << "Task " << i << " completed" << std::endl;
             return i * i;
         }));
         if(progress_callback) {
@@ -285,12 +285,12 @@ std::vector<int> test_logging_function(int num_tasks, py::function progress_call
                 progress_callback();
             }
             catch (const py::error_already_set& e) {
-                std::cerr << "Python error in progress_callback: " << e.what() << std::endl;
+                // std::cerr << "Python error in progress_callback: " << e.what() << std::endl;
             }
         }
     }
 
-    std::cerr << "All tasks enqueued." << std::endl;
+    // std::cerr << "All tasks enqueued." << std::endl;
 
     // Collect results
     std::vector<int> results;
@@ -298,7 +298,7 @@ std::vector<int> test_logging_function(int num_tasks, py::function progress_call
         results.emplace_back(fut.get());
     }
 
-    std::cerr << "All tasks completed. Results collected." << std::endl;
+    // std::cerr << "All tasks completed. Results collected." << std::endl;
 
     // No need to call queue.set_finished(); Logger destructor handles it
 
