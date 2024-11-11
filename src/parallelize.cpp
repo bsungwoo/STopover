@@ -2,6 +2,11 @@
 #include "topological_comp.h"
 #include "jaccard.h"
 
+#include <iostream>
+#include "thread_safe_queue.h"
+#include "custom_streambuf.h"
+#include "logger.h"
+
 #include <stdexcept>
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
@@ -12,6 +17,40 @@
 #include <utility>               // For std::pair
 
 namespace py = pybind11;
+
+// Global queue and logger pointer
+ThreadSafeQueue global_queue;
+Logger* global_logger = nullptr;
+
+// Function to initialize the logger
+void initialize_logger(py::function callback) {
+    if (global_logger == nullptr) {
+        global_logger = new Logger(global_queue, callback);
+    }
+}
+
+// Function to cleanup the logger
+void cleanup_logger() {
+    if (global_logger != nullptr) {
+        delete global_logger;
+        global_logger = nullptr;
+    }
+}
+
+// Redirect std::cout to custom stream buffer
+struct CoutRedirector {
+    CoutRedirector() : custom_buf(global_queue) {
+        original_buf = std::cout.rdbuf(&custom_buf);
+    }
+
+    ~CoutRedirector() {
+        std::cout.rdbuf(original_buf);
+    }
+
+private:
+    CustomStreamBuf custom_buf;
+    std::streambuf* original_buf;
+};
 
 // ThreadPool constructor
 ThreadPool::ThreadPool(size_t threads) : stop(false) {
@@ -111,6 +150,12 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         feats_eigen.push_back(feat);
     }
 
+    // Initialize logger with the provided callback
+    initialize_logger(log_callback);
+
+    // Create a CoutRedirector instance to redirect std::cout
+    CoutRedirector redirector;
+
     ThreadPool pool(num_workers);
     std::vector<std::future<std::pair<size_t, Eigen::VectorXd>>> results;
 
@@ -142,6 +187,9 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         Eigen::VectorXd res = result_pair.second;
         output[index] = res;
     }
+
+    // Cleanup logger
+    cleanup_logger();
 
     return output;
 }
@@ -193,6 +241,12 @@ std::vector<double> parallel_jaccard_composite_py(
         }
     }
 
+    // Initialize logger with the provided callback
+    initialize_logger(log_callback);
+
+    // Create a CoutRedirector instance to redirect std::cout
+    CoutRedirector redirector;
+
     ThreadPool pool(num_workers);
     std::vector<std::future<std::pair<size_t, double>>> results;
 
@@ -232,6 +286,9 @@ std::vector<double> parallel_jaccard_composite_py(
         double value = result_pair.second;
         output[index] = value;
     }
+
+    // Cleanup logger
+    cleanup_logger();
 
     return output;
 }
