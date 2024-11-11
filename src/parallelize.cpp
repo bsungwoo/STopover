@@ -4,6 +4,7 @@
 #include "thread_pool.h"
 
 #include <iostream>
+#include <fstream>
 #include "thread_safe_queue.h"
 #include "custom_streambuf.h"
 #include "cout_redirector.h"
@@ -69,6 +70,10 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     int min_size, int thres_per, const std::string& return_mode, int num_workers,
     py::function progress_callback,
     py::function log_callback) {
+
+    // Inside your function or initialization code
+    std::ofstream log_file("cpp_log.txt");
+    std::cerr.rdbuf(log_file.rdbuf());
 
     // Create a thread-safe queue and initialize the logger with log_callback
     ThreadSafeQueue queue;
