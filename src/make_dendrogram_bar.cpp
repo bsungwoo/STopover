@@ -199,3 +199,11 @@ make_dendrogram_bar(
 
     return std::make_tuple(nvertical_x, nvertical_y, nhorizontal_x, nhorizontal_y, ndots, nlayer);
 }
+
+// Expose to Python via Pybind11
+PYBIND11_MODULE(connected_components, m) {  // Module name within the STopover package
+    m.def("make_dendrogram_bar", &make_dendrogram_bar, "make_dendrogram_bar",
+          py::arg("history"), py::arg("duration"), py::arg("cvertical_x"),
+          py::arg("cvertical_y"), py::arg("chorizontal_x"), py::arg("chorizontal_y"),
+          py::arg("cdots");
+}

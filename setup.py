@@ -126,16 +126,30 @@ ext_modules = [
             "src/make_dendrogram_bar.cpp",
             "src/make_original_dendrogram.cpp",
             "src/make_smoothed_dendrogram.cpp",
-            "src/utils.cpp",
-            "src/logger.cpp",
-            "src/custom_streambuf.cpp",
-            "src/cout_redirector.cpp"
+            "src/utils.cpp"
         ],
         include_dirs=[
             pybind11.get_include(),
             pybind11.get_include(user=True),
             EIGEN_INCLUDE_DIR,  # Correct Eigen directory
             "src"  # Assuming headers are in 'src'
+        ],
+        language="c++",
+        extra_compile_args=["-O3", "-Wall", "-std=c++17", "-fopenmp"],
+        extra_link_args=["-fopenmp"]
+    ),
+    Extension(
+        "STopover.connected_components",  # Another module name
+        sources=[
+            "src/make_original_dendrogram.cpp",
+            "src/make_smoothed_dendrogram.cpp",
+            "src/make_dendrogram_bar.cpp",
+        ],
+        include_dirs=[
+            pybind11.get_include(),
+            pybind11.get_include(user=True),
+            EIGEN_INCLUDE_DIR,
+            "src"
         ],
         language="c++",
         extra_compile_args=["-O3", "-Wall", "-std=c++17", "-fopenmp"],
