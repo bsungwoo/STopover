@@ -231,5 +231,5 @@ make_smoothed_dendrogram(
 PYBIND11_MODULE(connected_components, m) {  // Module name within the STopover package
     m.def("make_smoothed_dendrogram", &make_smoothed_dendrogram, "make_smoothed_dendrogram",
           py::arg("cCC"), py::arg("cE"), py::arg("cduration"), py::arg("chistory"), 
-          py::arg("lim_size");
+          py::arg("lim_size"));
 }

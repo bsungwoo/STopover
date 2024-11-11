@@ -241,5 +241,5 @@ make_original_dendrogram_cc(
 // Expose to Python via Pybind11
 PYBIND11_MODULE(connected_components, m) {  // Module name within the STopover package
     m.def("make_original_dendrogram", &make_original_dendrogram, "make_original_dendrogram",
-          py::arg("U"), py::arg("A"), py::arg("threshold");
+          py::arg("U"), py::arg("A"), py::arg("threshold"));
 }
