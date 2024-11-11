@@ -1,6 +1,7 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
+#include <iostream>
 #include <thread>
 #include <string>
 #include "thread_safe_queue.h"
