@@ -285,6 +285,7 @@ Eigen::VectorXd topological_comp_res(
 
     // Extract adjacency matrix and mask
     auto [A, mask] = extract_adjacency_spatial(loc, spatial_type, fwhm);
+    std::cout << "extract adjacency spatial finished" << std::endl;
 
     // Smooth the feature values with given mask
     int p = feat.size();
@@ -305,6 +306,7 @@ Eigen::VectorXd topological_comp_res(
     threshold.erase(std::unique(threshold.begin(), threshold.end()), threshold.end());
 
     auto CC_list = extract_connected_comp(t, A, threshold, p, min_size);
+    std::cout << "extract CC finished" << std::endl;
     // Manually print the contents of CC_list
     std::cout << "The contents of CC_list:" << std::endl;
     for (const auto& component : CC_list) {

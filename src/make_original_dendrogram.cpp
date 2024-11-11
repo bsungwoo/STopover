@@ -92,6 +92,7 @@ make_original_dendrogram_cc(
         }
 
         // Extract connected components
+        std::cout << "connected components starts" << std::endl;
         std::vector<std::set<int>> CC_profiles = connected_components(edge_list);
         std::cout << "connected components finished" << std::endl;
         int S = CC_profiles.size();
