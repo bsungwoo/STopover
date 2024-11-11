@@ -131,7 +131,8 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     const std::string& spatial_type, double fwhm,
     const std::vector<py::array_t<double>>& feats,
     int min_size, int thres_per, const std::string& return_mode, int num_workers,
-    py::function progress_callback) {
+    py::function progress_callback,
+    py::function log_callback) {
 
     // Pre-convert locs and feats to Eigen types by copying data
     std::vector<Eigen::MatrixXd> locs_eigen;
@@ -202,7 +203,8 @@ std::vector<double> parallel_jaccard_composite_py(
     py::list feat_ys_list,
     const std::string& jaccard_type,
     int num_workers,
-    py::function progress_callback) {
+    py::function progress_callback,
+    py::function log_callback) {
 
     // Check that all lists have the same size
     size_t list_size = CCx_loc_sums_list.size();

@@ -72,7 +72,8 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     const std::string& spatial_type, double fwhm,
     const std::vector<py::array_t<double>>& feats,
     int min_size, int thres_per, const std::string& return_mode, int num_workers,
-    py::function progress_callback);
+    py::function progress_callback,
+    py::function log_callback);
 
 // Parallel function for jaccard_composite
 std::vector<double> parallel_jaccard_composite(
@@ -82,6 +83,7 @@ std::vector<double> parallel_jaccard_composite(
     const std::vector<Eigen::VectorXd>& feat_ys, 
     const std::string& jaccard_type,
     int num_workers,
-    py::function progress_callback);
+    py::function progress_callback,
+    py::function log_callback);
 
 #endif // PARALLELIZE_H

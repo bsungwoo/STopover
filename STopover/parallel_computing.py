@@ -2,6 +2,9 @@ import numpy as np
 import tqdm
 from .parallelize import parallel_topological_comp, parallel_jaccard_composite
 
+def log_callback(message):
+    print(f"C++ Log: {message}", end='')  # 'end' to avoid adding extra newlines
+
 def parallel_with_progress_topological_comp(locs, feats, spatial_type="visium", fwhm=2.5,
                                             min_size=5, thres_per=30, return_mode="all", num_workers=4):
     """
@@ -36,7 +39,7 @@ def parallel_with_progress_topological_comp(locs, feats, spatial_type="visium", 
             pbar.update(1)
         
         # Call the C++ function in parallel, passing the progress callback
-        result = parallel_topological_comp(locs, spatial_type, fwhm, feats, min_size, thres_per, return_mode, num_workers, update_progress)
+        result = parallel_topological_comp(locs, spatial_type, fwhm, feats, min_size, thres_per, return_mode, num_workers, update_progress, log_callback=log_callback)
 
     return result
 
@@ -91,7 +94,8 @@ def parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums, feat_xs
             feat_ys=feat_ys,
             jaccard_type=jaccard_type,
             num_workers=num_workers,
-            progress_callback=update_progress
+            progress_callback=update_progress,
+            log_callback=log_callback
         )
 
     return result
