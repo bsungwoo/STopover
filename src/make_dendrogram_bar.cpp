@@ -205,5 +205,5 @@ PYBIND11_MODULE(connected_components, m) {  // Module name within the STopover p
     m.def("make_dendrogram_bar", &make_dendrogram_bar, "make_dendrogram_bar",
           py::arg("history"), py::arg("duration"), py::arg("cvertical_x"),
           py::arg("cvertical_y"), py::arg("chorizontal_x"), py::arg("chorizontal_y"),
-          py::arg("cdots");
+          py::arg("cdots"));
 }
