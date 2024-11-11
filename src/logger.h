@@ -1,50 +1,66 @@
-#ifndef LOGGER_H
-#define LOGGER_H
+#ifndef LOGGER_SIMPLE_H
+#define LOGGER_SIMPLE_H
 
 #include <thread>
 #include <string>
-#include "thread_safe_queue.h"
+#include <queue>
+#include <mutex>
+#include <condition_variable>
 #include <pybind11/pybind11.h>
 
 namespace py = pybind11;
 
-class Logger {
+class LoggerSimple {
 public:
-    Logger(ThreadSafeQueue& queue, py::function callback)
-        : queue_(queue), callback_(callback), logger_thread_(&Logger::process, this) {}
+    LoggerSimple(py::function callback)
+        : callback_(callback), finished_(false), logger_thread_(&LoggerSimple::process, this) {}
 
-    ~Logger() {
-        std::cerr << "Logger destructor called. Signaling to finish." << std::endl;
-        queue_.set_finished();
-        if (logger_thread_.joinable()) {
-            std::cerr << "Joining Logger thread." << std::endl;
-            logger_thread_.join();
-            std::cerr << "Logger thread joined successfully." << std::endl;
+    ~LoggerSimple() {
+        {
+            std::lock_guard<std::mutex> lock(mtx_);
+            finished_ = true;
+            cv_.notify_all();
         }
+        if (logger_thread_.joinable()) {
+            logger_thread_.join();
+        }
+    }
+
+    void log(const std::string& message) {
+        {
+            std::lock_guard<std::mutex> lock(mtx_);
+            q_.push(message);
+        }
+        cv_.notify_one();
     }
 
 private:
     void process() {
-        std::cerr << "Logger thread started." << std::endl;
-        std::string msg;
-        while (queue_.pop(msg)) {  // Continue until pop returns false
-            std::cerr << "Logger processing message: " << msg << std::endl;  // Debug Statement
+        std::string message;
+        while (true) {
+            {
+                std::unique_lock<std::mutex> lock(mtx_);
+                cv_.wait(lock, [this]{ return !q_.empty() || finished_; });
+                if (finished_ && q_.empty()) break;
+                message = q_.front();
+                q_.pop();
+            }
             try {
-                // Acquire GIL before calling Python
                 py::gil_scoped_acquire acquire;
-                callback_(msg);
+                callback_(message);
             }
             catch (const py::error_already_set& e) {
-                // If Python callback fails, log the error
                 std::cerr << "Python error in log_callback: " << e.what() << std::endl;
             }
         }
-        std::cerr << "Logger thread exiting." << std::endl;  // Debug Statement
     }
 
-    ThreadSafeQueue& queue_;
     py::function callback_;
+    std::queue<std::string> q_;
+    std::mutex mtx_;
+    std::condition_variable cv_;
+    bool finished_;
     std::thread logger_thread_;
 };
 
-#endif // LOGGER_H
+#endif // LOGGER_SIMPLE_H

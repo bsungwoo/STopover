@@ -219,26 +219,24 @@ std::vector<double> parallel_jaccard_composite_py(
     return output;
 }
 
-// Function to perform a simple computation with Logger and CoutRedirector
+// Function to perform a simple computation with LoggerSimple only
 std::vector<int> test_logging_function(int num_tasks, py::function progress_callback, py::function log_callback) {
-    // Initialize Logger and CoutRedirector
-    ThreadSafeQueue queue;
-    Logger logger(queue, log_callback);
-    CoutRedirector redirector(queue);
+    // Initialize LoggerSimple only
+    LoggerSimple logger(log_callback);
 
-    std::cerr << "Starting test_logging_function with " << num_tasks << " tasks." << std::endl;
+    logger.log("Starting test_logging_function with " + std::to_string(num_tasks) + " tasks.\n");
 
     // Initialize ThreadPool
     ThreadPool pool(4);
     std::vector<std::future<int>> futures;
 
     for(int i = 0; i < num_tasks; ++i) {
-        std::cerr << "Enqueuing task " << i << std::endl;
-        futures.emplace_back(pool.enqueue([i]() -> int {
-            std::cout << "Task " << i << " is running" << std::endl;
+        logger.log("Enqueuing task " + std::to_string(i) + "\n");
+        futures.emplace_back(pool.enqueue([i, &logger]() -> int {
+            logger.log("Task " + std::to_string(i) + " is running\n");
             // Simulate computation
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            std::cout << "Task " << i << " completed" << std::endl;
+            logger.log("Task " + std::to_string(i) + " completed\n");
             return i * i;
         }));
         if(progress_callback) {
@@ -252,7 +250,7 @@ std::vector<int> test_logging_function(int num_tasks, py::function progress_call
         }
     }
 
-    std::cerr << "All tasks enqueued." << std::endl;
+    logger.log("All tasks enqueued.\n");
 
     // Collect results
     std::vector<int> results;
@@ -261,14 +259,13 @@ std::vector<int> test_logging_function(int num_tasks, py::function progress_call
             results.emplace_back(fut.get());
         }
         catch (const std::exception& e) {
-            std::cerr << "Exception while getting result: " << e.what() << std::endl;
+            logger.log("Exception while getting result: " + std::string(e.what()) + "\n");
             throw;
         }
     }
 
-    std::cerr << "All tasks completed. Results collected." << std::endl;
+    logger.log("All tasks completed. Results collected.\n");
 
-    // Logger destructor will handle shutdown
     return results;
 }
 
