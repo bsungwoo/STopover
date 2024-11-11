@@ -70,13 +70,6 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     py::function progress_callback,
     py::function log_callback) {
 
-    // Initialize Logger and CoutRedirector
-    ThreadSafeQueue queue;
-    Logger logger(queue, log_callback);
-    CoutRedirector redirector(queue);
-
-    std::cerr << "Starting parallel_topological_comp" << std::endl;
-
     // Pre-convert locs and feats to Eigen types by copying data
     std::vector<Eigen::MatrixXd> locs_eigen;
     std::vector<Eigen::VectorXd> feats_eigen;
@@ -85,7 +78,6 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     feats_eigen.reserve(feats.size());
 
     for (size_t i = 0; i < feats.size(); ++i) {
-        std::cerr << "Converting input " << i << std::endl;
         // Convert locs[i] to Eigen::MatrixXd
         Eigen::MatrixXd loc = array_to_matrix(locs[i]);
         locs_eigen.push_back(loc);
@@ -94,8 +86,6 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         Eigen::VectorXd feat = array_to_vector(feats[i]);
         feats_eigen.push_back(feat);
     }
-
-    std::cerr << "Inputs converted" << std::endl;
 
     // Initialize ThreadPool
     ThreadPool pool(num_workers);
@@ -107,54 +97,26 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         Eigen::MatrixXd loc = locs_eigen[i];
         Eigen::VectorXd feat = feats_eigen[i];
 
-        std::cerr << "Enqueuing task " << i << std::endl;
-
         // Enqueue the task
         results.emplace_back(pool.enqueue([=]() -> std::pair<size_t, Eigen::VectorXd> {
-            try {
-                Eigen::VectorXd res = topological_comp_res(loc, spatial_type, fwhm, feat, min_size, thres_per, return_mode);
-                std::cout << "Task " << index << " completed" << std::endl;
-                return {index, res};
-            }
-            catch (const std::exception& e) {
-                std::cerr << "Exception in task " << index << ": " << e.what() << std::endl;
-                throw;
-            }
+            Eigen::VectorXd res = topological_comp_res(loc, spatial_type, fwhm, feat, min_size, thres_per, return_mode);
+            return {index, res};
         }));
 
         // Call the progress callback
         if (progress_callback) {
-            try {
-                py::gil_scoped_acquire acquire;  // Acquire GIL
-                progress_callback();
-            }
-            catch (const py::error_already_set& e) {
-                std::cerr << "Python error in progress_callback: " << e.what() << std::endl;
-            }
+            progress_callback();
         }
     }
-
-    std::cerr << "All tasks enqueued" << std::endl;
 
     // Collect the results in the correct order
     std::vector<Eigen::VectorXd> output(feats.size());
     for (auto& result_future : results) {
-        try {
-            auto result_pair = result_future.get();
-            size_t index = result_pair.first;
-            Eigen::VectorXd res = result_pair.second;
-            output[index] = res;
-        }
-        catch (const std::exception& e) {
-            std::cerr << "Exception while getting result: " << e.what() << std::endl;
-            throw;
-        }
+        auto result_pair = result_future.get();
+        size_t index = result_pair.first;
+        Eigen::VectorXd res = result_pair.second;
+        output[index] = res;
     }
-
-    std::cerr << "Results collected" << std::endl;
-
-    // Signal that no more messages will be added to the queue
-    queue.set_finished();
 
     return output;
 }
