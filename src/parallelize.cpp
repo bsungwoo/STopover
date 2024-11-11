@@ -157,9 +157,6 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         output[index] = res;
     }
 
-    // Cleanup logger
-    cleanup_logger();
-
     return output;
 }
 
@@ -257,9 +254,6 @@ std::vector<double> parallel_jaccard_composite_py(
         double value = result_pair.second;
         output[index] = value;
     }
-
-    // Cleanup logger
-    cleanup_logger();
 
     return output;
 }
