@@ -285,7 +285,6 @@ Eigen::VectorXd topological_comp_res(
 
     // Extract adjacency matrix and mask
     auto [A, mask] = extract_adjacency_spatial(loc, spatial_type, fwhm);
-    std::cout << "extract adjacency spatial finished" << std::endl;
 
     // Smooth the feature values with given mask
     int p = feat.size();
@@ -305,23 +304,10 @@ Eigen::VectorXd topological_comp_res(
     std::sort(threshold.begin(), threshold.end(), std::greater<double>());
     threshold.erase(std::unique(threshold.begin(), threshold.end()), threshold.end());
     
-    std::cerr << "Starting topological_comp" << std::endl;
     auto CC_list = extract_connected_comp(t, A, threshold, p, min_size);
-
-    // Manually print the contents of CC_list
-    std::cerr << "End of parallel_topological_comp" << std::endl;
-    for (const auto& component : CC_list) {
-        std::cout << "[ ";
-        for (const auto& elem : component) {
-            std::cout << elem << " ";
-        }
-        std::cout << "]" << std::endl;
-    }
-    std::cerr << "Starting connected component calculation" << std::endl;
     Eigen::SparseMatrix<double> CC_loc_mat = extract_connected_loc_mat(CC_list, p, "sparse");
     CC_loc_mat = filter_connected_loc_exp(CC_loc_mat, feat, thres_per);
     
     Eigen::VectorXd row_sums = CC_loc_mat * Eigen::VectorXd::Ones(CC_loc_mat.cols());
-    std::cerr << "The End" << std::endl;
     return row_sums;
 }
