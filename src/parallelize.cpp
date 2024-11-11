@@ -134,6 +134,13 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     py::function progress_callback,
     py::function log_callback) {
 
+    // Create a thread-safe queue and initialize the logger with log_callback
+    ThreadSafeQueue queue;
+    Logger logger(queue, log_callback);
+
+    // Create a CoutRedirector instance to redirect std::cout to the queue
+    CoutRedirector redirector(queue);
+
     // Pre-convert locs and feats to Eigen types by copying data
     std::vector<Eigen::MatrixXd> locs_eigen;
     std::vector<Eigen::VectorXd> feats_eigen;
@@ -150,13 +157,7 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         Eigen::VectorXd feat = array_to_vector(feats[i]);
         feats_eigen.push_back(feat);
     }
-
-    // Initialize logger with the provided callback
-    initialize_logger(log_callback);
-
-    // Create a CoutRedirector instance to redirect std::cout
-    CoutRedirector redirector;
-
+    
     ThreadPool pool(num_workers);
     std::vector<std::future<std::pair<size_t, Eigen::VectorXd>>> results;
 
@@ -206,6 +207,13 @@ std::vector<double> parallel_jaccard_composite_py(
     py::function progress_callback,
     py::function log_callback) {
 
+    // Create a thread-safe queue and initialize the logger with log_callback
+    ThreadSafeQueue queue;
+    Logger logger(queue, log_callback);
+
+    // Create a CoutRedirector instance to redirect std::cout to the queue
+    CoutRedirector redirector(queue);
+
     // Check that all lists have the same size
     size_t list_size = CCx_loc_sums_list.size();
     if (CCy_loc_sums_list.size() != list_size ||
@@ -242,12 +250,6 @@ std::vector<double> parallel_jaccard_composite_py(
             throw std::invalid_argument("All elements in input lists must be NumPy arrays of type float64.");
         }
     }
-
-    // Initialize logger with the provided callback
-    initialize_logger(log_callback);
-
-    // Create a CoutRedirector instance to redirect std::cout
-    CoutRedirector redirector;
 
     ThreadPool pool(num_workers);
     std::vector<std::future<std::pair<size_t, double>>> results;
