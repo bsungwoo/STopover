@@ -1,6 +1,7 @@
 #ifndef LOGGER_SIMPLE_H
 #define LOGGER_SIMPLE_H
 
+#include <iostream>
 #include <thread>
 #include <string>
 #include <queue>
