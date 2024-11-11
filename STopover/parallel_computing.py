@@ -5,8 +5,11 @@ from .parallelize import parallel_topological_comp, parallel_jaccard_composite
 def log_callback(message):
     print(f"C++ Log: {message}", end='')  # 'end' to avoid adding extra newlines
 
-def parallel_with_progress_topological_comp(locs, feats, spatial_type="visium", fwhm=2.5,
-                                            min_size=5, thres_per=30, return_mode="all", num_workers=4):
+def parallel_with_progress_topological_comp(
+    locs, feats, spatial_type="visium", fwhm=2.5,
+    min_size=5, thres_per=30, return_mode="all", num_workers=4,
+    log_callback=None
+):
     """
     Parallel computation for topological component extraction.
     Progress is shown using a tqdm progress bar.
@@ -20,7 +23,8 @@ def parallel_with_progress_topological_comp(locs, feats, spatial_type="visium", 
         thres_per (int): Percentile threshold for filtering connected components.
         return_mode (str): Return mode.
         num_workers (int): Number of parallel workers.
-        
+        log_callback (callable, optional): Function to handle log messages from C++.
+    
     Returns:
         list: A list of topological components for each feature.
     """
@@ -31,16 +35,36 @@ def parallel_with_progress_topological_comp(locs, feats, spatial_type="visium", 
     for i, feat in enumerate(feats):
         if feat.ndim != 1:
             raise ValueError(f"feats[{i}] is not one-dimensional after reshape.")
-        
+    
+    # Define a default log_callback if none is provided
+    if log_callback is None:
+        def log_callback(message):
+            print(f"C++ Log: {message}", end='')  # 'end' to avoid adding extra newlines
+    
     # Create a progress bar
     with tqdm.tqdm(total=len(feats)) as pbar:
         # Define a Python callback function to update progress
         def update_progress():
             pbar.update(1)
         
-        # Call the C++ function in parallel, passing the progress callback
-        result = parallel_topological_comp(locs, spatial_type, fwhm, feats, min_size, thres_per, return_mode, num_workers, update_progress, log_callback=log_callback)
-
+        try:
+            # Call the C++ function in parallel, passing both callbacks
+            result = parallel_topological_comp(
+                locs=locs,
+                spatial_type=spatial_type,
+                fwhm=fwhm,
+                feats=feats,
+                min_size=min_size,
+                thres_per=thres_per,
+                return_mode=return_mode,
+                num_workers=num_workers,
+                progress_callback=update_progress,
+                log_callback=log_callback
+            )
+        except Exception as e:
+            print(f"\nException during parallel_topological_comp: {e}")
+            raise
+    
     return result
 
 
