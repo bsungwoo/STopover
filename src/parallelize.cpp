@@ -75,11 +75,9 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     std::ofstream log_file("cpp_log.txt");
     std::cerr.rdbuf(log_file.rdbuf());
 
-    // Create a thread-safe queue and initialize the logger with log_callback
+    // Initialize Logger and CoutRedirector
     ThreadSafeQueue queue;
     Logger logger(queue, log_callback);
-
-    // Create a CoutRedirector instance to redirect std::cout to the queue
     CoutRedirector redirector(queue);
 
     std::cerr << "Starting parallel_topological_comp" << std::endl;
@@ -103,26 +101,40 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     
     std::cerr << "Inputs converted" << std::endl;
     
+    // Initialize ThreadPool
     ThreadPool pool(num_workers);
     std::vector<std::future<std::pair<size_t, Eigen::VectorXd>>> results;
 
     // Dispatch parallel tasks
     for (size_t i = 0; i < feats.size(); ++i) {
-        // Capture index and inputs by value
         size_t index = i;
         Eigen::MatrixXd loc = locs_eigen[i];
         Eigen::VectorXd feat = feats_eigen[i];
 
+        std::cerr << "Enqueuing task " << i << std::endl;
+
         // Enqueue the task
         results.emplace_back(pool.enqueue([=]() -> std::pair<size_t, Eigen::VectorXd> {
-            // Perform computations using C++ types
-            Eigen::VectorXd res = topological_comp_res(loc, spatial_type, fwhm, feat, min_size, thres_per, return_mode);
-            return {index, res};
+            try {
+                Eigen::VectorXd res = topological_comp_res(loc, spatial_type, fwhm, feat, min_size, thres_per, return_mode);
+                std::cout << "Task " << index << " completed" << std::endl;
+                return {index, res};
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Exception in task " << index << ": " << e.what() << std::endl;
+                throw;
+            }
         }));
 
         // Call the progress callback
         if (progress_callback) {
-            progress_callback();
+            try {
+                py::gil_scoped_acquire acquire;  // Acquire GIL
+                progress_callback();
+            }
+            catch (const py::error_already_set& e) {
+                std::cerr << "Python error in progress_callback: " << e.what() << std::endl;
+            }
         }
     }
 
@@ -138,6 +150,9 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     }
 
     std::cerr << "Results collected" << std::endl;
+
+    // Signal that no more messages will be added to the queue
+    queue.set_finished();
 
     return output;
 }

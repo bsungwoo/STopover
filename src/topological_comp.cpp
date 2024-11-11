@@ -322,6 +322,6 @@ Eigen::VectorXd topological_comp_res(
     CC_loc_mat = filter_connected_loc_exp(CC_loc_mat, feat, thres_per);
     
     Eigen::VectorXd row_sums = CC_loc_mat * Eigen::VectorXd::Ones(CC_loc_mat.cols());
-
+    std::cerr << "The End" << std::endl;
     return row_sums;
 }
