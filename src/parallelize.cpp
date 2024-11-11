@@ -132,13 +132,6 @@ std::vector<double> parallel_jaccard_composite_py(
     py::function progress_callback,
     py::function log_callback) {
 
-    // Create a thread-safe queue and initialize the logger with log_callback
-    ThreadSafeQueue queue;
-    Logger logger(queue, log_callback);
-
-    // Create a CoutRedirector instance to redirect std::cout to the queue
-    CoutRedirector redirector(queue);
-
     // Check that all lists have the same size
     size_t list_size = CCx_loc_sums_list.size();
     if (CCy_loc_sums_list.size() != list_size ||
