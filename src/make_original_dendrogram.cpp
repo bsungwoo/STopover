@@ -2,6 +2,8 @@
 #include <iostream>
 #include <pybind11/pybind11.h>
 
+namespace py = pybind11;
+
 std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx) {
     std::set<int> cc_set;
     std::set<int> next_neighbor = { sel_node_idx };

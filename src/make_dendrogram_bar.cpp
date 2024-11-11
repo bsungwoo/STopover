@@ -5,6 +5,8 @@
 #include <limits>
 #include <pybind11/pybind11.h>
 
+namespace py = pybind11;
+
 std::tuple<
     Eigen::MatrixXd,
     Eigen::MatrixXd,

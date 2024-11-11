@@ -5,6 +5,8 @@
 #include <iostream>
 #include <pybind11/pybind11.h>
 
+namespace py = pybind11;
+
 std::tuple<
     std::vector<std::vector<int>>,
     Eigen::SparseMatrix<double>,
