@@ -3,6 +3,7 @@
 #include <numeric>
 #include <set>
 #include <iostream>
+#include <pybind11/pybind11.h>
 
 std::tuple<
     std::vector<std::vector<int>>,

@@ -3,6 +3,7 @@
 #include <numeric>
 #include <set>
 #include <limits>
+#include <pybind11/pybind11.h>
 
 std::tuple<
     Eigen::MatrixXd,

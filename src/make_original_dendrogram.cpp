@@ -1,5 +1,6 @@
 #include "make_original_dendrogram.h"
 #include <iostream>
+#include <pybind11/pybind11.h>
 
 std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx) {
     std::set<int> cc_set;
