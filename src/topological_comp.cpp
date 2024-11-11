@@ -299,11 +299,16 @@ Eigen::VectorXd topological_comp_res(
         smooth = feat;
     }
 
-    Eigen::VectorXd t = smooth.cwiseMax(0);
-    std::vector<double> threshold(t.data(), t.data() + t.size());
+    Eigen::VectorXd t = smooth.array() * (smooth.array() > 0).cast<double>();  // Mask values below zero
+    std::vector<double> threshold;
+    for (int i = 0; i < t.size(); ++i) {
+        if (t[i] > 0) {  // Only add positive values to threshold
+            threshold.push_back(t[i]);
+        }
+    }
     std::sort(threshold.begin(), threshold.end(), std::greater<double>());
     threshold.erase(std::unique(threshold.begin(), threshold.end()), threshold.end());
-    
+
     auto CC_list = extract_connected_comp(t, A, threshold, p, min_size);
     Eigen::SparseMatrix<double> CC_loc_mat = extract_connected_loc_mat(CC_list, p, "sparse");
     CC_loc_mat = filter_connected_loc_exp(CC_loc_mat, feat, thres_per);
