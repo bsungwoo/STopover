@@ -1,7 +1,6 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
-#include <iostream>
 #include <thread>
 #include <string>
 #include "thread_safe_queue.h"
@@ -15,15 +14,18 @@ public:
         : queue_(queue), callback_(callback), logger_thread_(&Logger::process, this) {}
 
     ~Logger() {
-        // Signal that no more messages will be added
+        std::cerr << "Logger destructor called. Signaling to finish." << std::endl;
         queue_.set_finished();
         if (logger_thread_.joinable()) {
+            std::cerr << "Joining Logger thread." << std::endl;
             logger_thread_.join();
+            std::cerr << "Logger thread joined successfully." << std::endl;
         }
     }
 
 private:
     void process() {
+        std::cerr << "Logger thread started." << std::endl;
         std::string msg;
         while (queue_.pop(msg)) {  // Continue until pop returns false
             std::cerr << "Logger processing message: " << msg << std::endl;  // Debug Statement

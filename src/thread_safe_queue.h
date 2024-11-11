@@ -8,39 +8,43 @@
 
 class ThreadSafeQueue {
 public:
+    ThreadSafeQueue() : finished(false) {}
+
     // Push a new message into the queue
-    void push(const std::string& msg) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        queue_.push(msg);
-        cond_var_.notify_one();
+    void push(const std::string& message) {
+        std::lock_guard<std::mutex> lock(mtx);
+        q.push(message);
+        std::cerr << "ThreadSafeQueue: Pushed message: " << message;
+        cv.notify_one();
     }
 
-    // Pop a message from the queue. Blocks if the queue is empty.
-    bool pop(std::string& msg) {
-        std::unique_lock<std::mutex> lock(mutex_);
-        while (queue_.empty() && !finished_) {
-            cond_var_.wait(lock);
-        }
-        if (!queue_.empty()) {
-            msg = std::move(queue_.front());
-            queue_.pop();
+    // Pop a message from the queue; returns false if finished and queue is empty
+    bool pop(std::string& message) {
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, [this]{ return !q.empty() || finished; });
+        if (!q.empty()) {
+            message = q.front();
+            q.pop();
+            std::cerr << "ThreadSafeQueue: Popped message: " << message;
             return true;
         }
+        std::cerr << "ThreadSafeQueue: No more messages. Exiting pop." << std::endl;
         return false;
     }
 
-    // Signal that no more messages will be pushed
+    // Indicate that no more messages will be added
     void set_finished() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        finished_ = true;
-        cond_var_.notify_all();
+        std::lock_guard<std::mutex> lock(mtx);
+        finished = true;
+        std::cerr << "ThreadSafeQueue: set_finished called. Signaling all waiting threads." << std::endl;
+        cv.notify_all();
     }
 
 private:
-    std::queue<std::string> queue_;
-    std::mutex mutex_;
-    std::condition_variable cond_var_;
-    bool finished_ = false;
+    std::queue<std::string> q;
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool finished;
 };
 
 #endif // THREAD_SAFE_QUEUE_H

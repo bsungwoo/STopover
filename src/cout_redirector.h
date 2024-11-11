@@ -8,9 +8,12 @@
 
 class CoutRedirector : public std::streambuf {
 public:
-    CoutRedirector(ThreadSafeQueue& queue) : queue_(queue), original_buf_(std::cout.rdbuf(this)) {}
+    CoutRedirector(ThreadSafeQueue& queue) : queue_(queue), original_buf_(std::cout.rdbuf(this)) {
+        std::cerr << "CoutRedirector initialized." << std::endl;
+    }
     ~CoutRedirector() {
         std::cout.rdbuf(original_buf_);
+        std::cerr << "CoutRedirector destructed. Restored original std::cout buffer." << std::endl;
     }
 
 protected:
@@ -21,6 +24,7 @@ protected:
         else {
             buffer_ += static_cast<char>(c);
             if (c == '\n') {
+                std::cerr << "CoutRedirector pushing message: " << buffer_;
                 queue_.push(buffer_);
                 buffer_.clear();
             }
