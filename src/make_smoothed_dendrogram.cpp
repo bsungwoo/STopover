@@ -3,9 +3,6 @@
 #include <numeric>
 #include <set>
 #include <iostream>
-#include <pybind11/pybind11.h>
-
-namespace py = pybind11;
 
 std::tuple<
     std::vector<std::vector<int>>,
@@ -225,11 +222,4 @@ make_smoothed_dendrogram(
 
     // Return the results
     return std::make_tuple(nCC, nE, nduration, nchildren);
-}
-
-// Expose to Python via Pybind11
-PYBIND11_MODULE(connected_components, m) {  // Module name within the STopover package
-    m.def("make_smoothed_dendrogram", &make_smoothed_dendrogram, "make_smoothed_dendrogram",
-          py::arg("cCC"), py::arg("cE"), py::arg("cduration"), py::arg("chistory"), 
-          py::arg("lim_size"));
 }
