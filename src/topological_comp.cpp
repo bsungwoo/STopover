@@ -2,21 +2,25 @@
 #include "make_original_dendrogram.h"
 #include "make_smoothed_dendrogram.h"
 #include "make_dendrogram_bar.h"
-#include <limits>    // for std::numeric_limits
-#include <algorithm> // for std::sort, std::find
-#include <cmath>     // for M_PI
-#include <stdexcept> // for std::invalid_argument
+#include <limits>
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
 #include <tuple>
 #include <vector>
 #include <iostream>
 #include <Eigen/Sparse>
 #include <Eigen/Dense>
+#include <unordered_map>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
+namespace py = pybind11;
 
 // Function to compute adjacency matrix and Gaussian smoothing mask based on spatial locations
 std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spatial(
     const Eigen::MatrixXd& loc, const std::string& spatial_type, double fwhm) {
-    
+
     int p = loc.rows();
     Eigen::MatrixXd A = Eigen::MatrixXd::Zero(p, p);
     Eigen::MatrixXd arr_mod = Eigen::MatrixXd::Zero(p, p);
@@ -31,6 +35,9 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
             }
         }
 
+        // Gaussian smoothing
+        arr_mod = (1.0 / (2.0 * M_PI * sigma * sigma)) * (-A.array().square() / (2.0 * sigma * sigma)).exp();
+
         // Replace distances exceeding fwhm with infinity
         for (int i = 0; i < p; ++i) {
             for (int j = 0; j < p; ++j) {
@@ -40,10 +47,7 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
             }
         }
 
-        // Gaussian smoothing
-        arr_mod = (1.0 / (2.0 * M_PI * sigma * sigma)) * (-A.array().square() / (2.0 * sigma * sigma)).exp();
-
-        // Calculate minimum non-zero distance
+        // Find minimum non-zero distance
         double min_distance = std::numeric_limits<double>::infinity();
         for (int i = 0; i < p; ++i) {
             for (int j = 0; j < p; ++j) {
@@ -62,7 +66,7 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
 
         Eigen::SparseMatrix<double> A_sparse = A.sparseView();
         return std::make_tuple(A_sparse, arr_mod);
-    } else if (spatial_type == "imageST") {
+    } else if (spatial_type == "imageST" || spatial_type == "visiumHD") {
         // Determine grid size
         int rows = static_cast<int>(loc.col(1).maxCoeff()) + 1;
         int cols = static_cast<int>(loc.col(0).maxCoeff()) + 1;
@@ -129,62 +133,78 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
 
         return std::make_tuple(adjacency_subset, Eigen::MatrixXd());
     } else {
-        throw std::invalid_argument("'spatial_type' not among ['visium', 'imageST']");
+        throw std::invalid_argument("'spatial_type' not among ['visium', 'imageST', 'visiumHD']");
     }
 }
 
-std::vector<std::vector<int>> extract_connected_comp(
+// Function to smooth feature vector following Python's smoothing logic
+Eigen::VectorXd smooth_feature_vector_python_style(const Eigen::VectorXd& feat, const Eigen::MatrixXd& mask) {
+    int p = feat.size();
+    Eigen::MatrixXd feat_tiled = feat.replicate(1, p); // p x p
+    Eigen::MatrixXd multiplied = mask.array() * feat_tiled.array(); // p x p
+    Eigen::VectorXd sum_per_column = multiplied.colwise().sum(); // p x 1
+
+    double sum_smooth = sum_per_column.sum();
+    double sum_feat = feat.sum();
+
+    if (sum_smooth == 0) {
+        throw std::invalid_argument("Sum of smoothed feature vector is zero, cannot divide by zero.");
+    }
+
+    Eigen::VectorXd smooth = sum_per_column.array() / sum_smooth * sum_feat;
+    return smooth;
+}
+
+// Function to compute thresholds similar to np.setdiff1d(t, 0) sorted descendingly
+std::vector<double> compute_thresholds_python_style(const Eigen::VectorXd& t) {
+    std::vector<double> threshold;
+    for (int i = 0; i < t.size(); ++i) {
+        if (t[i] > 0) {  // Only add positive values
+            threshold.push_back(t[i]);
+        }
+    }
+    std::sort(threshold.begin(), threshold.end(), std::greater<double>());
+    // Remove duplicates
+    threshold.erase(std::unique(threshold.begin(), threshold.end()), threshold.end());
+    return threshold;
+}
+
+// Function to extract connected components similar to Python's extract_connected_comp
+std::vector<std::vector<int>> extract_connected_comp_python_style(
     const Eigen::VectorXd& tx, 
     const Eigen::SparseMatrix<double>& A_sparse, 
     const std::vector<double>& threshold_x, 
     int num_spots, 
     int min_size) {
-    
-    // Step 1: Compute Connected Components
+
+    // Compute connected components using make_original_dendrogram_cc
     auto [cCC_x, cE_x, cduration_x, chistory_x] = make_original_dendrogram_cc(tx, A_sparse, threshold_x);
 
-    // Step 2: Smooth the Dendrogram
-    auto [nCC_x, nE_x, nduration_x, nhistory_x] = make_smoothed_dendrogram(
-        cCC_x, 
-        cE_x, 
-        cduration_x, 
-        chistory_x, 
-        Eigen::Vector2d(min_size, num_spots)
-    );
-    
-    // Step 3a: Estimate Initial Dendrogram Bars for Plotting
-    // Call make_dendrogram_bar with original history and duration
+    // Smooth the dendrogram
+    auto [nCC_x, nE_x, nduration_x, nhistory_x] = make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, Eigen::Vector2d(min_size, num_spots));
+
+    // Estimate dendrogram bars for plotting
     Eigen::MatrixXd cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x;
     std::vector<std::vector<int>> clayer_x;
     std::tie(cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, clayer_x) = 
-        make_dendrogram_bar(chistory_x, cduration_x, Eigen::MatrixXd(), Eigen::MatrixXd(), Eigen::MatrixXd(), Eigen::MatrixXd(), Eigen::MatrixXd());
-    
-    // Step 3b: Estimate Smoothed Dendrogram Bars for Plotting
-    // Call make_dendrogram_bar with smoothed history and duration, along with initial bar coordinates
+        make_dendrogram_bar(chistory_x, cduration_x);
+
+    // Estimate smoothed dendrogram bars
     Eigen::MatrixXd cvertical_x_new, cvertical_y_new, chorizontal_x_new, chorizontal_y_new, cdots_new;
     std::vector<std::vector<int>> nlayer_x;
     std::tie(cvertical_x_new, cvertical_y_new, chorizontal_x_new, chorizontal_y_new, cdots_new, nlayer_x) = 
-        make_dendrogram_bar(
-            nhistory_x, 
-            nduration_x, 
-            cvertical_x_x, 
-            cvertical_y_x, 
-            chorizontal_x_x, 
-            chorizontal_y_x, 
-            cdots_x
-        );
+        make_dendrogram_bar(nhistory_x, nduration_x, cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x);
 
-    // Step 4: Extract Connected Components Based on Layer Information
-    // Ensure that nlayer_x has at least one layer
+    // Extract connected components based on layer information
     if (nlayer_x.empty() || nlayer_x[0].empty()) {
         // No connected components found; return an empty vector
         return {};
     }
-    
+
     // Extract the first layer indices
     std::vector<int> sind = nlayer_x[0];
     std::vector<std::vector<int>> CCx;
-    
+
     // Populate CCx with the connected components corresponding to sind
     for (const auto& i : sind) {
         if (i >= 0 && i < static_cast<int>(nCC_x.size())) { // Validate index
@@ -194,14 +214,14 @@ std::vector<std::vector<int>> extract_connected_comp(
             std::cerr << "Warning: Index " << i << " is out of bounds for nCC_x with size " << nCC_x.size() << ". Skipping.\n";
         }
     }
-    
+
     return CCx;
 }
 
 // Function to extract the connected location matrix
-Eigen::SparseMatrix<double> extract_connected_loc_mat(
+Eigen::SparseMatrix<double> extract_connected_loc_mat_python_style(
     const std::vector<std::vector<int>>& CC, int num_spots, const std::string& format) {
-    
+
     Eigen::MatrixXd CC_loc_arr = Eigen::MatrixXd::Zero(num_spots, CC.size());
 
     for (size_t num = 0; num < CC.size(); ++num) {
@@ -220,14 +240,15 @@ Eigen::SparseMatrix<double> extract_connected_loc_mat(
     }
 }
 
-Eigen::SparseMatrix<double> filter_connected_loc_exp(
+// Function to filter connected components based on expression percentile
+Eigen::SparseMatrix<double> filter_connected_loc_exp_python_style(
     const Eigen::SparseMatrix<double>& CC_loc_mat, 
     const Eigen::VectorXd& feat_data, 
     int thres_per) {
-    
+
     // Vector to store the mean expression value of each connected component
     std::vector<std::pair<int, double>> CC_mean;
-    
+
     for (int i = 0; i < CC_loc_mat.cols(); ++i) {
         // Get the indices of the spots in this connected component
         std::vector<int> indices;
@@ -286,33 +307,26 @@ Eigen::VectorXd topological_comp_res(
     // Extract adjacency matrix and mask
     auto [A, mask] = extract_adjacency_spatial(loc, spatial_type, fwhm);
 
-    // Smooth the feature values with given mask
-    int p = feat.size();
-    Eigen::VectorXd smooth;
-    if (spatial_type == "visium") {
-        double feat_sum = feat.sum();
-        if (feat_sum == 0) {
-            throw std::invalid_argument("Sum of 'feat' vector is zero, cannot divide by zero.");
-        }
-        smooth = (mask * feat).array() / feat_sum;
-    } else {
-        smooth = feat;
-    }
+    // Smooth the feature values with given mask, following Python logic
+    Eigen::VectorXd smooth = smooth_feature_vector_python_style(feat, mask);
 
-    Eigen::VectorXd t = smooth.array() * (smooth.array() > 0).cast<double>();  // Mask values below zero
-    std::vector<double> threshold;
-    for (int i = 0; i < t.size(); ++i) {
-        if (t[i] > 0) {  // Only add positive values to threshold
-            threshold.push_back(t[i]);
-        }
-    }
-    std::sort(threshold.begin(), threshold.end(), std::greater<double>());
-    threshold.erase(std::unique(threshold.begin(), threshold.end()), threshold.end());
+    // Apply t = smooth*(smooth > 0)
+    Eigen::VectorXd t = smooth.array() * (smooth.array() > 0).cast<double>();
 
-    auto CC_list = extract_connected_comp(t, A, threshold, p, min_size);
-    Eigen::SparseMatrix<double> CC_loc_mat = extract_connected_loc_mat(CC_list, p, "sparse");
-    CC_loc_mat = filter_connected_loc_exp(CC_loc_mat, feat, thres_per);
-    
+    // Compute unique nonzero thresholds in descending order
+    std::vector<double> threshold = compute_thresholds_python_style(t);
+
+    // Compute connected components
+    std::vector<std::vector<int>> CC_list = extract_connected_comp_python_style(t, A, threshold, feat.size(), min_size);
+
+    // Extract location of connected components as sparse matrix
+    Eigen::SparseMatrix<double> CC_loc_mat = extract_connected_loc_mat_python_style(CC_list, feat.size(), "sparse");
+
+    // Filter connected components based on feature expression percentile
+    CC_loc_mat = filter_connected_loc_exp_python_style(CC_loc_mat, feat, thres_per);
+
+    // Compute row sums
     Eigen::VectorXd row_sums = CC_loc_mat * Eigen::VectorXd::Ones(CC_loc_mat.cols());
+
     return row_sums;
 }
