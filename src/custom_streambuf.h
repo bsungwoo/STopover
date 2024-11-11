@@ -24,7 +24,7 @@ protected:
         return c;
     }
 
-    // Optionally, override sync if needed
+    // Override sync to handle any remaining characters
     virtual int sync() override {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!buffer_.empty()) {

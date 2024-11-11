@@ -5,6 +5,7 @@
 #include <iostream>
 #include "thread_safe_queue.h"
 #include "custom_streambuf.h"
+#include "cout_redirector.h"
 #include "logger.h"
 
 #include <stdexcept>
@@ -17,40 +18,6 @@
 #include <utility>               // For std::pair
 
 namespace py = pybind11;
-
-// Global queue and logger pointer
-ThreadSafeQueue global_queue;
-Logger* global_logger = nullptr;
-
-// Function to initialize the logger
-void initialize_logger(py::function callback) {
-    if (global_logger == nullptr) {
-        global_logger = new Logger(global_queue, callback);
-    }
-}
-
-// Function to cleanup the logger
-void cleanup_logger() {
-    if (global_logger != nullptr) {
-        delete global_logger;
-        global_logger = nullptr;
-    }
-}
-
-// Redirect std::cout to custom stream buffer
-struct CoutRedirector {
-    CoutRedirector() : custom_buf(global_queue) {
-        original_buf = std::cout.rdbuf(&custom_buf);
-    }
-
-    ~CoutRedirector() {
-        std::cout.rdbuf(original_buf);
-    }
-
-private:
-    CustomStreamBuf custom_buf;
-    std::streambuf* original_buf;
-};
 
 // ThreadPool constructor
 ThreadPool::ThreadPool(size_t threads) : stop(false) {

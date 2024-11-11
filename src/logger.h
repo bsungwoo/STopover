@@ -3,6 +3,7 @@
 
 #include <thread>
 #include <atomic>
+#include <string>
 #include "thread_safe_queue.h"
 #include <pybind11/pybind11.h>
 
@@ -28,9 +29,14 @@ private:
         std::string msg;
         while (!stop_flag_) {
             if (queue_.pop(msg)) {
-                // Acquire GIL before calling Python
-                py::gil_scoped_acquire acquire;
-                callback_(msg);
+                try {
+                    // Acquire GIL before calling Python
+                    py::gil_scoped_acquire acquire;
+                    callback_(msg);
+                }
+                catch (const py::error_already_set& e) {
+                    std::cerr << "Python error in log_callback: " << e.what() << std::endl;
+                }
             }
         }
     }

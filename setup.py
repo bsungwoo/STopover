@@ -126,7 +126,10 @@ ext_modules = [
             "src/make_dendrogram_bar.cpp",
             "src/make_original_dendrogram.cpp",
             "src/make_smoothed_dendrogram.cpp",
-            "src/utils.cpp"
+            "src/utils.cpp",
+            "src/logger.cpp",
+            "src/custom_streambuf.cpp",
+            "stc/cout_redirector.cpp"
         ],
         include_dirs=[
             pybind11.get_include(),
