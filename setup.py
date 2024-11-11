@@ -129,7 +129,8 @@ ext_modules = [
             "src/utils.cpp",
             "src/logger.cpp",
             "src/custom_streambuf.cpp",
-            "src/cout_redirector.cpp"
+            "src/cout_redirector.cpp",
+            "src/test_logging.cpp"
         ],
         include_dirs=[
             pybind11.get_include(),
