@@ -342,8 +342,8 @@ py::tuple make_dendrogram_bar_py(
 
 // ------------------------- Pybind11 Module Binding -------------------------
 
-PYBIND11_MODULE(topological_comp, m) {
-    m.doc() = "Pybind11 wrapper for topological_comp module functions";
+PYBIND11_MODULE(connected_components, m) {  // Module name within the STopover package
+    m.doc() = "Pybind11 wrapper for connected_components module functions";
 
     // Bind the helper conversion functions
     m.def("array_to_matrix", &array_to_matrix, "Convert NumPy array to Eigen::MatrixXd");
@@ -358,7 +358,7 @@ PYBIND11_MODULE(topological_comp, m) {
           py::arg("spatial_type") = "visium",
           py::arg("fwhm") = 2.5);
 
-    m.def("make_original_dendrogram", &make_original_dendrogram_cc_py, 
+    m.def("make_original_dendrogram_cc", &make_original_dendrogram_cc_py, 
           "Wrapper for make_original_dendrogram_cc that accepts Python data types",
           py::arg("U"),
           py::arg("A_csr"),
