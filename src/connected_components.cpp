@@ -13,100 +13,78 @@ namespace py = pybind11;
 // ------------------------- Helper Functions -------------------------
 
 // Function to convert NumPy array to Eigen::MatrixXd
-Eigen::MatrixXd array_to_matrix(const py::array& array) {
+Eigen::MatrixXd array_to_matrix(const py::array_t<double>& array) {
     // Ensure the array is two-dimensional
     if (array.ndim() != 2) {
         throw std::invalid_argument("Input array must be two-dimensional.");
     }
 
-    // Check data type and handle accordingly
-    if (py::isinstance<py::array_t<double>>(array)) {
-        // Float64
-        auto buf = array.request();
-        size_t rows = buf.shape[0];
-        size_t cols = buf.shape[1];
-        const double* data_ptr = static_cast<const double*>(buf.ptr);
+    // Request a buffer descriptor from the NumPy array
+    py::buffer_info buf = array.request();
 
-        // Ensure the array is contiguous
-        if (!(array.flags() & py::array::c_style)) {
-            throw std::invalid_argument("Input array must be C-contiguous.");
-        }
-
-        // Map data as row-major and then convert to column-major
-        Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mat_map(data_ptr, rows, cols);
-        Eigen::MatrixXd mat = mat_map;
-        return mat;
+    // Check if the array data type is double
+    if (buf.format != py::format_descriptor<double>::format()) {
+        throw std::invalid_argument("Input array must be of type float64.");
     }
-    else if (py::isinstance<py::array_t<float>>(array)) {
-        // Float32
-        auto buf = array.request();
-        size_t rows = buf.shape[0];
-        size_t cols = buf.shape[1];
-        const float* data_ptr = static_cast<const float*>(buf.ptr);
 
-        // Ensure the array is contiguous
-        if (!(array.flags() & py::array::c_style)) {
-            throw std::invalid_argument("Input array must be C-contiguous.");
-        }
+    // Check if the array is contiguous in memory
+    if (!array.flags() & py::array::c_style) {
+        throw std::invalid_argument("Input array must be C-contiguous.");
+    }
 
-        // Convert float to double
-        Eigen::MatrixXd mat(rows, cols);
-        for (size_t i = 0; i < rows; ++i) {
-            for (size_t j = 0; j < cols; ++j) {
-                mat(i, j) = static_cast<double>(data_ptr[i * cols + j]);
-            }
-        }
-        return mat;
-    }
-    else {
-        throw std::invalid_argument("Unsupported data type. Only float32 and float64 are supported.");
-    }
+    // Extract shape information
+    size_t rows = buf.shape[0];
+    size_t cols = buf.shape[1];
+
+    // Map the NumPy array data to Eigen::MatrixXd
+    Eigen::MatrixXd mat(rows, cols);
+    std::memcpy(mat.data(), buf.ptr, sizeof(double) * rows * cols);
+
+    return mat;
 }
 
 // Function to convert NumPy array to Eigen::VectorXd
-Eigen::VectorXd array_to_vector(const py::array& array) {
+Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
     // Ensure the array is one-dimensional
     if (array.ndim() != 1) {
         throw std::invalid_argument("Input array must be one-dimensional.");
     }
 
-    // Check data type and handle accordingly
-    if (py::isinstance<py::array_t<double>>(array)) {
-        // Float64
-        auto buf = array.request();
-        size_t size = buf.shape[0];
-        const double* data_ptr = static_cast<const double*>(buf.ptr);
+    // Request a buffer descriptor from the NumPy array
+    py::buffer_info buf = array.request();
 
-        // Ensure the array is contiguous
-        if (!(array.flags() & py::array::c_style)) {
-            throw std::invalid_argument("Input array must be C-contiguous.");
-        }
-
-        Eigen::Map<const Eigen::VectorXd> vec_map(data_ptr, size);
-        Eigen::VectorXd vec = vec_map;
-        return vec;
+    // Check if the array data type is double
+    if (buf.format != py::format_descriptor<double>::format()) {
+        throw std::invalid_argument("Input array must be of type float64.");
     }
-    else if (py::isinstance<py::array_t<float>>(array)) {
-        // Float32
-        auto buf = array.request();
-        size_t size = buf.shape[0];
-        const float* data_ptr = static_cast<const float*>(buf.ptr);
 
-        // Ensure the array is contiguous
-        if (!(array.flags() & py::array::c_style)) {
-            throw std::invalid_argument("Input array must be C-contiguous.");
-        }
+    // Check if the array is contiguous in memory
+    if (!array.flags() & py::array::c_style) {
+        throw std::invalid_argument("Input array must be C-contiguous.");
+    }
 
-        // Convert float to double
-        Eigen::VectorXd vec(size);
-        for (size_t i = 0; i < size; ++i) {
-            vec(i) = static_cast<double>(data_ptr[i]);
-        }
-        return vec;
-    }
-    else {
-        throw std::invalid_argument("Unsupported data type. Only float32 and float64 are supported.");
-    }
+    // Extract size information
+    size_t size = buf.shape[0];
+
+    // Map the NumPy array data to Eigen::VectorXd
+    Eigen::VectorXd vec(size);
+    std::memcpy(vec.data(), buf.ptr, sizeof(double) * size);
+
+    return vec;
+}
+
+// Function to convert Eigen::MatrixXd to NumPy array (with deep copy)
+py::array_t<double> eigen_to_numpy(const Eigen::MatrixXd& mat) {
+    // Allocate a new NumPy array with the same shape
+    py::array_t<double> arr({ mat.rows(), mat.cols() });
+
+    // Get a mutable reference to the data
+    auto buf = arr.mutable_unchecked<2>();
+
+    // Perform a bulk copy using Eigen's data storage
+    std::memcpy(buf.mutable_data(), mat.data(), sizeof(double) * mat.size());
+
+    return arr;
 }
 
 // Function to convert Eigen::SparseMatrix<double> to SciPy's CSR components
@@ -126,24 +104,14 @@ py::dict eigen_to_scipy_csr(const Eigen::SparseMatrix<double>& eigen_csr) {
     }
 
     py::dict csr_dict;
-    csr_dict["data"] = py::array_t<double>(data.size(), data.data());
-    csr_dict["indices"] = py::array_t<py::ssize_t>(indices.size(), indices.data());
-    csr_dict["indptr"] = py::array_t<py::ssize_t>(indptr.size(), indptr.data());
+    csr_dict["data"] = py::array_t<double>(data.size(), data.data()).copy();
+    csr_dict["indices"] = py::array_t<py::ssize_t>(indices.size(), indices.data()).copy();
+    csr_dict["indptr"] = py::array_t<py::ssize_t>(indptr.size(), indptr.data()).copy();
     csr_dict["shape"] = py::make_tuple(eigen_csr.rows(), eigen_csr.cols());
 
     return csr_dict;
 }
 
-// Function to convert Eigen::MatrixXd to NumPy array (with deep copy)
-py::array eigen_to_numpy(const Eigen::MatrixXd& mat) {
-    // Allocate a new NumPy array and copy the data
-    py::array_t<double> arr = py::array_t<double>(
-        { mat.rows(), mat.cols() }, // Shape
-        { sizeof(double) * mat.cols(), sizeof(double) }, // Strides
-        mat.data() // Pointer to data
-    );
-    return arr.copy(); // Make a copy so that the array owns its data
-}
 
 // Function to convert SciPy's CSR components to Eigen::SparseMatrix<double>
 Eigen::SparseMatrix<double> scipy_csr_to_eigen(const py::dict& csr_dict) {
@@ -158,6 +126,8 @@ Eigen::SparseMatrix<double> scipy_csr_to_eigen(const py::dict& csr_dict) {
 
     // Create Eigen::SparseMatrix
     Eigen::SparseMatrix<double> eigen_csr(rows, cols);
+    eigen_csr.reserve(data.size());
+
     std::vector<Eigen::Triplet<double>> tripletList;
     tripletList.reserve(data.size());
 
@@ -170,6 +140,8 @@ Eigen::SparseMatrix<double> scipy_csr_to_eigen(const py::dict& csr_dict) {
     }
 
     eigen_csr.setFromTriplets(tripletList.begin(), tripletList.end());
+    eigen_csr.makeCompressed(); // Optional: compress the matrix
+
     return eigen_csr;
 }
 
@@ -198,7 +170,7 @@ py::list extract_adjacency_spatial_py(
         // Convert Eigen::SparseMatrix to SciPy CSR format components
         py::dict csr_dict = eigen_to_scipy_csr(A_sparse);
 
-        // Convert arr_mod to NumPy array (with deep copy)
+        // Convert arr_mod to NumPy array
         py::array arr_mod_np = eigen_to_numpy(arr_mod);
 
         // Create a Python tuple (csr_matrix_dict, arr_mod_np)
@@ -213,7 +185,7 @@ py::list extract_adjacency_spatial_py(
 
 // Wrapper function for make_original_dendrogram_cc
 py::tuple make_original_dendrogram_cc_py(
-    const py::array& U,
+    const py::array_t<double>& U,
     const py::dict& A_csr,
     const std::vector<double>& threshold
 ) {
@@ -251,9 +223,9 @@ py::tuple make_original_dendrogram_cc_py(
 py::tuple make_smoothed_dendrogram_py(
     const std::vector<std::vector<int>>& cCC,
     const py::dict& cE,           // SciPy CSR matrix as dict
-    const py::array& cduration,   // 2D NumPy array
+    const py::array_t<double>& cduration,   // 2D NumPy array
     const std::vector<std::vector<int>>& chistory,
-    const py::array& lim_size     // 1D NumPy array with 2 elements
+    const py::array_t<double>& lim_size     // 1D NumPy array with 2 elements
 ) {
     // Convert cE from SciPy CSR to Eigen::SparseMatrix<double>
     Eigen::SparseMatrix<double> cE_eigen = scipy_csr_to_eigen(cE);
@@ -296,12 +268,12 @@ py::tuple make_smoothed_dendrogram_py(
 // Wrapper function for make_dendrogram_bar
 py::tuple make_dendrogram_bar_py(
     const std::vector<std::vector<int>>& history,
-    const py::array& duration_np,
-    const py::array& cvertical_x_np,
-    const py::array& cvertical_y_np,
-    const py::array& chorizontal_x_np,
-    const py::array& chorizontal_y_np,
-    const py::array& cdots_np
+    const py::array_t<double>& duration_np,
+    const py::array_t<double>& cvertical_x_np,
+    const py::array_t<double>& cvertical_y_np,
+    const py::array_t<double>& chorizontal_x_np,
+    const py::array_t<double>& chorizontal_y_np,
+    const py::array_t<double>& cdots_np
 ) {
     // Convert NumPy arrays to Eigen::MatrixXd
     Eigen::MatrixXd duration = array_to_matrix(duration_np);
@@ -342,13 +314,15 @@ py::tuple make_dendrogram_bar_py(
 
 // ------------------------- Pybind11 Module Binding -------------------------
 
-PYBIND11_MODULE(connected_components, m) {  // Module name within the STopover package
+// Pybind11 Module Binding
+PYBIND11_MODULE(connected_components, m) {
     m.doc() = "Pybind11 wrapper for connected_components module functions";
 
     // Bind the helper conversion functions
     m.def("array_to_matrix", &array_to_matrix, "Convert NumPy array to Eigen::MatrixXd");
     m.def("array_to_vector", &array_to_vector, "Convert NumPy array to Eigen::VectorXd");
     m.def("eigen_to_numpy", &eigen_to_numpy, "Convert Eigen::MatrixXd to NumPy array");
+    m.def("eigen_to_numpy_vector", &eigen_to_numpy_vector, "Convert Eigen::VectorXd to NumPy array");
     m.def("scipy_csr_to_eigen", &scipy_csr_to_eigen, "Convert SciPy CSR dict to Eigen::SparseMatrix<double>");
     m.def("eigen_to_scipy_csr", &eigen_to_scipy_csr, "Convert Eigen::SparseMatrix<double> to SciPy CSR dict");
 
