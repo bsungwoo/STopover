@@ -28,7 +28,7 @@ Eigen::MatrixXd array_to_matrix(const py::array_t<double>& array) {
     }
 
     // Check if the array is contiguous in memory
-    if (!array.flags() & py::array::c_style) {
+    if (!(array.flags() & py::array::c_style)) {
         throw std::invalid_argument("Input array must be C-contiguous.");
     }
 
@@ -59,7 +59,7 @@ Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
     }
 
     // Check if the array is contiguous in memory
-    if (!array.flags() & py::array::c_style) {
+    if (!(array.flags() & py::array::c_style)) {
         throw std::invalid_argument("Input array must be C-contiguous.");
     }
 
@@ -75,14 +75,28 @@ Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
 
 // Function to convert Eigen::MatrixXd to NumPy array (with deep copy)
 py::array_t<double> eigen_to_numpy(const Eigen::MatrixXd& mat) {
-    // Allocate a new NumPy array with the same shape
+    // Allocate a new NumPy array with the same shape as the Eigen matrix
     py::array_t<double> arr({ mat.rows(), mat.cols() });
 
-    // Get a mutable reference to the data
+    // Access the buffer of the NumPy array for direct data manipulation
     auto buf = arr.mutable_unchecked<2>();
 
-    // Perform a bulk copy using Eigen's data storage
+    // Perform a bulk copy of data from Eigen::MatrixXd to NumPy array
     std::memcpy(buf.mutable_data(), mat.data(), sizeof(double) * mat.size());
+
+    return arr;
+}
+
+// Function to convert Eigen::VectorXd to NumPy array
+py::array_t<double> eigen_to_numpy_vector(const Eigen::VectorXd& vec) {
+    // Allocate a new NumPy array with the same size as the Eigen vector
+    py::array_t<double> arr({ vec.size() });
+
+    // Access the buffer of the NumPy array for direct data manipulation
+    auto buf = arr.mutable_unchecked<1>();
+
+    // Perform a bulk copy of data from Eigen::VectorXd to NumPy array
+    std::memcpy(buf.mutable_data(), vec.data(), sizeof(double) * vec.size());
 
     return arr;
 }
@@ -104,14 +118,13 @@ py::dict eigen_to_scipy_csr(const Eigen::SparseMatrix<double>& eigen_csr) {
     }
 
     py::dict csr_dict;
-    csr_dict["data"] = py::array_t<double>(data.size(), data.data()).copy();
-    csr_dict["indices"] = py::array_t<py::ssize_t>(indices.size(), indices.data()).copy();
-    csr_dict["indptr"] = py::array_t<py::ssize_t>(indptr.size(), indptr.data()).copy();
+    csr_dict["data"] = py::array_t<double>({ data.size() }, data.data());
+    csr_dict["indices"] = py::array_t<py::ssize_t>({ indices.size() }, indices.data());
+    csr_dict["indptr"] = py::array_t<py::ssize_t>({ indptr.size() }, indptr.data());
     csr_dict["shape"] = py::make_tuple(eigen_csr.rows(), eigen_csr.cols());
 
     return csr_dict;
 }
-
 
 // Function to convert SciPy's CSR components to Eigen::SparseMatrix<double>
 Eigen::SparseMatrix<double> scipy_csr_to_eigen(const py::dict& csr_dict) {
@@ -147,7 +160,7 @@ Eigen::SparseMatrix<double> scipy_csr_to_eigen(const py::dict& csr_dict) {
 
 // ------------------------- Wrapper Functions -------------------------
 
-// Wrapper function for extract_adjacency_spatial
+// Function signature and implementation
 py::list extract_adjacency_spatial_py(
     const std::vector<py::array_t<double>>& locs,
     const std::string& spatial_type = "visium",
@@ -159,7 +172,7 @@ py::list extract_adjacency_spatial_py(
         // Convert loc array to Eigen::MatrixXd
         Eigen::MatrixXd loc_eigen = array_to_matrix(locs[i]);
 
-        // Call the original C++ function
+        // Call the original C++ function (assumed to return a tuple)
         std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> adjacency_result = 
             extract_adjacency_spatial(loc_eigen, spatial_type, fwhm);
 
@@ -195,7 +208,7 @@ py::tuple make_original_dendrogram_cc_py(
     // Convert A_csr from SciPy CSR dict to Eigen::SparseMatrix<double>
     Eigen::SparseMatrix<double> A_eigen = scipy_csr_to_eigen(A_csr);
 
-    // Call the original C++ function
+    // Call the original C++ function (assumed to return a tuple)
     std::tuple<
         std::vector<std::vector<int>>,
         Eigen::SparseMatrix<double>,
@@ -219,13 +232,14 @@ py::tuple make_original_dendrogram_cc_py(
     return py::make_tuple(nCC, nE_csr, nduration_np, nchildren);
 }
 
+
 // Wrapper function for make_smoothed_dendrogram
 py::tuple make_smoothed_dendrogram_py(
     const std::vector<std::vector<int>>& cCC,
-    const py::dict& cE,           // SciPy CSR matrix as dict
-    const py::array_t<double>& cduration,   // 2D NumPy array
+    const py::dict& cE,
+    const py::array_t<double>& cduration,
     const std::vector<std::vector<int>>& chistory,
-    const py::array_t<double>& lim_size     // 1D NumPy array with 2 elements
+    const py::array_t<double>& lim_size
 ) {
     // Convert cE from SciPy CSR to Eigen::SparseMatrix<double>
     Eigen::SparseMatrix<double> cE_eigen = scipy_csr_to_eigen(cE);
@@ -241,7 +255,7 @@ py::tuple make_smoothed_dendrogram_py(
     Eigen::Vector2d lim_size_eigen;
     lim_size_eigen << lim_size_vec(0), lim_size_vec(1);
 
-    // Call the original C++ function
+    // Call the original C++ function (assumed to return a tuple)
     std::tuple<
         std::vector<std::vector<int>>,
         Eigen::SparseMatrix<double>,
@@ -265,6 +279,7 @@ py::tuple make_smoothed_dendrogram_py(
     return py::make_tuple(nCC, nE_csr, nduration_np, nchildren);
 }
 
+
 // Wrapper function for make_dendrogram_bar
 py::tuple make_dendrogram_bar_py(
     const std::vector<std::vector<int>>& history,
@@ -283,7 +298,7 @@ py::tuple make_dendrogram_bar_py(
     Eigen::MatrixXd chorizontal_y = array_to_matrix(chorizontal_y_np);
     Eigen::MatrixXd cdots = array_to_matrix(cdots_np);
 
-    // Call the original C++ function
+    // Call the original C++ function (assumed to return a tuple)
     std::tuple<
         Eigen::MatrixXd,
         Eigen::MatrixXd,
