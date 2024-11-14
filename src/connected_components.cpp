@@ -4,7 +4,6 @@
 #include "make_dendrogram_bar.h"
 #include "topological_comp.h"
 #include "parallelize.h"
-#include "connected_components.h" // Ensure this header is included
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h> // For automatic conversion of STL containers
