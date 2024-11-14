@@ -7,11 +7,15 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h> // For automatic conversion of STL containers
+#include <cstring> // For std::memcpy
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
+#include <vector>
+#include <stdexcept>
 
 namespace py = pybind11;
 
 // ------------------------- Helper Functions -------------------------
-
 // Function to convert NumPy array to Eigen::MatrixXd
 Eigen::MatrixXd array_to_matrix(const py::array_t<double>& array) {
     // Ensure the array is two-dimensional
@@ -76,7 +80,7 @@ Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
 // Function to convert Eigen::MatrixXd to NumPy array (with deep copy)
 py::array_t<double> eigen_to_numpy(const Eigen::MatrixXd& mat) {
     // Allocate a new NumPy array with the same shape as the Eigen matrix
-    py::array_t<double> arr({ mat.rows(), mat.cols() });
+    py::array_t<double> arr({ static_cast<py::ssize_t>(mat.rows()), static_cast<py::ssize_t>(mat.cols()) });
 
     // Access the buffer of the NumPy array for direct data manipulation
     auto buf = arr.mutable_unchecked<2>();
@@ -90,7 +94,7 @@ py::array_t<double> eigen_to_numpy(const Eigen::MatrixXd& mat) {
 // Function to convert Eigen::VectorXd to NumPy array
 py::array_t<double> eigen_to_numpy_vector(const Eigen::VectorXd& vec) {
     // Allocate a new NumPy array with the same size as the Eigen vector
-    py::array_t<double> arr({ vec.size() });
+    py::array_t<double> arr({ static_cast<py::ssize_t>(vec.size()) });
 
     // Access the buffer of the NumPy array for direct data manipulation
     auto buf = arr.mutable_unchecked<1>();
@@ -118,9 +122,10 @@ py::dict eigen_to_scipy_csr(const Eigen::SparseMatrix<double>& eigen_csr) {
     }
 
     py::dict csr_dict;
-    csr_dict["data"] = py::array_t<double>({ data.size() }, data.data());
-    csr_dict["indices"] = py::array_t<py::ssize_t>({ indices.size() }, indices.data());
-    csr_dict["indptr"] = py::array_t<py::ssize_t>({ indptr.size() }, indptr.data());
+    // Explicitly cast sizes to py::ssize_t to prevent narrowing conversion warnings
+    csr_dict["data"] = py::array_t<double>({ static_cast<py::ssize_t>(data.size()) }, data.data());
+    csr_dict["indices"] = py::array_t<py::ssize_t>({ static_cast<py::ssize_t>(indices.size()) }, indices.data());
+    csr_dict["indptr"] = py::array_t<py::ssize_t>({ static_cast<py::ssize_t>(indptr.size()) }, indptr.data());
     csr_dict["shape"] = py::make_tuple(eigen_csr.rows(), eigen_csr.cols());
 
     return csr_dict;
