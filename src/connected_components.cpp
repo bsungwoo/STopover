@@ -134,15 +134,15 @@ py::dict eigen_to_scipy_csr(const Eigen::SparseMatrix<double>& eigen_csr) {
     return csr_dict;
 }
 
-// Function to convert Eigen::MatrixXd to NumPy array
+// Function to convert Eigen::MatrixXd to NumPy array (with deep copy)
 py::array eigen_to_numpy(const Eigen::MatrixXd& mat) {
-    // Create a NumPy array that shares memory with the Eigen matrix
-    return py::array(
+    // Allocate a new NumPy array and copy the data
+    py::array_t<double> arr = py::array_t<double>(
         { mat.rows(), mat.cols() }, // Shape
         { sizeof(double) * mat.cols(), sizeof(double) }, // Strides
-        mat.data(), // Pointer to data
-        py::cast(mat) // Reference to the Eigen matrix to keep it alive
+        mat.data() // Pointer to data
     );
+    return arr.copy(); // Make a copy so that the array owns its data
 }
 
 // Function to convert SciPy's CSR components to Eigen::SparseMatrix<double>
@@ -198,7 +198,7 @@ py::list extract_adjacency_spatial_py(
         // Convert Eigen::SparseMatrix to SciPy CSR format components
         py::dict csr_dict = eigen_to_scipy_csr(A_sparse);
 
-        // Convert arr_mod to NumPy array
+        // Convert arr_mod to NumPy array (with deep copy)
         py::array arr_mod_np = eigen_to_numpy(arr_mod);
 
         // Create a Python tuple (csr_matrix_dict, arr_mod_np)
