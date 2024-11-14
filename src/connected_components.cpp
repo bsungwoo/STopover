@@ -333,14 +333,6 @@ py::tuple make_dendrogram_bar_py(
 PYBIND11_MODULE(connected_components, m) {
     m.doc() = "Pybind11 wrapper for connected_components module functions";
 
-    // Bind the helper conversion functions
-    m.def("array_to_matrix", &array_to_matrix, "Convert NumPy array to Eigen::MatrixXd");
-    m.def("array_to_vector", &array_to_vector, "Convert NumPy array to Eigen::VectorXd");
-    m.def("eigen_to_numpy", &eigen_to_numpy, "Convert Eigen::MatrixXd to NumPy array");
-    m.def("eigen_to_numpy_vector", &eigen_to_numpy_vector, "Convert Eigen::VectorXd to NumPy array");
-    m.def("scipy_csr_to_eigen", &scipy_csr_to_eigen, "Convert SciPy CSR dict to Eigen::SparseMatrix<double>");
-    m.def("eigen_to_scipy_csr", &eigen_to_scipy_csr, "Convert Eigen::SparseMatrix<double> to SciPy CSR dict");
-
     // Bind the wrapper functions without _py suffix
     m.def("extract_adjacency_spatial", &extract_adjacency_spatial_py, "Extract adjacency spatial information",
           py::arg("locs"),
