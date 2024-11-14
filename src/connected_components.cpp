@@ -353,18 +353,18 @@ PYBIND11_MODULE(connected_components, m) {  // Module name within the STopover p
     m.def("eigen_to_scipy_csr", &eigen_to_scipy_csr, "Convert Eigen::SparseMatrix<double> to SciPy CSR dict");
 
     // Bind the wrapper functions
-    m.def("extract_adjacency_spatial", &extract_adjacency_spatial_py, "Extract adjacency spatial information",
+    m.def("extract_adjacency_spatial_py", &extract_adjacency_spatial_py, "Extract adjacency spatial information",
           py::arg("locs"),
           py::arg("spatial_type") = "visium",
           py::arg("fwhm") = 2.5);
 
-    m.def("make_original_dendrogram_cc", &make_original_dendrogram_cc_py, 
+    m.def("make_original_dendrogram_py", &make_original_dendrogram_cc_py, 
           "Wrapper for make_original_dendrogram_cc that accepts Python data types",
           py::arg("U"),
           py::arg("A_csr"),
           py::arg("threshold"));
 
-    m.def("make_smoothed_dendrogram", &make_smoothed_dendrogram_py, 
+    m.def("make_smoothed_dendrogram_py", &make_smoothed_dendrogram_py, 
           "Wrapper for make_smoothed_dendrogram that accepts Python data types",
           py::arg("cCC"),
           py::arg("cE"),
@@ -372,7 +372,7 @@ PYBIND11_MODULE(connected_components, m) {  // Module name within the STopover p
           py::arg("chistory"),
           py::arg("lim_size"));
 
-    m.def("make_dendrogram_bar", &make_dendrogram_bar_py, 
+    m.def("make_dendrogram_bar_py", &make_dendrogram_bar_py, 
           "Wrapper for make_dendrogram_bar that accepts Python data types",
           py::arg("history"),
           py::arg("duration"),
