@@ -31,7 +31,9 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
         for (int i = 0; i < p; ++i) {
             for (int j = i + 1; j < p; ++j) {
                 double dist = (loc.row(i) - loc.row(j)).norm();
-                A(i, j) = A(j, i) = dist;
+                // Round to 4 decimal places
+                double dist_rounded = std::round(dist * 10000.0) / 10000.0;
+                A(i, j) = A(j, i) = dist_rounded;
             }
         }
 
