@@ -110,7 +110,7 @@ py::dict eigen_to_scipy_csr(const Eigen::SparseMatrix<double>& eigen_csr) {
     std::vector<double> data;
     std::vector<py::ssize_t> indices;
     std::vector<py::ssize_t> indptr;
-    indptr.reserve(eigen_csr.rows() + 1);
+    indptr.reserve(static_cast<py::ssize_t>(eigen_csr.rows()) + 1);
     indptr.push_back(0);
 
     for (int k = 0; k < eigen_csr.outerSize(); ++k) {
@@ -122,10 +122,16 @@ py::dict eigen_to_scipy_csr(const Eigen::SparseMatrix<double>& eigen_csr) {
     }
 
     py::dict csr_dict;
-    // Explicitly cast sizes to py::ssize_t to prevent narrowing conversion warnings
-    csr_dict["data"] = py::array_t<double>({ static_cast<py::ssize_t>(data.size()) }, data.data());
-    csr_dict["indices"] = py::array_t<py::ssize_t>({ static_cast<py::ssize_t>(indices.size()) }, indices.data());
-    csr_dict["indptr"] = py::array_t<py::ssize_t>({ static_cast<py::ssize_t>(indptr.size()) }, indptr.data());
+
+    // Define shapes explicitly as separate vectors to avoid ambiguity
+    std::vector<py::ssize_t> data_shape = { static_cast<py::ssize_t>(data.size()) };
+    std::vector<py::ssize_t> indices_shape = { static_cast<py::ssize_t>(indices.size()) };
+    std::vector<py::ssize_t> indptr_shape = { static_cast<py::ssize_t>(indptr.size()) };
+
+    // Create NumPy arrays without using .copy(), ensuring proper ownership
+    csr_dict["data"] = py::array_t<double>(data_shape, data.data());
+    csr_dict["indices"] = py::array_t<py::ssize_t>(indices_shape, indices.data());
+    csr_dict["indptr"] = py::array_t<py::ssize_t>(indptr_shape, indptr.data());
     csr_dict["shape"] = py::make_tuple(eigen_csr.rows(), eigen_csr.cols());
 
     return csr_dict;
@@ -165,19 +171,19 @@ Eigen::SparseMatrix<double> scipy_csr_to_eigen(const py::dict& csr_dict) {
 
 // ------------------------- Wrapper Functions -------------------------
 
-// Function signature and implementation
+// Wrapper function for extract_adjacency_spatial
 py::list extract_adjacency_spatial_py(
     const std::vector<py::array_t<double>>& locs,
-    const std::string& spatial_type = "visium",
-    double fwhm = 2.5
+    const std::string& spatial_type,
+    double fwhm
 ) {
     py::list results;
 
     for (size_t i = 0; i < locs.size(); ++i) {
-        // Convert loc array to Eigen::MatrixXd
-        Eigen::MatrixXd loc_eigen = array_to_matrix(locs[i]);
+        // Convert loc array to Eigen::MatrixXd (Pybind11 handles conversion automatically)
+        Eigen::MatrixXd loc_eigen = locs[i].cast<Eigen::MatrixXd>();
 
-        // Call the original C++ function (assumed to return a tuple)
+        // Call the original C++ function
         std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> adjacency_result = 
             extract_adjacency_spatial(loc_eigen, spatial_type, fwhm);
 
@@ -188,8 +194,8 @@ py::list extract_adjacency_spatial_py(
         // Convert Eigen::SparseMatrix to SciPy CSR format components
         py::dict csr_dict = eigen_to_scipy_csr(A_sparse);
 
-        // Convert arr_mod to NumPy array
-        py::array arr_mod_np = eigen_to_numpy(arr_mod);
+        // Convert arr_mod to NumPy array (Pybind11 handles conversion automatically)
+        py::array arr_mod_np = arr_mod;
 
         // Create a Python tuple (csr_matrix_dict, arr_mod_np)
         py::tuple result_tuple = py::make_tuple(csr_dict, arr_mod_np);
@@ -207,34 +213,34 @@ py::tuple make_original_dendrogram_cc_py(
     const py::dict& A_csr,
     const std::vector<double>& threshold
 ) {
-    // Convert U from NumPy array to Eigen::VectorXd
-    Eigen::VectorXd U_eigen = array_to_vector(U);
+    try {
+        // Convert U from NumPy array to Eigen::VectorXd
+        Eigen::VectorXd U_eigen = array_to_vector(U);
 
-    // Convert A_csr from SciPy CSR dict to Eigen::SparseMatrix<double>
-    Eigen::SparseMatrix<double> A_eigen = scipy_csr_to_eigen(A_csr);
+        // Convert A_csr from SciPy CSR dict to Eigen::SparseMatrix<double>
+        Eigen::SparseMatrix<double> A_eigen = scipy_csr_to_eigen(A_csr);
 
-    // Call the original C++ function (assumed to return a tuple)
-    std::tuple<
-        std::vector<std::vector<int>>,
-        Eigen::SparseMatrix<double>,
-        Eigen::MatrixXd,
-        std::vector<std::vector<int>>
-    > result = make_original_dendrogram_cc(U_eigen, A_eigen, threshold);
+        // Call the original C++ function
+        auto result = make_original_dendrogram_cc(U_eigen, A_eigen, threshold);
 
-    // Unpack the results
-    std::vector<std::vector<int>> nCC = std::get<0>(result);
-    Eigen::SparseMatrix<double> nE_eigen = std::get<1>(result);
-    Eigen::MatrixXd nduration = std::get<2>(result);
-    std::vector<std::vector<int>> nchildren = std::get<3>(result);
+        // Unpack the results
+        std::vector<std::vector<int>> nCC = std::get<0>(result);
+        Eigen::SparseMatrix<double> nE_eigen = std::get<1>(result);
+        Eigen::MatrixXd nduration = std::get<2>(result);
+        std::vector<std::vector<int>> nchildren = std::get<3>(result);
 
-    // Convert Eigen::SparseMatrix to SciPy CSR dict
-    py::dict nE_csr = eigen_to_scipy_csr(nE_eigen);
+        // Convert Eigen::SparseMatrix to SciPy CSR dict
+        py::dict nE_csr = eigen_to_scipy_csr(nE_eigen);
 
-    // Convert nduration to NumPy array
-    py::array nduration_np = eigen_to_numpy(nduration);
+        // Convert nduration to NumPy array (Pybind11 handles conversion automatically)
+        py::array nduration_np = nduration;
 
-    // Return as a Python tuple
-    return py::make_tuple(nCC, nE_csr, nduration_np, nchildren);
+        // Return as a Python tuple
+        return py::make_tuple(nCC, nE_csr, nduration_np, nchildren);
+    }
+    catch (const std::exception &e) {
+        throw py::value_error(e.what());
+    }
 }
 
 
