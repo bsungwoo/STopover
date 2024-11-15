@@ -4,6 +4,7 @@
 #include "make_dendrogram_bar.h"
 #include "topological_comp.h"
 #include "parallelize.h"
+#include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h> // For automatic conversion of STL containers
@@ -29,11 +30,6 @@ Eigen::MatrixXd array_to_matrix(const py::array_t<double>& array) {
     // Check if the array data type is double
     if (buf.format != py::format_descriptor<double>::format()) {
         throw std::invalid_argument("Input array must be of type float64.");
-    }
-
-    // Check if the array is contiguous in memory
-    if (!(array.flags() & py::array::c_style)) {
-        throw std::invalid_argument("Input array must be C-contiguous.");
     }
 
     // Extract shape information
@@ -62,11 +58,6 @@ Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
         throw std::invalid_argument("Input array must be of type float64.");
     }
 
-    // Check if the array is contiguous in memory
-    if (!(array.flags() & py::array::c_style)) {
-        throw std::invalid_argument("Input array must be C-contiguous.");
-    }
-
     // Extract size information
     size_t size = buf.shape[0];
 
@@ -79,30 +70,13 @@ Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
 
 // Function to convert Eigen::MatrixXd to NumPy array (with deep copy)
 py::array_t<double> eigen_to_numpy(const Eigen::MatrixXd& mat) {
-    // Allocate a new NumPy array with the same shape as the Eigen matrix
-    py::array_t<double> arr({ static_cast<py::ssize_t>(mat.rows()), static_cast<py::ssize_t>(mat.cols()) });
-
-    // Access the buffer of the NumPy array for direct data manipulation
-    auto buf = arr.mutable_unchecked<2>();
-
-    // Perform a bulk copy of data from Eigen::MatrixXd to NumPy array
-    std::memcpy(buf.mutable_data(), mat.data(), sizeof(double) * mat.size());
-
-    return arr;
+    return py::cast(mat);
 }
 
 // Function to convert Eigen::VectorXd to NumPy array
 py::array_t<double> eigen_to_numpy_vector(const Eigen::VectorXd& vec) {
-    // Allocate a new NumPy array with the same size as the Eigen vector
-    py::array_t<double> arr({ static_cast<py::ssize_t>(vec.size()) });
-
-    // Access the buffer of the NumPy array for direct data manipulation
-    auto buf = arr.mutable_unchecked<1>();
-
-    // Perform a bulk copy of data from Eigen::VectorXd to NumPy array
-    std::memcpy(buf.mutable_data(), vec.data(), sizeof(double) * vec.size());
-
-    return arr;
+    // With Pybind11's Eigen support, this function is simplified
+    return py::cast(vec);
 }
 
 // Function to convert Eigen::SparseMatrix<double> to SciPy's CSR components
@@ -180,11 +154,11 @@ py::list extract_adjacency_spatial_py(
     py::list results;
 
     for (size_t i = 0; i < locs.size(); ++i) {
-        // Convert loc array to Eigen::MatrixXd (Pybind11 handles conversion automatically)
-        Eigen::MatrixXd loc_eigen = locs[i].cast<Eigen::MatrixXd>();
+        // Convert loc array to Eigen::MatrixXd
+        Eigen::MatrixXd loc_eigen = array_to_matrix(locs[i]);
 
         // Call the original C++ function
-        std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> adjacency_result = 
+        std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> adjacency_result =
             extract_adjacency_spatial(loc_eigen, spatial_type, fwhm);
 
         // Extract adjacency matrix and arr_mod
@@ -194,8 +168,8 @@ py::list extract_adjacency_spatial_py(
         // Convert Eigen::SparseMatrix to SciPy CSR format components
         py::dict csr_dict = eigen_to_scipy_csr(A_sparse);
 
-        // Convert arr_mod to NumPy array (Pybind11 handles conversion automatically)
-        py::array arr_mod_np = arr_mod;
+        // Convert arr_mod to NumPy array
+        py::array_t<double> arr_mod_np = arr_mod;  // Pybind11 handles conversion automatically
 
         // Create a Python tuple (csr_matrix_dict, arr_mod_np)
         py::tuple result_tuple = py::make_tuple(csr_dict, arr_mod_np);
@@ -243,7 +217,6 @@ py::tuple make_original_dendrogram_cc_py(
     }
 }
 
-
 // Wrapper function for make_smoothed_dendrogram
 py::tuple make_smoothed_dendrogram_py(
     const std::vector<std::vector<int>>& cCC,
@@ -252,45 +225,45 @@ py::tuple make_smoothed_dendrogram_py(
     const std::vector<std::vector<int>>& chistory,
     const py::array_t<double>& lim_size
 ) {
-    // Convert cE from SciPy CSR to Eigen::SparseMatrix<double>
-    Eigen::SparseMatrix<double> cE_eigen = scipy_csr_to_eigen(cE);
+    try {
+        // Convert cE from SciPy CSR to Eigen::SparseMatrix<double>
+        Eigen::SparseMatrix<double> cE_eigen = scipy_csr_to_eigen(cE);
 
-    // Convert cduration to Eigen::MatrixXd
-    Eigen::MatrixXd cduration_eigen = array_to_matrix(cduration);
+        // Convert cduration to Eigen::MatrixXd
+        Eigen::MatrixXd cduration_eigen = array_to_matrix(cduration);
 
-    // Convert lim_size to Eigen::Vector2d
-    Eigen::VectorXd lim_size_vec = array_to_vector(lim_size);
-    if (lim_size_vec.size() != 2) {
-        throw std::invalid_argument("lim_size must be a 1D array with exactly 2 elements.");
+        // Convert lim_size to Eigen::Vector2d
+        Eigen::VectorXd lim_size_vec = array_to_vector(lim_size);
+        if (lim_size_vec.size() != 2) {
+            throw std::invalid_argument("lim_size must be a 1D array with exactly 2 elements.");
+        }
+        Eigen::Vector2d lim_size_eigen = lim_size_vec.head<2>();
+
+        // Call the original C++ function
+        auto result = make_smoothed_dendrogram(cCC, cE_eigen, cduration_eigen, chistory, lim_size_eigen);
+
+        // Unpack the results
+        auto& nCC = std::get<0>(result);
+        auto& nE_eigen = std::get<1>(result);
+        auto& nduration = std::get<2>(result);
+        auto& nchildren = std::get<3>(result);
+
+        // Convert Eigen::SparseMatrix to SciPy CSR dict
+        py::dict nE_csr = eigen_to_scipy_csr(nE_eigen);
+
+        // Convert nduration to NumPy array (automatic conversion)
+        py::array_t<double> nduration_np = nduration;
+
+        // Return as a Python tuple
+        return py::make_tuple(nCC, nE_csr, nduration_np, nchildren);
     }
-    Eigen::Vector2d lim_size_eigen;
-    lim_size_eigen << lim_size_vec(0), lim_size_vec(1);
-
-    // Call the original C++ function (assumed to return a tuple)
-    std::tuple<
-        std::vector<std::vector<int>>,
-        Eigen::SparseMatrix<double>,
-        Eigen::MatrixXd,
-        std::vector<std::vector<int>>
-    > result = make_smoothed_dendrogram(cCC, cE_eigen, cduration_eigen, chistory, lim_size_eigen);
-
-    // Unpack the results
-    std::vector<std::vector<int>> nCC = std::get<0>(result);
-    Eigen::SparseMatrix<double> nE_eigen = std::get<1>(result);
-    Eigen::MatrixXd nduration = std::get<2>(result);
-    std::vector<std::vector<int>> nchildren = std::get<3>(result);
-
-    // Convert Eigen::SparseMatrix to SciPy CSR dict
-    py::dict nE_csr = eigen_to_scipy_csr(nE_eigen);
-
-    // Convert nduration to NumPy array
-    py::array nduration_np = eigen_to_numpy(nduration);
-
-    // Return as a Python tuple
-    return py::make_tuple(nCC, nE_csr, nduration_np, nchildren);
+    catch (const std::exception& e) {
+        throw py::value_error(e.what());
+    }
 }
 
 
+// Wrapper function for make_dendrogram_bar
 // Wrapper function for make_dendrogram_bar
 py::tuple make_dendrogram_bar_py(
     const std::vector<std::vector<int>>& history,
@@ -301,41 +274,46 @@ py::tuple make_dendrogram_bar_py(
     const py::array_t<double>& chorizontal_y_np,
     const py::array_t<double>& cdots_np
 ) {
-    // Convert NumPy arrays to Eigen::MatrixXd
-    Eigen::MatrixXd duration = array_to_matrix(duration_np);
-    Eigen::MatrixXd cvertical_x = array_to_matrix(cvertical_x_np);
-    Eigen::MatrixXd cvertical_y = array_to_matrix(cvertical_y_np);
-    Eigen::MatrixXd chorizontal_x = array_to_matrix(chorizontal_x_np);
-    Eigen::MatrixXd chorizontal_y = array_to_matrix(chorizontal_y_np);
-    Eigen::MatrixXd cdots = array_to_matrix(cdots_np);
+    try {
+        // Convert NumPy arrays to Eigen::MatrixXd
+        Eigen::MatrixXd duration = array_to_matrix(duration_np);
+        Eigen::MatrixXd cvertical_x = array_to_matrix(cvertical_x_np);
+        Eigen::MatrixXd cvertical_y = array_to_matrix(cvertical_y_np);
+        Eigen::MatrixXd chorizontal_x = array_to_matrix(chorizontal_x_np);
+        Eigen::MatrixXd chorizontal_y = array_to_matrix(chorizontal_y_np);
+        Eigen::MatrixXd cdots = array_to_matrix(cdots_np);
 
-    // Call the original C++ function (assumed to return a tuple)
-    std::tuple<
-        Eigen::MatrixXd,
-        Eigen::MatrixXd,
-        Eigen::MatrixXd,
-        Eigen::MatrixXd,
-        Eigen::MatrixXd,
-        std::vector<std::vector<int>>
-    > result = make_dendrogram_bar(history, duration, cvertical_x, cvertical_y, chorizontal_x, chorizontal_y, cdots);
+        // Call the original C++ function
+        auto result = make_dendrogram_bar(history, duration, cvertical_x, cvertical_y, chorizontal_x, chorizontal_y, cdots);
 
-    // Unpack the results
-    Eigen::MatrixXd nvertical_x = std::get<0>(result);
-    Eigen::MatrixXd nvertical_y = std::get<1>(result);
-    Eigen::MatrixXd nhorizontal_x = std::get<2>(result);
-    Eigen::MatrixXd nhorizontal_y = std::get<3>(result);
-    Eigen::MatrixXd ndots = std::get<4>(result);
-    std::vector<std::vector<int>> nlayer = std::get<5>(result);
+        // Unpack the results
+        auto& nvertical_x = std::get<0>(result);
+        auto& nvertical_y = std::get<1>(result);
+        auto& nhorizontal_x = std::get<2>(result);
+        auto& nhorizontal_y = std::get<3>(result);
+        auto& ndots = std::get<4>(result);
+        auto& nlayer = std::get<5>(result);
 
-    // Convert Eigen::MatrixXd to NumPy arrays
-    py::array nvertical_x_np_out = eigen_to_numpy(nvertical_x);
-    py::array nvertical_y_np_out = eigen_to_numpy(nvertical_y);
-    py::array nhorizontal_x_np_out = eigen_to_numpy(nhorizontal_x);
-    py::array nhorizontal_y_np_out = eigen_to_numpy(nhorizontal_y);
-    py::array ndots_np_out = eigen_to_numpy(ndots);
+        // Convert Eigen::MatrixXd to NumPy arrays (automatic conversion)
+        py::array_t<double> nvertical_x_np_out = nvertical_x;
+        py::array_t<double> nvertical_y_np_out = nvertical_y;
+        py::array_t<double> nhorizontal_x_np_out = nhorizontal_x;
+        py::array_t<double> nhorizontal_y_np_out = nhorizontal_y;
+        py::array_t<double> ndots_np_out = ndots;
 
-    // Return as a Python tuple
-    return py::make_tuple(nvertical_x_np_out, nvertical_y_np_out, nhorizontal_x_np_out, nhorizontal_y_np_out, ndots_np_out, nlayer);
+        // Return as a Python tuple
+        return py::make_tuple(
+            nvertical_x_np_out,
+            nvertical_y_np_out,
+            nhorizontal_x_np_out,
+            nhorizontal_y_np_out,
+            ndots_np_out,
+            nlayer
+        );
+    }
+    catch (const std::exception& e) {
+        throw py::value_error(e.what());
+    }
 }
 
 // ------------------------- Pybind11 Module Binding -------------------------
