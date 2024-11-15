@@ -19,31 +19,24 @@ namespace py = pybind11;
 // ------------------------- Helper Functions -------------------------
 // Function to convert NumPy array to Eigen::MatrixXd
 Eigen::MatrixXd array_to_matrix(const py::array_t<double>& array) {
-    // Ensure the array is two-dimensional
     if (array.ndim() != 2) {
         throw std::invalid_argument("Input array must be two-dimensional.");
     }
 
-    // Request a buffer descriptor from the NumPy array
     py::buffer_info buf = array.request();
-
-    // Check if the array data type is double
-    if (buf.format != py::format_descriptor<double>::format()) {
-        throw std::invalid_argument("Input array must be of type float64.");
-    }
-
-    // Extract shape information
     size_t rows = buf.shape[0];
     size_t cols = buf.shape[1];
 
-    // Map the NumPy array data to Eigen::MatrixXd
-    Eigen::MatrixXd mat(rows, cols);
-    std::memcpy(mat.data(), buf.ptr, sizeof(double) * rows * cols);
+    double* data_ptr = static_cast<double*>(buf.ptr);
+    ssize_t stride_row = buf.strides[0] / sizeof(double);
+    ssize_t stride_col = buf.strides[1] / sizeof(double);
 
-    return mat;
+    Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>>
+        mat(data_ptr, rows, cols, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>(stride_row, stride_col));
+
+    return Eigen::MatrixXd(mat); // Make a deep copy if necessary
 }
 
-// Function to convert NumPy array to Eigen::VectorXd
 Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
     // Ensure the array is one-dimensional
     if (array.ndim() != 1) {
@@ -58,15 +51,19 @@ Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
         throw std::invalid_argument("Input array must be of type float64.");
     }
 
-    // Extract size information
     size_t size = buf.shape[0];
+    double* data_ptr = static_cast<double*>(buf.ptr);
+    ssize_t stride = buf.strides[0] / sizeof(double);
 
-    // Map the NumPy array data to Eigen::VectorXd
-    Eigen::VectorXd vec(size);
-    std::memcpy(vec.data(), buf.ptr, sizeof(double) * size);
+    // Create an Eigen::Map with custom stride
+    typedef Eigen::Stride<Eigen::Dynamic, 1> StrideType;
+    Eigen::Map<Eigen::VectorXd, 0, StrideType> vec(
+        data_ptr, size, StrideType(stride, 1));
 
-    return vec;
+    // Make a copy of the vector to return
+    return Eigen::VectorXd(vec);
 }
+
 
 // Function to convert Eigen::MatrixXd to NumPy array (with deep copy)
 py::array_t<double> eigen_to_numpy(const Eigen::MatrixXd& mat) {

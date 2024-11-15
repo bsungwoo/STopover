@@ -22,44 +22,50 @@
 namespace py = pybind11;
 
 Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
-    // Request a contiguous buffer
-    py::buffer_info buf = array.request();
-    
     // Ensure the array is one-dimensional
-    if (buf.ndim != 1) {
-        throw std::invalid_argument("All input arrays must be one-dimensional.");
+    if (array.ndim() != 1) {
+        throw std::invalid_argument("Input array must be one-dimensional.");
     }
-    
+
+    // Request a buffer descriptor from the NumPy array
+    py::buffer_info buf = array.request();
+
+    // Check if the array data type is double
+    if (buf.format != py::format_descriptor<double>::format()) {
+        throw std::invalid_argument("Input array must be of type float64.");
+    }
+
     size_t size = buf.shape[0];
-    const double* data_ptr = static_cast<const double*>(buf.ptr);
+    double* data_ptr = static_cast<double*>(buf.ptr);
+    ssize_t stride = buf.strides[0] / sizeof(double);
 
-    // Copy data into Eigen::VectorXd
-    Eigen::VectorXd vec(size);
-    std::memcpy(vec.data(), data_ptr, size * sizeof(double));
+    // Create an Eigen::Map with custom stride
+    typedef Eigen::Stride<Eigen::Dynamic, 1> StrideType;
+    Eigen::Map<Eigen::VectorXd, 0, StrideType> vec(
+        data_ptr, size, StrideType(stride, 1));
 
-    return vec;
+    // Make a copy of the vector to return
+    return Eigen::VectorXd(vec);
 }
 
+
 Eigen::MatrixXd array_to_matrix(const py::array_t<double>& array) {
-    // Request a buffer (ensure it's contiguous)
-    py::buffer_info buf = array.request();
-    
-    // Ensure the array is two-dimensional
-    if (buf.ndim != 2) {
-        throw std::invalid_argument("All input arrays must be two-dimensional.");
+    if (array.ndim() != 2) {
+        throw std::invalid_argument("Input array must be two-dimensional.");
     }
-    
+
+    py::buffer_info buf = array.request();
     size_t rows = buf.shape[0];
     size_t cols = buf.shape[1];
-    const double* data_ptr = static_cast<const double*>(buf.ptr);
 
-    // Copy data into Eigen::MatrixXd
-    // Need to handle the memory layout (NumPy is row-major, Eigen is column-major by default)
-    // Map the data with RowMajor and then copy to a column-major matrix
-    Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mat_map(data_ptr, rows, cols);
-    Eigen::MatrixXd mat = mat_map;
+    double* data_ptr = static_cast<double*>(buf.ptr);
+    ssize_t stride_row = buf.strides[0] / sizeof(double);
+    ssize_t stride_col = buf.strides[1] / sizeof(double);
 
-    return mat;
+    Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>>
+        mat(data_ptr, rows, cols, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>(stride_row, stride_col));
+
+    return Eigen::MatrixXd(mat); // Make a deep copy if necessary
 }
 
 std::vector<Eigen::VectorXd> parallel_topological_comp(
