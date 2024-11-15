@@ -37,9 +37,6 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
             }
         }
 
-        // Gaussian smoothing
-        arr_mod = (1.0 / (2.0 * M_PI * sigma * sigma)) * (-A.array().square() / (2.0 * sigma * sigma)).exp();
-
         // Replace distances exceeding fwhm with infinity
         for (int i = 0; i < p; ++i) {
             for (int j = 0; j < p; ++j) {
@@ -49,12 +46,17 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
             }
         }
 
-        // Find minimum non-zero distance
-        double min_distance = std::numeric_limits<double>::infinity();
+        // Gaussian smoothing
+        arr_mod = (1.0 / (2.0 * M_PI * sigma * sigma)) *
+                  (-A.array().square() / (2.0 * sigma * sigma)).exp();
+
+        // Find minimum non-zero finite distance
+        double min_distance = std::numeric_limits<double>::max();
         for (int i = 0; i < p; ++i) {
             for (int j = 0; j < p; ++j) {
-                if (A(i, j) > 0 && A(i, j) < min_distance && A(i, j) != std::numeric_limits<double>::infinity()) {
-                    min_distance = A(i, j);
+                double value = A(i, j);
+                if (value > 0 && std::isfinite(value) && value < min_distance) {
+                    min_distance = value;
                 }
             }
         }
@@ -62,7 +64,12 @@ std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spati
         // Create adjacency matrix based on minimum distances
         for (int i = 0; i < p; ++i) {
             for (int j = 0; j < p; ++j) {
-                A(i, j) = (A(i, j) > 0 && A(i, j) <= min_distance) ? 1.0 : 0.0;
+                double value = A(i, j);
+                if (value > 0 && value <= min_distance && std::isfinite(value)) {
+                    A(i, j) = 1.0;
+                } else {
+                    A(i, j) = 0.0;
+                }
             }
         }
 
