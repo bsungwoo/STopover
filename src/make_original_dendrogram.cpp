@@ -1,9 +1,12 @@
 #include "make_original_dendrogram.h"
 #include <iostream>
-#include <unordered_set>
-#include <algorithm>
+#include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
+#include <pybind11/eigen.h>
 
-// Helper function to extract connected nodes
+namespace py = pybind11;
+
+// Helper function to extract connected nodes from an edge list starting from a selected node
 std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx) {
     std::set<int> cc_set;
     std::set<int> next_neighbor = { sel_node_idx };
@@ -22,7 +25,7 @@ std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_
     return cc_set;
 }
 
-// Function to find connected components
+// Function to find connected components in a graph represented by an edge list
 std::vector<std::set<int>> connected_components(const std::vector<std::vector<int>>& edge_list) {
     int n = edge_list.size();
     std::set<int> all_cc_set;
@@ -38,16 +41,18 @@ std::vector<std::set<int>> connected_components(const std::vector<std::vector<in
     return connected_components_list;
 }
 
-// Corrected make_original_dendrogram_cc function
+// =================== Main Function ===================
+
+// Main function to compute original dendrogram with connected components
 std::tuple<
     std::vector<std::vector<int>>,
-    Eigen::SparseMatrix<double>,
+    Eigen::SparseMatrix<double, Eigen::RowMajor>,
     Eigen::MatrixXd,
     std::vector<std::vector<int>>
 >
 make_original_dendrogram_cc(
     const Eigen::VectorXd& U,
-    const Eigen::SparseMatrix<double>& A,
+    const Eigen::SparseMatrix<double, Eigen::RowMajor>& A,
     const std::vector<double>& threshold
 )
 {
@@ -58,7 +63,7 @@ make_original_dendrogram_cc(
     std::vector<std::vector<int>> history; // Initialize history as an empty vector
 
     // Initialize E as an empty sparse matrix
-    Eigen::SparseMatrix<double> E(0, 0);
+    Eigen::SparseMatrix<double, Eigen::RowMajor> E(0, 0);
 
     for (size_t i = 0; i < threshold.size(); ++i) {
         // Choose current voxels that satisfy threshold interval
@@ -89,7 +94,7 @@ make_original_dendrogram_cc(
 
         for (size_t idx = 0; idx < cvoxels.size(); ++idx) {
             int original_idx = cvoxels[idx];
-            for (Eigen::SparseMatrix<double>::InnerIterator it(A, original_idx); it; ++it) {
+            for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(A, original_idx); it; ++it) {
                 int col = it.col();
                 if (voxel_to_index.find(col) != voxel_to_index.end()) {
                     edge_list[idx].push_back(voxel_to_index[col]);
@@ -101,7 +106,7 @@ make_original_dendrogram_cc(
         std::vector<std::set<int>> CC_profiles = connected_components(edge_list);
         int S = CC_profiles.size();
         std::vector<std::vector<int>> nCC(S);
-        Eigen::SparseMatrix<double> nA(p, S);
+        Eigen::SparseMatrix<double, Eigen::RowMajor> nA(p, S);
         std::vector<int> neighbor_cc;
 
         for (int j = 0; j < S; ++j) {
@@ -113,7 +118,7 @@ make_original_dendrogram_cc(
             // Find neighbors
             std::set<int> neighbor_voxels_set;
             for (int idx : nCC[j]) {
-                for (Eigen::SparseMatrix<double>::InnerIterator it(A, idx); it; ++it) {
+                for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(A, idx); it; ++it) {
                     neighbor_voxels_set.insert(it.col());
                 }
             }
@@ -161,7 +166,7 @@ make_original_dendrogram_cc(
         } else {
             // Construct nA_tmp
             int N = neighbor_cc.size() + S;
-            Eigen::SparseMatrix<double> nA_tmp(N, N);
+            Eigen::SparseMatrix<double, Eigen::RowMajor> nA_tmp(N, N);
 
             // Set diagonal elements to 1
             for (int idx = 0; idx < N; ++idx) {
@@ -170,7 +175,7 @@ make_original_dendrogram_cc(
 
             // Fill nA_tmp
             for (size_t row = 0; row < neighbor_cc.size(); ++row) {
-                for (Eigen::SparseMatrix<double>::InnerIterator it(nA, neighbor_cc[row]); it; ++it) {
+                for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(nA, neighbor_cc[row]); it; ++it) {
                     nA_tmp.insert(row, neighbor_cc.size() + it.col()) = it.value();
                     nA_tmp.insert(neighbor_cc.size() + it.col(), row) = it.value();
                 }
@@ -179,7 +184,7 @@ make_original_dendrogram_cc(
             // Extract connected components from nA_tmp
             std::vector<std::vector<int>> edge_list_tmp(N);
             for (int k = 0; k < nA_tmp.outerSize(); ++k) {
-                for (Eigen::SparseMatrix<double>::InnerIterator it(nA_tmp, k); it; ++it) {
+                for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(nA_tmp, k); it; ++it) {
                     if (it.row() != it.col() && it.value() != 0) {
                         edge_list_tmp[it.row()].push_back(it.col());
                     }
@@ -255,7 +260,6 @@ make_original_dendrogram_cc(
             }
         }
     }
-
     // No need to remove empty entries since CC is dynamically sized
 
     return std::make_tuple(CC, E, duration, history);
