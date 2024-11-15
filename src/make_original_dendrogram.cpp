@@ -1,6 +1,9 @@
 #include "make_original_dendrogram.h"
 #include <iostream>
+#include <unordered_set>
+#include <algorithm>
 
+// Helper function to extract connected nodes
 std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx) {
     std::set<int> cc_set;
     std::set<int> next_neighbor = { sel_node_idx };
@@ -19,6 +22,7 @@ std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_
     return cc_set;
 }
 
+// Function to find connected components
 std::vector<std::set<int>> connected_components(const std::vector<std::vector<int>>& edge_list) {
     int n = edge_list.size();
     std::set<int> all_cc_set;
@@ -34,6 +38,7 @@ std::vector<std::set<int>> connected_components(const std::vector<std::vector<in
     return connected_components_list;
 }
 
+// Corrected make_original_dendrogram_cc function
 std::tuple<
     std::vector<std::vector<int>>,
     Eigen::SparseMatrix<double>,
@@ -47,12 +52,13 @@ make_original_dendrogram_cc(
 )
 {
     int p = U.size();
-    std::vector<std::vector<int>> CC(p);
-    Eigen::SparseMatrix<double> E(p, p);
-    int ncc = -1;
+    std::vector<std::vector<int>> CC;  // Initialize CC as an empty vector
     Eigen::VectorXi ck_cc = Eigen::VectorXi::Constant(p, -1);
-    Eigen::MatrixXd duration = Eigen::MatrixXd::Zero(p, 2);
-    std::vector<std::vector<int>> history(p);
+    Eigen::MatrixXd duration(0, 2);    // Initialize duration with 0 rows
+    std::vector<std::vector<int>> history; // Initialize history as an empty vector
+
+    // Initialize E as an empty sparse matrix
+    Eigen::SparseMatrix<double> E(0, 0);
 
     for (size_t i = 0; i < threshold.size(); ++i) {
         // Choose current voxels that satisfy threshold interval
@@ -132,15 +138,25 @@ make_original_dendrogram_cc(
         neighbor_cc.erase(std::unique(neighbor_cc.begin(), neighbor_cc.end()), neighbor_cc.end());
 
         if (neighbor_cc.empty()) {
+            // Initialize new connected components
             for (int j = 0; j < S; ++j) {
-                ncc += 1;
-                CC[ncc] = nCC[j];
-                for (int idx : CC[ncc]) {
-                    ck_cc[idx] = ncc;
+                // Update ck_cc
+                int cc_idx = CC.size(); // Next CC index
+                for (int idx : nCC[j]) {
+                    ck_cc[idx] = cc_idx;
                 }
-                duration(ncc, 0) = threshold[i];
-                E.insert(ncc, ncc) = threshold[i];
-                history[ncc] = std::vector<int>();
+                CC.push_back(nCC[j]);
+
+                // Update duration
+                duration.conservativeResize(CC.size(), 2);
+                duration(CC.size() - 1, 0) = threshold[i];
+
+                // Update E
+                E.conservativeResize(CC.size(), CC.size());
+                E.insert(CC.size() - 1, CC.size() - 1) = threshold[i];
+
+                // Update history
+                history.push_back(std::vector<int>());
             }
         } else {
             // Construct nA_tmp
@@ -187,50 +203,60 @@ make_original_dendrogram_cc(
 
                 if (tind1.size() == 1) {
                     int cc_idx = tind1[0];
+                    // Merge nCC[tind2] into CC[cc_idx]
                     for (int idx : tind2) {
                         CC[cc_idx].insert(CC[cc_idx].end(), nCC[idx].begin(), nCC[idx].end());
                     }
+                    // Update ck_cc
                     for (int idx : CC[cc_idx]) {
                         ck_cc[idx] = cc_idx;
                     }
                 } else {
-                    ncc += 1;
+                    // Create a new connected component
+                    int new_cc_idx = CC.size();
+                    std::vector<int> new_CC;
                     for (int idx : tind1) {
-                        CC[ncc].insert(CC[ncc].end(), CC[idx].begin(), CC[idx].end());
+                        new_CC.insert(new_CC.end(), CC[idx].begin(), CC[idx].end());
                     }
                     for (int idx : tind2) {
-                        CC[ncc].insert(CC[ncc].end(), nCC[idx].begin(), nCC[idx].end());
+                        new_CC.insert(new_CC.end(), nCC[idx].begin(), nCC[idx].end());
                     }
-                    for (int idx : CC[ncc]) {
-                        ck_cc[idx] = ncc;
+
+                    // Update ck_cc
+                    for (int idx : new_CC) {
+                        ck_cc[idx] = new_cc_idx;
                     }
-                    duration(ncc, 0) = threshold[i];
+
+                    // Add new connected component
+                    CC.push_back(new_CC);
+
+                    // Update duration
+                    duration.conservativeResize(CC.size(), 2);
+                    duration(CC.size() - 1, 0) = threshold[i];
                     for (int idx : tind1) {
                         duration(idx, 1) = threshold[i];
                     }
 
                     // Update E
+                    E.conservativeResize(CC.size(), CC.size());
                     for (size_t idx1 = 0; idx1 < tind1.size(); ++idx1) {
                         for (size_t idx2 = idx1; idx2 < tind1.size(); ++idx2) {
                             E.coeffRef(tind1[idx1], tind1[idx2]) = threshold[i];
                             E.coeffRef(tind1[idx2], tind1[idx1]) = threshold[i];
                         }
-                        E.coeffRef(ncc, tind1[idx1]) = threshold[i];
-                        E.coeffRef(tind1[idx1], ncc) = threshold[i];
+                        E.coeffRef(new_cc_idx, tind1[idx1]) = threshold[i];
+                        E.coeffRef(tind1[idx1], new_cc_idx) = threshold[i];
                     }
-                    E.coeffRef(ncc, ncc) = threshold[i];
-                    history[ncc] = tind1;
+                    E.coeffRef(new_cc_idx, new_cc_idx) = threshold[i];
+
+                    // Update history
+                    history.push_back(tind1);
                 }
             }
         }
     }
 
-    // Remove empty entries from CC and history
-    size_t valid_entries = ncc + 1;
-    CC.resize(valid_entries);
-    history.resize(valid_entries);
-    duration.conservativeResize(valid_entries, 2);
-    E.prune([&](int i, int j, double){ return i < valid_entries && j < valid_entries; });
+    // No need to remove empty entries since CC is dynamically sized
 
     return std::make_tuple(CC, E, duration, history);
 }
