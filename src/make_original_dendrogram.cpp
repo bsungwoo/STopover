@@ -6,19 +6,20 @@
 
 namespace py = pybind11;
 
-// Helper function to extract connected nodes from an edge list starting from a selected node
-std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx) {
-    std::set<int> cc_set;
-    std::set<int> next_neighbor = { sel_node_idx };
+std::unordered_set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx) {
+    std::unordered_set<int> cc_set;
+    std::queue<int> to_visit;
+    to_visit.push(sel_node_idx);
+    cc_set.insert(sel_node_idx);
 
-    while (!next_neighbor.empty()) {
-        std::set<int> curr_neighbor = next_neighbor;
-        next_neighbor.clear();
+    while (!to_visit.empty()) {
+        int vertex = to_visit.front();
+        to_visit.pop();
 
-        for (const int& vertex : curr_neighbor) {
-            if (cc_set.find(vertex) == cc_set.end()) {
-                cc_set.insert(vertex);
-                next_neighbor.insert(edge_list[vertex].begin(), edge_list[vertex].end());
+        for (int neighbor : edge_list[vertex]) {
+            if (cc_set.find(neighbor) == cc_set.end()) {
+                cc_set.insert(neighbor);
+                to_visit.push(neighbor);
             }
         }
     }
