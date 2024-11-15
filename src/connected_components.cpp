@@ -168,8 +168,8 @@ py::list extract_adjacency_spatial_py(
         // Convert Eigen::SparseMatrix to SciPy CSR format components
         py::dict csr_dict = eigen_to_scipy_csr(A_sparse);
 
-        // Convert arr_mod to NumPy array
-        py::array_t<double> arr_mod_np = arr_mod;  // Pybind11 handles conversion automatically
+        // Convert arr_mod to NumPy array using py::cast
+        py::array_t<double> arr_mod_np = py::cast(arr_mod);
 
         // Create a Python tuple (csr_matrix_dict, arr_mod_np)
         py::tuple result_tuple = py::make_tuple(csr_dict, arr_mod_np);
@@ -198,21 +198,21 @@ py::tuple make_original_dendrogram_cc_py(
         auto result = make_original_dendrogram_cc(U_eigen, A_eigen, threshold);
 
         // Unpack the results
-        std::vector<std::vector<int>> nCC = std::get<0>(result);
-        Eigen::SparseMatrix<double> nE_eigen = std::get<1>(result);
-        Eigen::MatrixXd nduration = std::get<2>(result);
-        std::vector<std::vector<int>> nchildren = std::get<3>(result);
+        auto& nCC = std::get<0>(result);
+        auto& nE_eigen = std::get<1>(result);
+        auto& nduration = std::get<2>(result);
+        auto& nchildren = std::get<3>(result);
 
         // Convert Eigen::SparseMatrix to SciPy CSR dict
         py::dict nE_csr = eigen_to_scipy_csr(nE_eigen);
 
-        // Convert nduration to NumPy array (Pybind11 handles conversion automatically)
-        py::array nduration_np = nduration;
+        // Convert nduration to NumPy array using py::cast
+        py::array_t<double> nduration_np = py::cast(nduration);
 
         // Return as a Python tuple
         return py::make_tuple(nCC, nE_csr, nduration_np, nchildren);
     }
-    catch (const std::exception &e) {
+    catch (const std::exception& e) {
         throw py::value_error(e.what());
     }
 }
@@ -251,8 +251,8 @@ py::tuple make_smoothed_dendrogram_py(
         // Convert Eigen::SparseMatrix to SciPy CSR dict
         py::dict nE_csr = eigen_to_scipy_csr(nE_eigen);
 
-        // Convert nduration to NumPy array (automatic conversion)
-        py::array_t<double> nduration_np = nduration;
+        // Convert nduration to NumPy array using py::cast
+        py::array_t<double> nduration_np = py::cast(nduration);
 
         // Return as a Python tuple
         return py::make_tuple(nCC, nE_csr, nduration_np, nchildren);
@@ -263,7 +263,6 @@ py::tuple make_smoothed_dendrogram_py(
 }
 
 
-// Wrapper function for make_dendrogram_bar
 // Wrapper function for make_dendrogram_bar
 py::tuple make_dendrogram_bar_py(
     const std::vector<std::vector<int>>& history,
@@ -294,12 +293,12 @@ py::tuple make_dendrogram_bar_py(
         auto& ndots = std::get<4>(result);
         auto& nlayer = std::get<5>(result);
 
-        // Convert Eigen::MatrixXd to NumPy arrays (automatic conversion)
-        py::array_t<double> nvertical_x_np_out = nvertical_x;
-        py::array_t<double> nvertical_y_np_out = nvertical_y;
-        py::array_t<double> nhorizontal_x_np_out = nhorizontal_x;
-        py::array_t<double> nhorizontal_y_np_out = nhorizontal_y;
-        py::array_t<double> ndots_np_out = ndots;
+        // Convert Eigen::MatrixXd to NumPy arrays using py::cast
+        py::array_t<double> nvertical_x_np_out = py::cast(nvertical_x);
+        py::array_t<double> nvertical_y_np_out = py::cast(nvertical_y);
+        py::array_t<double> nhorizontal_x_np_out = py::cast(nhorizontal_x);
+        py::array_t<double> nhorizontal_y_np_out = py::cast(nhorizontal_y);
+        py::array_t<double> ndots_np_out = py::cast(ndots);
 
         // Return as a Python tuple
         return py::make_tuple(
