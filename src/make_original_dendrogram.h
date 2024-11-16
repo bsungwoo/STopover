@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <Eigen/Sparse>
 #include <Eigen/Dense>
+#include <queue> // Include the queue header
 
 // Function to create the original dendrogram
 std::tuple<
