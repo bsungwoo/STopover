@@ -10,30 +10,35 @@ namespace py = pybind11;
 
 // Helper function to extract connected nodes using BFS
 std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx) {
-    std::set<int> cc_set;
-    std::set<int> next_neighbor = { sel_node_idx };
+    std::unordered_set<int> cc_set_unordered;
+    std::queue<int> to_visit;
+    to_visit.push(sel_node_idx);
+    cc_set_unordered.insert(sel_node_idx);
 
-    while (!next_neighbor.empty()) {
-        std::set<int> curr_neighbor = next_neighbor;
-        next_neighbor.clear();
+    while (!to_visit.empty()) {
+        int vertex = to_visit.front();
+        to_visit.pop();
 
-        for (const int& vertex : curr_neighbor) {
-            if (cc_set.find(vertex) == cc_set.end()) {
-                cc_set.insert(vertex);
-                next_neighbor.insert(edge_list[vertex].begin(), edge_list[vertex].end());
+        for (int neighbor : edge_list[vertex]) {
+            if (cc_set_unordered.find(neighbor) == cc_set_unordered.end()) {
+                cc_set_unordered.insert(neighbor);
+                to_visit.push(neighbor);
             }
         }
     }
+
+    // Convert unordered_set to set to maintain consistency
+    std::set<int> cc_set(cc_set_unordered.begin(), cc_set_unordered.end());
     return cc_set;
 }
 
 // Function to find connected components in a graph represented by an edge list
 std::vector<std::set<int>> connected_components(const std::vector<std::vector<int>>& edge_list) {
-    size_t n = edge_list.size();
+    int n = edge_list.size();
     std::unordered_set<int> all_cc_set;
     std::vector<std::set<int>> connected_components_list;
 
-    for (size_t vertex = 0; vertex < n; ++vertex) {
+    for (int vertex = 0; vertex < n; ++vertex) {
         if (all_cc_set.find(vertex) == all_cc_set.end()) {
             std::set<int> cc_set = extract_connected_nodes(edge_list, vertex);
             all_cc_set.insert(cc_set.begin(), cc_set.end());
@@ -42,8 +47,6 @@ std::vector<std::set<int>> connected_components(const std::vector<std::vector<in
     }
     return connected_components_list;
 }
-
-// =================== Main Function ===================
 
 // Main function to compute original dendrogram with connected components
 std::tuple<
@@ -59,13 +62,12 @@ make_original_dendrogram_cc(
 )
 {
     int p = U.size();
-    std::vector<std::vector<int>> CC;  // Initialize CC as an empty vector
+    std::vector<std::vector<int>> CC(p);  // Initialize CC with size p
+    Eigen::SparseMatrix<double, Eigen::RowMajor> E(p, p);  // Initialize E with size p x p
+    int ncc = -1;
     Eigen::VectorXi ck_cc = Eigen::VectorXi::Constant(p, -1);
-    Eigen::MatrixXd duration(0, 2);    // Initialize duration with 0 rows
-    std::vector<std::vector<int>> history; // Initialize history as an empty vector
-
-    // Initialize E as an empty sparse matrix
-    Eigen::SparseMatrix<double, Eigen::RowMajor> E(0, 0);
+    Eigen::MatrixXd duration = Eigen::MatrixXd::Zero(p, 2);  // Initialize duration with size p x 2
+    std::vector<std::vector<int>> history(p);  // Initialize history with size p
 
     for (size_t i = 0; i < threshold.size(); ++i) {
         // Choose current voxels that satisfy threshold interval
@@ -85,7 +87,7 @@ make_original_dendrogram_cc(
         }
 
         // Create a mapping from original indices to new indices
-        std::unordered_map<int, size_t> voxel_to_index;
+        std::unordered_map<int, int> voxel_to_index;
         for (size_t idx = 0; idx < cvoxels.size(); ++idx) {
             voxel_to_index[cvoxels[idx]] = idx;
         }
@@ -98,7 +100,7 @@ make_original_dendrogram_cc(
             int original_idx = cvoxels[idx];
             for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(A, original_idx); it; ++it) {
                 int col = it.col();
-                if (voxel_to_index.find(col) != voxel_to_index.end() && col != original_idx) {
+                if (voxel_to_index.find(col) != voxel_to_index.end()) {
                     edge_list[idx].push_back(voxel_to_index[col]);
                 }
             }
@@ -106,12 +108,12 @@ make_original_dendrogram_cc(
 
         // Extract connected components
         std::vector<std::set<int>> CC_profiles = connected_components(edge_list);
-        size_t S = CC_profiles.size();
+        int S = CC_profiles.size();
         std::vector<std::vector<int>> nCC(S);
         Eigen::SparseMatrix<double, Eigen::RowMajor> nA(p, S);
         std::vector<int> neighbor_cc;
 
-        for (size_t j = 0; j < S; ++j) {
+        for (int j = 0; j < S; ++j) {
             // Map back to original indices
             for (int idx : CC_profiles[j]) {
                 nCC[j].push_back(cvoxels[idx]);
@@ -146,32 +148,30 @@ make_original_dendrogram_cc(
 
         if (neighbor_cc.empty()) {
             // Initialize new connected components
-            for (size_t j = 0; j < S; ++j) {
+            for (int j = 0; j < S; ++j) {
+                ncc += 1;
                 // Update ck_cc
-                int cc_idx = CC.size(); // Next CC index
                 for (int idx : nCC[j]) {
-                    ck_cc[idx] = cc_idx;
+                    ck_cc[idx] = ncc;
                 }
-                CC.push_back(nCC[j]);
+                CC[ncc] = nCC[j];
 
                 // Update duration
-                duration.conservativeResize(CC.size(), 2);
-                duration(CC.size() - 1, 0) = threshold[i];
+                duration(ncc, 0) = threshold[i];
 
                 // Update E
-                E.conservativeResize(CC.size(), CC.size());
-                E.insert(CC.size() - 1, CC.size() - 1) = threshold[i];
+                E.insert(ncc, ncc) = threshold[i];
 
                 // Update history
-                history.push_back(std::vector<int>());
+                history[ncc] = std::vector<int>();
             }
         } else {
             // Construct nA_tmp
-            size_t N = neighbor_cc.size() + S;
+            int N = neighbor_cc.size() + S;
             Eigen::SparseMatrix<double, Eigen::RowMajor> nA_tmp(N, N);
 
             // Set diagonal elements to 1
-            for (size_t idx = 0; idx < N; ++idx) {
+            for (int idx = 0; idx < N; ++idx) {
                 nA_tmp.insert(idx, idx) = 1;
             }
 
@@ -185,7 +185,7 @@ make_original_dendrogram_cc(
 
             // Extract connected components from nA_tmp
             std::vector<std::vector<int>> edge_list_tmp(N);
-            for (size_t k = 0; k < nA_tmp.outerSize(); ++k) {
+            for (int k = 0; k < nA_tmp.outerSize(); ++k) {
                 for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(nA_tmp, k); it; ++it) {
                     if (it.row() != it.col() && it.value() != 0) {
                         edge_list_tmp[it.row()].push_back(it.col());
@@ -194,16 +194,16 @@ make_original_dendrogram_cc(
             }
 
             std::vector<std::set<int>> CC_profiles_tmp = connected_components(edge_list_tmp);
-            size_t S_tmp = CC_profiles_tmp.size();
+            int S_tmp = CC_profiles_tmp.size();
 
-            for (size_t j = 0; j < S_tmp; ++j) {
+            for (int j = 0; j < S_tmp; ++j) {
                 std::vector<int> tind(CC_profiles_tmp[j].begin(), CC_profiles_tmp[j].end());
                 std::vector<int> tind1, tind2;
-                for (size_t idx = 0; idx < tind.size(); ++idx) {
-                    if (tind[idx] < neighbor_cc.size()) {
-                        tind1.push_back(neighbor_cc[tind[idx]]);
+                for (int idx : tind) {
+                    if (idx < neighbor_cc.size()) {
+                        tind1.push_back(neighbor_cc[idx]);
                     } else {
-                        tind2.push_back(tind[idx] - neighbor_cc.size());
+                        tind2.push_back(idx - neighbor_cc.size());
                     }
                 }
 
@@ -218,8 +218,8 @@ make_original_dendrogram_cc(
                         ck_cc[idx] = cc_idx;
                     }
                 } else {
+                    ncc += 1;
                     // Create a new connected component
-                    int new_cc_idx = CC.size();
                     std::vector<int> new_CC;
                     for (int idx : tind1) {
                         new_CC.insert(new_CC.end(), CC[idx].begin(), CC[idx].end());
@@ -230,39 +230,42 @@ make_original_dendrogram_cc(
 
                     // Update ck_cc
                     for (int idx : new_CC) {
-                        ck_cc[idx] = new_cc_idx;
+                        ck_cc[idx] = ncc;
                     }
 
                     // Add new connected component
-                    CC.push_back(new_CC);
+                    CC[ncc] = new_CC;
 
                     // Update duration
-                    duration.conservativeResize(CC.size(), 2);
-                    duration(CC.size() - 1, 0) = threshold[i];
+                    duration(ncc, 0) = threshold[i];
                     for (int idx : tind1) {
                         duration(idx, 1) = threshold[i];
                     }
 
                     // Update E
-                    E.conservativeResize(CC.size(), CC.size());
                     for (size_t idx1 = 0; idx1 < tind1.size(); ++idx1) {
                         for (size_t idx2 = idx1; idx2 < tind1.size(); ++idx2) {
                             E.coeffRef(tind1[idx1], tind1[idx2]) = threshold[i];
                             E.coeffRef(tind1[idx2], tind1[idx1]) = threshold[i];
                         }
-                        E.coeffRef(new_cc_idx, tind1[idx1]) = threshold[i];
-                        E.coeffRef(tind1[idx1], new_cc_idx) = threshold[i];
+                        E.coeffRef(ncc, tind1[idx1]) = threshold[i];
+                        E.coeffRef(tind1[idx1], ncc) = threshold[i];
                     }
-                    E.coeffRef(new_cc_idx, new_cc_idx) = threshold[i];
+                    E.coeffRef(ncc, ncc) = threshold[i];
 
                     // Update history
-                    history.push_back(tind1);
+                    history[ncc] = tind1;
                 }
             }
         }
     }
 
-    // No need to remove empty entries since CC is dynamically sized
+    // Remove empty entries from CC and history
+    int valid_entries = ncc + 1;
+    CC.resize(valid_entries);
+    history.resize(valid_entries);
+    duration.conservativeResize(valid_entries, 2);
+    E.conservativeResize(valid_entries, valid_entries);
 
     return std::make_tuple(CC, E, duration, history);
 }

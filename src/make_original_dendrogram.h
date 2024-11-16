@@ -1,15 +1,16 @@
 #ifndef MAKE_ORIGINAL_DENDROGRAM_CC_H
 #define MAKE_ORIGINAL_DENDROGRAM_CC_H
 
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
 #include <vector>
-#include <tuple>
 #include <set>
-#include <unordered_map>
 #include <unordered_set>
+#include <unordered_map>
+#include <tuple>
 #include <algorithm>
 #include <stdexcept>
-#include <Eigen/Sparse>
-#include <Eigen/Dense>
+#include <queue>
 
 // Function to create the original dendrogram
 std::tuple<
