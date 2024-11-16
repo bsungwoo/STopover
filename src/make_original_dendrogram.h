@@ -4,13 +4,11 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <vector>
-#include <set>
-#include <unordered_set>
+#include <queue>
 #include <unordered_map>
 #include <tuple>
 #include <algorithm>
 #include <stdexcept>
-#include <queue>
 
 // Function to create the original dendrogram
 std::tuple<

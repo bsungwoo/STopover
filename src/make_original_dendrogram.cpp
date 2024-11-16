@@ -8,45 +8,51 @@ namespace py = pybind11;
 
 // =================== Helper Functions ===================
 
-// Helper function to extract connected nodes using BFS
-std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx) {
-    std::unordered_set<int> cc_set_unordered;
+// Helper function to extract connected nodes using BFS with ordered traversal
+std::vector<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx) {
+    std::vector<int> cc_list; // To store the connected component nodes in order
     std::queue<int> to_visit;
+    std::vector<bool> visited(edge_list.size(), false);
+
     to_visit.push(sel_node_idx);
-    cc_set_unordered.insert(sel_node_idx);
+    visited[sel_node_idx] = true;
 
     while (!to_visit.empty()) {
         int vertex = to_visit.front();
         to_visit.pop();
+        cc_list.push_back(vertex);
 
-        for (int neighbor : edge_list[vertex]) {
-            if (cc_set_unordered.find(neighbor) == cc_set_unordered.end()) {
-                cc_set_unordered.insert(neighbor);
+        const auto& neighbors = edge_list[vertex];
+        for (int neighbor : neighbors) {
+            if (!visited[neighbor]) {
+                visited[neighbor] = true;
                 to_visit.push(neighbor);
             }
         }
     }
-
-    // Convert unordered_set to set to maintain consistency
-    std::set<int> cc_set(cc_set_unordered.begin(), cc_set_unordered.end());
-    return cc_set;
+    return cc_list;
 }
 
 // Function to find connected components in a graph represented by an edge list
-std::vector<std::set<int>> connected_components(const std::vector<std::vector<int>>& edge_list) {
-    int n = edge_list.size();
-    std::unordered_set<int> all_cc_set;
-    std::vector<std::set<int>> connected_components_list;
+std::vector<std::vector<int>> connected_components(const std::vector<std::vector<int>>& edge_list) {
+    size_t n = edge_list.size();
+    std::vector<bool> visited(n, false);
+    std::vector<std::vector<int>> connected_components_list;
 
-    for (int vertex = 0; vertex < n; ++vertex) {
-        if (all_cc_set.find(vertex) == all_cc_set.end()) {
-            std::set<int> cc_set = extract_connected_nodes(edge_list, vertex);
-            all_cc_set.insert(cc_set.begin(), cc_set.end());
-            connected_components_list.push_back(cc_set);
+    for (size_t vertex = 0; vertex < n; ++vertex) {
+        if (!visited[vertex]) {
+            std::vector<int> cc_list = extract_connected_nodes(edge_list, vertex);
+            // Mark nodes as visited
+            for (int idx : cc_list) {
+                visited[idx] = true;
+            }
+            connected_components_list.push_back(cc_list);
         }
     }
     return connected_components_list;
 }
+
+// =================== Main Function ===================
 
 // Main function to compute original dendrogram with connected components
 std::tuple<
@@ -98,16 +104,19 @@ make_original_dendrogram_cc(
 
         for (size_t idx = 0; idx < cvoxels.size(); ++idx) {
             int original_idx = cvoxels[idx];
+            std::vector<int> neighbors;
             for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(A, original_idx); it; ++it) {
                 int col = it.col();
                 if (voxel_to_index.find(col) != voxel_to_index.end()) {
-                    edge_list[idx].push_back(voxel_to_index[col]);
+                    neighbors.push_back(voxel_to_index[col]);
                 }
             }
+            std::sort(neighbors.begin(), neighbors.end()); // Sort the neighbor list
+            edge_list[idx] = neighbors;
         }
 
         // Extract connected components
-        std::vector<std::set<int>> CC_profiles = connected_components(edge_list);
+        std::vector<std::vector<int>> CC_profiles = connected_components(edge_list);
         int S = CC_profiles.size();
         std::vector<std::vector<int>> nCC(S);
         Eigen::SparseMatrix<double, Eigen::RowMajor> nA(p, S);
@@ -168,36 +177,26 @@ make_original_dendrogram_cc(
         } else {
             // Construct nA_tmp
             int N = neighbor_cc.size() + S;
-            Eigen::SparseMatrix<double, Eigen::RowMajor> nA_tmp(N, N);
+            std::vector<std::vector<int>> edge_list_tmp(N);
 
-            // Set diagonal elements to 1
-            for (int idx = 0; idx < N; ++idx) {
-                nA_tmp.insert(idx, idx) = 1;
-            }
-
-            // Fill nA_tmp
+            // Add edges between neighbor_cc and new components
             for (size_t row = 0; row < neighbor_cc.size(); ++row) {
                 for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(nA, neighbor_cc[row]); it; ++it) {
-                    nA_tmp.insert(row, neighbor_cc.size() + it.col()) = it.value();
-                    nA_tmp.insert(neighbor_cc.size() + it.col(), row) = it.value();
+                    int col = it.col();
+                    int col_idx = neighbor_cc.size() + col;
+                    edge_list_tmp[row].push_back(col_idx);
+                    edge_list_tmp[col_idx].push_back(row);
                 }
             }
 
-            // Extract connected components from nA_tmp
-            std::vector<std::vector<int>> edge_list_tmp(N);
-            for (int k = 0; k < nA_tmp.outerSize(); ++k) {
-                for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(nA_tmp, k); it; ++it) {
-                    if (it.row() != it.col() && it.value() != 0) {
-                        edge_list_tmp[it.row()].push_back(it.col());
-                    }
-                }
-            }
+            // Add self-loops (implicitly via BFS traversal)
 
-            std::vector<std::set<int>> CC_profiles_tmp = connected_components(edge_list_tmp);
+            // Extract connected components from edge_list_tmp
+            std::vector<std::vector<int>> CC_profiles_tmp = connected_components(edge_list_tmp);
             int S_tmp = CC_profiles_tmp.size();
 
             for (int j = 0; j < S_tmp; ++j) {
-                std::vector<int> tind(CC_profiles_tmp[j].begin(), CC_profiles_tmp[j].end());
+                std::vector<int> tind = CC_profiles_tmp[j];
                 std::vector<int> tind1, tind2;
                 for (int idx : tind) {
                     if (idx < neighbor_cc.size()) {
@@ -206,6 +205,10 @@ make_original_dendrogram_cc(
                         tind2.push_back(idx - neighbor_cc.size());
                     }
                 }
+
+                // Sort tind1 and tind2 to ensure consistent order
+                std::sort(tind1.begin(), tind1.end());
+                std::sort(tind2.begin(), tind2.end());
 
                 if (tind1.size() == 1) {
                     int cc_idx = tind1[0];
