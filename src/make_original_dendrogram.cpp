@@ -10,25 +10,20 @@ namespace py = pybind11;
 
 // Helper function to extract connected nodes using BFS
 std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx) {
-    std::unordered_set<int> cc_set_unordered;
-    std::queue<int> to_visit;
-    to_visit.push(sel_node_idx);
-    cc_set_unordered.insert(sel_node_idx);
+    std::set<int> cc_set;
+    std::set<int> next_neighbor = { sel_node_idx };
 
-    while (!to_visit.empty()) {
-        int vertex = to_visit.front();
-        to_visit.pop();
+    while (!next_neighbor.empty()) {
+        std::set<int> curr_neighbor = next_neighbor;
+        next_neighbor.clear();
 
-        for (int neighbor : edge_list[vertex]) {
-            if (cc_set_unordered.find(neighbor) == cc_set_unordered.end()) {
-                cc_set_unordered.insert(neighbor);
-                to_visit.push(neighbor);
+        for (const int& vertex : curr_neighbor) {
+            if (cc_set.find(vertex) == cc_set.end()) {
+                cc_set.insert(vertex);
+                next_neighbor.insert(edge_list[vertex].begin(), edge_list[vertex].end());
             }
         }
     }
-
-    // Convert unordered_set to set to maintain consistency
-    std::set<int> cc_set(cc_set_unordered.begin(), cc_set_unordered.end());
     return cc_set;
 }
 
