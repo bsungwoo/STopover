@@ -39,11 +39,13 @@ make_dendrogram_bar(
         length_history[i] = history[i].size();
     }
 
-    // Identify non-empty and empty indices based on the validity of duration values
+    // Identify non-empty and empty indices based on the sum of each row in duration
     std::vector<int> ind_notempty;
     std::vector<int> ind_empty;
+    const double EPSILON = 1e-12; // Tolerance for floating-point comparison
     for (int i = 0; i < ncc; ++i) {
-        if (!std::isnan(duration(i, 0)) && !std::isnan(duration(i, 1))) {
+        double row_sum = duration.row(i).sum();
+        if (std::abs(row_sum) > EPSILON) {
             ind_notempty.push_back(i);
         } else {
             ind_empty.push_back(i);
