@@ -39,27 +39,41 @@ make_dendrogram_bar(
         length_history[i] = history[i].size();
     }
 
-    // Identify non-empty and empty indices based on the validity of duration values
+    // Identify non-empty and empty indices based on the sum of duration rows
     std::vector<int> ind_notempty;
     std::vector<int> ind_empty;
-    const double EPSILON = 0; // Tolerance for floating-point comparison
     for (int i = 0; i < ncc; ++i) {
         double row_sum = duration.row(i).sum();
-        if (std::abs(row_sum) > EPSILON) {
+        if (row_sum != 0.0) {
             ind_notempty.push_back(i);
-        } else {
-            ind_empty.push_back(i);
         }
     }
+    std::sort(ind_notempty.begin(), ind_notempty.end());
+
+    // Compute ind_empty as the set difference between all indices and ind_notempty
+    std::vector<int> indices(ncc);
+    std::iota(indices.begin(), indices.end(), 0);
+    std::vector<int> ind_empty;
+    std::set_difference(
+        indices.begin(), indices.end(),
+        ind_notempty.begin(), ind_notempty.end(),
+        std::back_inserter(ind_empty)
+    );
 
     // Leaf CCs
     std::vector<int> ind_past;
+    std::vector<int> indices_with_length_zero;
     for (int i = 0; i < ncc; ++i) {
-        if (length_history[i] == 0 &&
-            std::find(ind_empty.begin(), ind_empty.end(), i) == ind_empty.end()) {
-            ind_past.push_back(i);
+        if (length_history[i] == 0) {
+            indices_with_length_zero.push_back(i);
         }
     }
+    std::sort(indices_with_length_zero.begin(), indices_with_length_zero.end());
+    std::set_difference(
+        indices_with_length_zero.begin(), indices_with_length_zero.end(),
+        ind_empty.begin(), ind_empty.end(),
+        std::back_inserter(ind_past)
+    );
     nlayer.push_back(ind_past);
 
     // Build layers
@@ -67,29 +81,45 @@ make_dendrogram_bar(
         std::vector<bool> tind(ncc, false);
         for (int i = 0; i < ncc; ++i) {
             if (!history[i].empty()) {
+                // Sort history[i]
+                std::vector<int> sorted_history_i = history[i];
+                std::sort(sorted_history_i.begin(), sorted_history_i.end());
+
+                // Perform set_intersection with sorted inputs
                 std::vector<int> intersect;
                 std::set_intersection(
-                    history[i].begin(), history[i].end(),
+                    sorted_history_i.begin(), sorted_history_i.end(),
                     ind_past.begin(), ind_past.end(),
                     std::back_inserter(intersect)
                 );
-                tind[i] = (intersect.size() == history[i].size());
+                tind[i] = (intersect.size() == sorted_history_i.size());
             }
         }
 
-        std::vector<int> ttind;
+        // Compute ttind as the set difference between where tind is true and (ind_past + ind_empty)
+        std::vector<int> where_tind_true;
         for (int i = 0; i < ncc; ++i) {
-            if (tind[i] &&
-                std::find(ind_past.begin(), ind_past.end(), i) == ind_past.end() &&
-                std::find(ind_empty.begin(), ind_empty.end(), i) == ind_empty.end()) {
-                ttind.push_back(i);
+            if (tind[i]) {
+                where_tind_true.push_back(i);
             }
         }
+        std::sort(where_tind_true.begin(), where_tind_true.end());
+
+        std::vector<int> ind_past_and_empty = ind_past;
+        ind_past_and_empty.insert(ind_past_and_empty.end(), ind_empty.begin(), ind_empty.end());
+        std::sort(ind_past_and_empty.begin(), ind_past_and_empty.end());
+
+        std::vector<int> ttind;
+        std::set_difference(
+            where_tind_true.begin(), where_tind_true.end(),
+            ind_past_and_empty.begin(), ind_past_and_empty.end(),
+            std::back_inserter(ttind)
+        );
 
         if (!ttind.empty()) {
             nlayer.push_back(ttind);
             ind_past.insert(ind_past.end(), ttind.begin(), ttind.end());
-            // Sort ind_past to ensure set_intersection works correctly
+            // Sort ind_past to ensure set operations work correctly
             std::sort(ind_past.begin(), ind_past.end());
         } else {
             break;
