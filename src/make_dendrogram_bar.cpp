@@ -3,6 +3,8 @@
 #include <numeric>
 #include <set>
 #include <limits>
+#include <cmath>      // For std::isnan
+#include <iostream>   // For debugging output (optional)
 
 std::tuple<
     Eigen::MatrixXd,
@@ -59,16 +61,18 @@ make_dendrogram_bar(
     nlayer.push_back(ind_past);
 
     // Build layers
-    while (ind_past.size() < ind_notempty.size()) {
+    while (static_cast<int>(ind_past.size()) < static_cast<int>(ind_notempty.size())) {
         std::vector<bool> tind(ncc, false);
         for (int i = 0; i < ncc; ++i) {
-            std::vector<int> intersect;
-            std::set_intersection(
-                history[i].begin(), history[i].end(),
-                ind_past.begin(), ind_past.end(),
-                std::back_inserter(intersect)
-            );
-            tind[i] = (!history[i].empty()) && (intersect.size() == history[i].size());
+            if (!history[i].empty()) {
+                std::vector<int> intersect;
+                std::set_intersection(
+                    history[i].begin(), history[i].end(),
+                    ind_past.begin(), ind_past.end(),
+                    std::back_inserter(intersect)
+                );
+                tind[i] = (intersect.size() == history[i].size());
+            }
         }
 
         std::vector<int> ttind;
@@ -83,6 +87,8 @@ make_dendrogram_bar(
         if (!ttind.empty()) {
             nlayer.push_back(ttind);
             ind_past.insert(ind_past.end(), ttind.begin(), ttind.end());
+            // Sort ind_past to ensure set_intersection works correctly
+            std::sort(ind_past.begin(), ind_past.end());
         } else {
             break;
         }
@@ -103,15 +109,15 @@ make_dendrogram_bar(
 
         // Sort nlayer[0] by duration
         std::vector<std::pair<int, double>> sval_ind;
-        for (size_t i = 0; i < nlayer[0].size(); ++i) {
-            int idx = nlayer[0][i];
+        for (int idx : nlayer[0]) {
             sval_ind.emplace_back(idx, duration(idx, 1));
         }
 
-        std::sort(sval_ind.begin(), sval_ind.end(),
-                  [](const std::pair<int, double>& a, const std::pair<int, double>& b) {
-                      return a.second > b.second;
-                  });
+        // Stable sort to handle ties
+        std::stable_sort(sval_ind.begin(), sval_ind.end(),
+                         [](const std::pair<int, double>& a, const std::pair<int, double>& b) {
+                             return a.second > b.second;
+                         });
 
         std::vector<int> sind;
         for (const auto& pair : sval_ind) {
@@ -125,18 +131,20 @@ make_dendrogram_bar(
             ndots.row(ii) = Eigen::Vector2d(i, duration(ii, 0));
         }
 
-        for (size_t i = 1; i < nlayer.size(); ++i) {
-            for (size_t j = 0; j < nlayer[i].size(); ++j) {
-                int idx = nlayer[i][j];
+        for (size_t layer_idx = 1; layer_idx < nlayer.size(); ++layer_idx) {
+            for (int idx : nlayer[layer_idx]) {
                 std::vector<double> tx;
                 for (int h : history[idx]) {
                     tx.push_back(nvertical_x(h, 0));
                 }
                 if (!tx.empty()) {
-                    double mean_tx = std::accumulate(tx.begin(), tx.end(), 0.0) / tx.size();
-                    nvertical_x.row(idx) = Eigen::Vector2d(mean_tx, mean_tx);
+                    // Compute mean, min, max of tx
+                    double sum_tx = std::accumulate(tx.begin(), tx.end(), 0.0);
+                    double mean_tx = sum_tx / tx.size();
                     double min_tx = *std::min_element(tx.begin(), tx.end());
                     double max_tx = *std::max_element(tx.begin(), tx.end());
+
+                    nvertical_x.row(idx) = Eigen::Vector2d(mean_tx, mean_tx);
                     nhorizontal_x.row(idx) = Eigen::Vector2d(min_tx, max_tx);
                     ndots(idx, 0) = mean_tx;
                 }
@@ -146,6 +154,7 @@ make_dendrogram_bar(
             }
         }
     } else {
+        // Handling the case when is_new is false
         nvertical_x = cvertical_x;
         nvertical_y = cvertical_y;
         nhorizontal_x = chorizontal_x;
@@ -159,6 +168,7 @@ make_dendrogram_bar(
         if (nhorizontal_y.rows() != ncc) nhorizontal_y.conservativeResize(ncc, 2);
         if (ndots.rows() != ncc) ndots.conservativeResize(ncc, 2);
 
+        // Set NaN for ind_empty indices
         for (int idx : ind_empty) {
             nvertical_x.row(idx).setConstant(std::numeric_limits<double>::quiet_NaN());
             nvertical_y.row(idx).setConstant(std::numeric_limits<double>::quiet_NaN());
@@ -167,26 +177,27 @@ make_dendrogram_bar(
             ndots.row(idx).setConstant(std::numeric_limits<double>::quiet_NaN());
         }
 
-        for (size_t j = 0; j < nlayer[0].size(); ++j) {
-            int ii = nlayer[0][j];
-            nvertical_y.row(ii) = duration.row(ii).transpose();
+        // Update leaf nodes
+        for (int ii : nlayer[0]) {
+            nvertical_y.row(ii) = duration.row(ii);
             nhorizontal_x.row(ii).setConstant(std::numeric_limits<double>::quiet_NaN());
             nhorizontal_y.row(ii).setConstant(std::numeric_limits<double>::quiet_NaN());
             ndots.row(ii) = Eigen::Vector2d(nvertical_x(ii, 0), nvertical_y(ii, 1));
         }
 
-        for (size_t i = 1; i < nlayer.size(); ++i) {
-            for (size_t j = 0; j < nlayer[i].size(); ++j) {
-                int idx = nlayer[i][j];
+        for (size_t layer_idx = 1; layer_idx < nlayer.size(); ++layer_idx) {
+            for (int idx : nlayer[layer_idx]) {
                 std::vector<double> tx;
                 for (int h : history[idx]) {
                     tx.push_back(nvertical_x(h, 0));
                 }
                 if (!tx.empty()) {
-                    double mean_tx = std::accumulate(tx.begin(), tx.end(), 0.0) / tx.size();
-                    nvertical_x.row(idx) = Eigen::Vector2d(mean_tx, mean_tx);
+                    double sum_tx = std::accumulate(tx.begin(), tx.end(), 0.0);
+                    double mean_tx = sum_tx / tx.size();
                     double min_tx = *std::min_element(tx.begin(), tx.end());
                     double max_tx = *std::max_element(tx.begin(), tx.end());
+
+                    nvertical_x.row(idx) = Eigen::Vector2d(mean_tx, mean_tx);
                     nhorizontal_x.row(idx) = Eigen::Vector2d(min_tx, max_tx);
                     ndots(idx, 0) = mean_tx;
                 }
