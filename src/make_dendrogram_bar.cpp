@@ -89,8 +89,6 @@ make_dendrogram_bar(
         if (!ttind.empty()) {
             nlayer.push_back(ttind);
             ind_past.insert(ind_past.end(), ttind.begin(), ttind.end());
-            // Sort ind_past to ensure set_intersection works correctly
-            std::sort(ind_past.begin(), ind_past.end());
         } else {
             break;
         }
