@@ -264,31 +264,59 @@ py::tuple make_smoothed_dendrogram_py(
 py::tuple make_dendrogram_bar_py(
     const std::vector<std::vector<int>>& history,
     const py::array_t<double>& duration_np,
-    const py::array_t<double>& cvertical_x_np,
-    const py::array_t<double>& cvertical_y_np,
-    const py::array_t<double>& chorizontal_x_np,
-    const py::array_t<double>& chorizontal_y_np,
-    const py::array_t<double>& cdots_np
+    py::object cvertical_x_obj = py::none(),
+    py::object cvertical_y_obj = py::none(),
+    py::object chorizontal_x_obj = py::none(),
+    py::object chorizontal_y_obj = py::none(),
+    py::object cdots_obj = py::none()
 ) {
     try {
-        // Convert NumPy arrays to Eigen::MatrixXd
+        // Convert duration_np to Eigen::MatrixXd
         Eigen::MatrixXd duration = array_to_matrix(duration_np);
-        Eigen::MatrixXd cvertical_x = array_to_matrix(cvertical_x_np);
-        Eigen::MatrixXd cvertical_y = array_to_matrix(cvertical_y_np);
-        Eigen::MatrixXd chorizontal_x = array_to_matrix(chorizontal_x_np);
-        Eigen::MatrixXd chorizontal_y = array_to_matrix(chorizontal_y_np);
-        Eigen::MatrixXd cdots = array_to_matrix(cdots_np);
+
+        // Initialize optional matrices as empty
+        Eigen::MatrixXd cvertical_x = Eigen::MatrixXd();
+        Eigen::MatrixXd cvertical_y = Eigen::MatrixXd();
+        Eigen::MatrixXd chorizontal_x = Eigen::MatrixXd();
+        Eigen::MatrixXd chorizontal_y = Eigen::MatrixXd();
+        Eigen::MatrixXd cdots = Eigen::MatrixXd();
+
+        // Check and cast each optional argument if not None
+        if (!cvertical_x_obj.is_none()) {
+            py::array_t<double> cvertical_x_np = cvertical_x_obj.cast<py::array_t<double>>();
+            cvertical_x = array_to_matrix(cvertical_x_np);
+        }
+
+        if (!cvertical_y_obj.is_none()) {
+            py::array_t<double> cvertical_y_np = cvertical_y_obj.cast<py::array_t<double>>();
+            cvertical_y = array_to_matrix(cvertical_y_np);
+        }
+
+        if (!chorizontal_x_obj.is_none()) {
+            py::array_t<double> chorizontal_x_np = chorizontal_x_obj.cast<py::array_t<double>>();
+            chorizontal_x = array_to_matrix(chorizontal_x_np);
+        }
+
+        if (!chorizontal_y_obj.is_none()) {
+            py::array_t<double> chorizontal_y_np = chorizontal_y_obj.cast<py::array_t<double>>();
+            chorizontal_y = array_to_matrix(chorizontal_y_np);
+        }
+
+        if (!cdots_obj.is_none()) {
+            py::array_t<double> cdots_np = cdots_obj.cast<py::array_t<double>>();
+            cdots = array_to_matrix(cdots_np);
+        }
 
         // Call the original C++ function
         auto result = make_dendrogram_bar(history, duration, cvertical_x, cvertical_y, chorizontal_x, chorizontal_y, cdots);
 
         // Unpack the results
-        auto& nvertical_x = std::get<0>(result);
-        auto& nvertical_y = std::get<1>(result);
-        auto& nhorizontal_x = std::get<2>(result);
-        auto& nhorizontal_y = std::get<3>(result);
-        auto& ndots = std::get<4>(result);
-        auto& nlayer = std::get<5>(result);
+        Eigen::MatrixXd nvertical_x = std::get<0>(result);
+        Eigen::MatrixXd nvertical_y = std::get<1>(result);
+        Eigen::MatrixXd nhorizontal_x = std::get<2>(result);
+        Eigen::MatrixXd nhorizontal_y = std::get<3>(result);
+        Eigen::MatrixXd ndots = std::get<4>(result);
+        std::vector<std::vector<int>> nlayer = std::get<5>(result);
 
         // Convert Eigen::MatrixXd to NumPy arrays using py::cast
         py::array_t<double> nvertical_x_np_out = py::cast(nvertical_x);
@@ -338,13 +366,13 @@ PYBIND11_MODULE(connected_components, m) {
           py::arg("chistory"),
           py::arg("lim_size"));
 
-    m.def("make_dendrogram_bar", &make_dendrogram_bar_py, 
-          "Wrapper for make_dendrogram_bar that accepts Python data types",
+    m.def("make_dendrogram_bar", &make_dendrogram_bar_py,
           py::arg("history"),
           py::arg("duration"),
-          py::arg("cvertical_x"),
-          py::arg("cvertical_y"),
-          py::arg("chorizontal_x"),
-          py::arg("chorizontal_y"),
-          py::arg("cdots"));
+          py::arg("cvertical_x") = py::none(),
+          py::arg("cvertical_y") = py::none(),
+          py::arg("chorizontal_x") = py::none(),
+          py::arg("chorizontal_y") = py::none(),
+          py::arg("cdots") = py::none(),
+          "Create dendrogram bars with optional parameters");
 }
