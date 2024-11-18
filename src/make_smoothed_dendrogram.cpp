@@ -81,9 +81,6 @@ make_smoothed_dendrogram(
             layer.push_back(ttind);
             ind_past.insert(ind_past.end(), ttind.begin(), ttind.end());
         }
-        else {
-            break;
-        }
     }
 
     // Initialization
@@ -329,9 +326,6 @@ make_smoothed_dendrogram(
         if (!ttind.empty()) {
             layer.push_back(ttind);
             ind_past.insert(ind_past.end(), ttind.begin(), ttind.end());
-        }
-        else {
-            break;
         }
     }
 
