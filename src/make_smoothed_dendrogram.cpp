@@ -80,6 +80,8 @@ make_smoothed_dendrogram(
         if (!ttind.empty()) {
             layer.push_back(ttind);
             ind_past.insert(ind_past.end(), ttind.begin(), ttind.end());
+            // Sort ind_past to ensure set_intersection works correctly
+            std::sort(ind_past.begin(), ind_past.end());
         }
         else {
             break;
@@ -329,6 +331,8 @@ make_smoothed_dendrogram(
         if (!ttind.empty()) {
             layer.push_back(ttind);
             ind_past.insert(ind_past.end(), ttind.begin(), ttind.end());
+            // Sort ind_past to ensure set_intersection works correctly
+            std::sort(ind_past.begin(), ind_past.end());
         }
         else {
             break;
