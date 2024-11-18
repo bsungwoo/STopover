@@ -24,25 +24,26 @@ make_dendrogram_bar(
     const Eigen::MatrixXd& cdots
 )
 {
+    // Determine if this is a new dendrogram (i.e., no existing data)
     bool is_new = (cvertical_x.size() == 0) && (cvertical_y.size() == 0) &&
                   (chorizontal_x.size() == 0) && (chorizontal_y.size() == 0) &&
                   (cdots.size() == 0);
 
-    int ncc = duration.rows();
+    int ncc = static_cast<int>(duration.rows());
 
-    // Estimate the depth of dendrogram
+    // Initialize layers of the dendrogram
     std::vector<std::vector<int>> nlayer;
 
-    // Find CCs with no parent
+    // Compute the length of history for each connected component
     std::vector<int> length_history(ncc);
     for (int i = 0; i < ncc; ++i) {
-        length_history[i] = history[i].size();
+        length_history[i] = static_cast<int>(history[i].size());
     }
 
     // Identify non-empty and empty indices based on the validity of duration values
     std::vector<int> ind_notempty;
     std::vector<int> ind_empty;
-    const double EPSILON = 0; // Tolerance for floating-point comparison
+    const double EPSILON = 1e-9; // Tolerance for floating-point comparison
     for (int i = 0; i < ncc; ++i) {
         double row_sum = duration.row(i).sum();
         if (std::abs(row_sum) > EPSILON) {
@@ -52,7 +53,7 @@ make_dendrogram_bar(
         }
     }
 
-    // Leaf CCs
+    // Identify leaf connected components (no history and not empty)
     std::vector<int> ind_past;
     for (int i = 0; i < ncc; ++i) {
         if (length_history[i] == 0 &&
@@ -62,8 +63,10 @@ make_dendrogram_bar(
     }
     nlayer.push_back(ind_past);
 
-    // Build layers
-    while (static_cast<int>(ind_past.size()) < static_cast<int>(ind_notempty.size())) {
+    // Build layers (with safeguard against infinite loops)
+    const int MAX_ITERATIONS = ncc * 3; // Adjust as needed
+    int iteration = 0;
+    while (static_cast<int>(ind_past.size()) < static_cast<int>(ind_notempty.size()) && iteration < MAX_ITERATIONS) {
         std::vector<bool> tind(ncc, false);
         for (int i = 0; i < ncc; ++i) {
             if (!history[i].empty()) {
@@ -89,9 +92,15 @@ make_dendrogram_bar(
         if (!ttind.empty()) {
             nlayer.push_back(ttind);
             ind_past.insert(ind_past.end(), ttind.begin(), ttind.end());
+        } else {
+            // No progress can be made; break to prevent infinite loop
+            break;
         }
+
+        iteration++;
     }
 
+    // Initialize matrices
     Eigen::MatrixXd nvertical_x;
     Eigen::MatrixXd nvertical_y;
     Eigen::MatrixXd nhorizontal_x;
@@ -99,6 +108,7 @@ make_dendrogram_bar(
     Eigen::MatrixXd ndots;
 
     if (is_new) {
+        // Initialize new matrices
         nvertical_x = Eigen::MatrixXd::Zero(ncc, 2);
         nvertical_y = Eigen::MatrixXd::Zero(ncc, 2);
         nhorizontal_x = Eigen::MatrixXd::Zero(ncc, 2);
@@ -122,6 +132,7 @@ make_dendrogram_bar(
             sind.push_back(pair.first);
         }
 
+        // Assign positions to the leaf nodes
         for (size_t i = 0; i < sind.size(); ++i) {
             int ii = sind[i];
             nvertical_x.row(ii) = Eigen::Vector2d(i, i);
@@ -129,6 +140,7 @@ make_dendrogram_bar(
             ndots.row(ii) = Eigen::Vector2d(i, duration(ii, 0));
         }
 
+        // Process subsequent layers
         for (size_t layer_idx = 1; layer_idx < nlayer.size(); ++layer_idx) {
             for (int idx : nlayer[layer_idx]) {
                 std::vector<double> tx;
@@ -158,9 +170,6 @@ make_dendrogram_bar(
         nhorizontal_x = chorizontal_x;
         nhorizontal_y = chorizontal_y;
         ndots = cdots;
-
-        // Remove resizing if input matrices are guaranteed to be (ncc, 2)
-        // If not, ensure that input matrices are correctly sized before passing to this function
 
         // Set ind_empty rows to zero
         for (int idx : ind_empty) {

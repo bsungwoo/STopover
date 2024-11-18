@@ -54,7 +54,7 @@ make_smoothed_dendrogram(
     layer.push_back(ind_past);
 
     // Build layers (First while loop)
-    const int MAX_ITERATIONS = ncc * 10; // Safeguard to prevent infinite loops
+    const int MAX_ITERATIONS = ncc * 3; // Safeguard to prevent infinite loops
     int iteration = 0;
     while (static_cast<int>(ind_past.size()) < ncc && iteration < MAX_ITERATIONS) {
         std::vector<int> ttind;
@@ -84,7 +84,7 @@ make_smoothed_dendrogram(
 
         iteration++;
     }
-    
+
     // Initialization
     std::vector<std::vector<int>> nCC = cCC;
     Eigen::MatrixXd nduration = cduration;
@@ -276,7 +276,7 @@ make_smoothed_dendrogram(
     layer.push_back(ind_past_new);
 
     // Second while loop with safeguard
-    const int MAX_ITERATIONS_SECOND_LOOP = ncc * 2; // Adjust as needed
+    const int MAX_ITERATIONS_SECOND_LOOP = ncc * 3; // Adjust as needed
     int current_iteration_second_loop = 0;
 
     while (static_cast<int>(ind_past_new.size()) < static_cast<int>(ind_notempty.size()) && current_iteration_second_loop < MAX_ITERATIONS_SECOND_LOOP) {
