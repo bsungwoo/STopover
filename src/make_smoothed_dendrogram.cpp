@@ -50,13 +50,21 @@ make_smoothed_dendrogram(
     while (ind_past.size() < static_cast<size_t>(ncc)) {
         std::vector<int> ttind;
         for (int i = 0; i < ncc; ++i) {
+            // Sort chistory[i] and ind_past
+            std::vector<int> chistory_i_sorted = chistory[i];
+            std::sort(chistory_i_sorted.begin(), chistory_i_sorted.end());
+
+            std::vector<int> ind_past_sorted = ind_past;
+            std::sort(ind_past_sorted.begin(), ind_past_sorted.end());
+
             std::vector<int> intersect;
             std::set_intersection(
-                chistory[i].begin(), chistory[i].end(),
-                ind_past.begin(), ind_past.end(),
+                chistory_i_sorted.begin(), chistory_i_sorted.end(),
+                ind_past_sorted.begin(), ind_past_sorted.end(),
                 std::back_inserter(intersect)
             );
-            if (chistory[i].size() > 0 && intersect.size() == chistory[i].size()) {
+
+            if (chistory_i_sorted.size() > 0 && intersect.size() == chistory_i_sorted.size()) {
                 if (std::find(ind_past.begin(), ind_past.end(), i) == ind_past.end()) {
                     ttind.push_back(i);
                 }
