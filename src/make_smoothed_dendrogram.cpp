@@ -102,7 +102,7 @@ make_smoothed_dendrogram(
         // Find layer index
         for (size_t l = 0; l < layer.size(); ++l) {
             if (std::find(layer[l].begin(), layer[l].end(), i) != layer[l].end()) {
-                ilayer[i] = l;
+                ilayer[i] = static_cast<int>(l);
                 break;
             }
         }
@@ -145,8 +145,9 @@ make_smoothed_dendrogram(
                                 for (int child : nchildren[ii]) {
                                     nparent[child] = ii;
                                 }
-                                // Update nduration
-                                nduration.row(ii) = nduration.row(ii).cwiseMax(nduration.row(tind));
+                                // Correct update to nduration
+                                nduration(ii, 0) = std::max(nduration(ii, 0), nduration(tind, 0));
+                                nduration(ii, 1) = std::min(nduration(ii, 1), nduration(tind, 1));
                             }
                         }
                         else {
@@ -154,8 +155,8 @@ make_smoothed_dendrogram(
                             // Update nduration
                             std::vector<int> indices = jj;
                             indices.push_back(ii);
-                            double max_start = nduration(indices[0], 0);
-                            double min_end = nduration(indices[0], 1);
+                            double max_start = nduration(ii, 0);
+                            double min_end = nduration(ii, 1);
                             for (int idx : indices) {
                                 max_start = std::max(max_start, nduration(idx, 0));
                                 min_end = std::min(min_end, nduration(idx, 1));
@@ -218,7 +219,7 @@ make_smoothed_dendrogram(
                             length_cc[idx] = 0;
                             length_duration[idx] = 0;
                             int l_idx = ilayer[idx];
-                            if (l_idx >= 0 && l_idx < layer.size()) {
+                            if (l_idx >= 0 && l_idx < static_cast<int>(layer.size())) {
                                 replace_in_vector(layer[l_idx], idx, 0);
                             }
                         }
@@ -248,7 +249,7 @@ make_smoothed_dendrogram(
                         length_cc[ii] = 0;
                         length_duration[ii] = 0;
                         int l_idx = ilayer[ii];
-                        if (l_idx >= 0 && l_idx < layer.size()) {
+                        if (l_idx >= 0 && l_idx < static_cast<int>(layer.size())) {
                             replace_in_vector(layer[l_idx], ii, 0);
                         }
                     }
@@ -273,7 +274,7 @@ make_smoothed_dendrogram(
                     nduration.row(ii).setZero();
                     length_cc[ii] = 0;
                     int l_idx = ilayer[ii];
-                    if (l_idx >= 0 && l_idx < layer.size()) {
+                    if (l_idx >= 0 && l_idx < static_cast<int>(layer.size())) {
                         replace_in_vector(layer[l_idx], ii, 0);
                     }
                 }
@@ -407,7 +408,8 @@ make_smoothed_dendrogram(
             max_start = std::max(max_start, nduration(idx, 0));
             min_end = std::min(min_end, nduration(idx, 1));
         }
-        nduration.row(ii) << max_start, min_end;
+        nduration(ii, 0) = max_start;
+        nduration(ii, 1) = min_end;
 
         nchildren[ii].clear();
         // Update nE
