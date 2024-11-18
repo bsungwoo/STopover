@@ -98,7 +98,7 @@ make_original_dendrogram_cc(
             voxel_to_index[cvoxels[idx]] = idx;
         }
 
-        // Build sub adjacency matrix
+        // Build sub adjacency matrix as edge list
         size_t n_cvoxels = cvoxels.size();
         std::vector<std::vector<int>> edge_list(n_cvoxels);
 
@@ -175,23 +175,27 @@ make_original_dendrogram_cc(
                 history[ncc] = std::vector<int>();
             }
         } else {
-            // Construct nA_tmp
+            // Construct nA_tmp with self-loops
             int N = neighbor_cc.size() + S;
             std::vector<std::vector<int>> edge_list_tmp(N);
+
+            // Add self-loops
+            for (int x = 0; x < N; ++x) {
+                edge_list_tmp[x].push_back(x);
+            }
 
             // Add edges between neighbor_cc and new components
             for (size_t row = 0; row < neighbor_cc.size(); ++row) {
                 for (Eigen::SparseMatrix<double, Eigen::RowMajor>::InnerIterator it(nA, neighbor_cc[row]); it; ++it) {
                     int col = it.col();
+                    if (col >= S) continue; // Prevent out-of-bounds
                     int col_idx = neighbor_cc.size() + col;
                     edge_list_tmp[row].push_back(col_idx);
                     edge_list_tmp[col_idx].push_back(row);
                 }
             }
 
-            // Add self-loops (implicitly via BFS traversal)
-
-            // Extract connected components from edge_list_tmp
+            // Extract connected components from nA_tmp
             std::vector<std::vector<int>> CC_profiles_tmp = connected_components(edge_list_tmp);
             int S_tmp = CC_profiles_tmp.size();
 
@@ -216,6 +220,10 @@ make_original_dendrogram_cc(
                     for (int idx : tind2) {
                         CC[cc_idx].insert(CC[cc_idx].end(), nCC[idx].begin(), nCC[idx].end());
                     }
+                    // Remove duplicates
+                    std::sort(CC[cc_idx].begin(), CC[cc_idx].end());
+                    CC[cc_idx].erase(std::unique(CC[cc_idx].begin(), CC[cc_idx].end()), CC[cc_idx].end());
+
                     // Update ck_cc
                     for (int idx : CC[cc_idx]) {
                         ck_cc[idx] = cc_idx;
@@ -231,6 +239,10 @@ make_original_dendrogram_cc(
                         new_CC.insert(new_CC.end(), nCC[idx].begin(), nCC[idx].end());
                     }
 
+                    // Remove duplicates
+                    std::sort(new_CC.begin(), new_CC.end());
+                    new_CC.erase(std::unique(new_CC.begin(), new_CC.end()), new_CC.end());
+
                     // Update ck_cc
                     for (int idx : new_CC) {
                         ck_cc[idx] = ncc;
@@ -242,19 +254,36 @@ make_original_dendrogram_cc(
                     // Update duration
                     duration(ncc, 0) = threshold[i];
                     for (int idx : tind1) {
-                        duration(idx, 1) = threshold[i];
+                        if (idx >= 0 && idx < p) { // Safety check
+                            duration(idx, 1) = threshold[i];
+                        }
+                    }
+
+                    for (size_t ind = 0; ind < tind1.size(); ++ind) {
+                        int e = tind1[ind];
+                        for (size_t j = 0; j < tind1.size(); ++j) {
+                            int j_idx = tind1[j];
+                            if (j_idx != e) {
+                                // Set E[j, e] to threshold[i]
+                                E.coeffRef(j_idx, e) = threshold[i];
+                                // Ensure symmetry by setting E[e, j] as well
+                                E.coeffRef(e, j_idx) = threshold[i];
+                            }
+                            // If j_idx == e, retain the original E[j_idx, e]
+                            // No action needed since we don't modify E[e, e]
+                        }
                     }
 
                     // Update E
+                    // Set E[new_cc, new_cc] = threshold[i]
+                    E.insert(ncc, ncc) = threshold[i];
+
+                    // Set E[new_cc, tind1] and E[tind1, new_cc] to threshold[i]
                     for (size_t idx1 = 0; idx1 < tind1.size(); ++idx1) {
-                        for (size_t idx2 = idx1; idx2 < tind1.size(); ++idx2) {
-                            E.coeffRef(tind1[idx1], tind1[idx2]) = threshold[i];
-                            E.coeffRef(tind1[idx2], tind1[idx1]) = threshold[i];
-                        }
-                        E.coeffRef(ncc, tind1[idx1]) = threshold[i];
-                        E.coeffRef(tind1[idx1], ncc) = threshold[i];
+                        int tind1_idx = tind1[idx1];
+                        E.insert(ncc, tind1_idx) = threshold[i];
+                        E.insert(tind1_idx, ncc) = threshold[i];
                     }
-                    E.coeffRef(ncc, ncc) = threshold[i];
 
                     // Update history
                     history[ncc] = tind1;
