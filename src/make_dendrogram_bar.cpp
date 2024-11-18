@@ -163,12 +163,8 @@ make_dendrogram_bar(
         nhorizontal_y = chorizontal_y;
         ndots = cdots;
 
-        // Ensure matrices have the correct sizes
-        if (nvertical_x.rows() != ncc) nvertical_x.conservativeResize(ncc, 2);
-        if (nvertical_y.rows() != ncc) nvertical_y.conservativeResize(ncc, 2);
-        if (nhorizontal_x.rows() != ncc) nhorizontal_x.conservativeResize(ncc, 2);
-        if (nhorizontal_y.rows() != ncc) nhorizontal_y.conservativeResize(ncc, 2);
-        if (ndots.rows() != ncc) ndots.conservativeResize(ncc, 2);
+        // Remove resizing if input matrices are guaranteed to be (ncc, 2)
+        // If not, ensure that input matrices are correctly sized before passing to this function
 
         // Set ind_empty rows to zero
         for (int idx : ind_empty) {
@@ -187,8 +183,12 @@ make_dendrogram_bar(
                 std::swap(sorted_duration(0), sorted_duration(1));
             }
             nvertical_y.row(ii) = sorted_duration;
+
+            // Set nhorizontal_x and nhorizontal_y to zero
             nhorizontal_x.row(ii).setZero();
             nhorizontal_y.row(ii).setZero();
+
+            // Assign ndots
             ndots.row(ii) = Eigen::RowVector2d(nvertical_x(ii, 0), nvertical_y(ii, 1));
         }
 
@@ -200,7 +200,8 @@ make_dendrogram_bar(
                     tx.push_back(nvertical_x(h, 0));
                 }
                 if (!tx.empty()) {
-                    double mean_tx = std::accumulate(tx.begin(), tx.end(), 0.0) / tx.size();
+                    double sum_tx = std::accumulate(tx.begin(), tx.end(), 0.0);
+                    double mean_tx = sum_tx / tx.size();
                     double min_tx = *std::min_element(tx.begin(), tx.end());
                     double max_tx = *std::max_element(tx.begin(), tx.end());
 
