@@ -64,7 +64,7 @@ make_smoothed_dendrogram(
                 std::back_inserter(intersect)
             );
 
-            if (chistory_i_sorted.size() > 0 && intersect.size() == chistory_i_sorted.size()) {
+            if (!chistory_i_sorted.empty() && intersect.size() == chistory_i_sorted.size()) {
                 if (std::find(ind_past.begin(), ind_past.end(), i) == ind_past.end()) {
                     ttind.push_back(i);
                 }
@@ -109,8 +109,15 @@ make_smoothed_dendrogram(
             int ii = layer[i][j];
             if (ii != 0 && length_cc[ii] < min_size && ck_delete[ii] == 0) {
                 if (nparent[ii] != -1) {
+                    int parent_idx = nparent[ii];
                     // Find siblings
-                    std::vector<int> jj = nchildren[nparent[ii]];
+                    std::vector<int> jj = nchildren[parent_idx];
+
+                    // Sort jj for set operations
+                    std::vector<int> jj_sorted = jj;
+                    std::sort(jj_sorted.begin(), jj_sorted.end());
+
+                    // Compute ck
                     std::vector<int> ck(jj.size());
                     for (size_t k = 0; k < jj.size(); ++k) {
                         ck[k] = (length_cc[jj[k]] >= min_size) ? 1 : 0;
@@ -119,7 +126,6 @@ make_smoothed_dendrogram(
                     int sum_ck = std::accumulate(ck.begin(), ck.end(), 0);
                     if (sum_ck <= 1) {
                         // Merge back into parent
-                        int parent_idx = nparent[ii];
                         if (sum_ck == 1) {
                             // Find sibling to keep
                             int tind = -1;
@@ -167,7 +173,10 @@ make_smoothed_dendrogram(
                     } else {
                         // Delete current component
                         ck_delete[ii] = 1;
-                        nchildren[nparent[ii]].erase(std::remove(nchildren[nparent[ii]].begin(), nchildren[nparent[ii]].end(), ii), nchildren[nparent[ii]].end());
+                        // Remove ii from parent's children
+                        auto& parent_children = nchildren[parent_idx];
+                        parent_children.erase(std::remove(parent_children.begin(), parent_children.end(), ii), parent_children.end());
+
                         nCC[ii].clear();
                         nchildren[ii].clear();
                         nparent[ii] = 0;
@@ -207,13 +216,20 @@ make_smoothed_dendrogram(
         std::vector<int> ttind;
         for (int i = 0; i < ncc; ++i) {
             if (!nchildren[i].empty()) {
+                // Sort nchildren[i] and ind_past
+                std::vector<int> nchildren_i_sorted = nchildren[i];
+                std::sort(nchildren_i_sorted.begin(), nchildren_i_sorted.end());
+
+                std::vector<int> ind_past_sorted = ind_past;
+                std::sort(ind_past_sorted.begin(), ind_past_sorted.end());
+
                 std::vector<int> intersect;
                 std::set_intersection(
-                    nchildren[i].begin(), nchildren[i].end(),
-                    ind_past.begin(), ind_past.end(),
+                    nchildren_i_sorted.begin(), nchildren_i_sorted.end(),
+                    ind_past_sorted.begin(), ind_past_sorted.end(),
                     std::back_inserter(intersect)
                 );
-                if (intersect.size() == nchildren[i].size()) {
+                if (intersect.size() == nchildren_i_sorted.size()) {
                     if (std::find(ind_past.begin(), ind_past.end(), i) == ind_past.end()) {
                         ttind.push_back(i);
                     }
