@@ -219,7 +219,7 @@ std::vector<std::vector<int>> extract_connected_comp_python_style(
 }
 
 // Function to extract the connected location matrix
-Eigen::SparseMatrix<double> extract_connected_loc_mat_python_style(
+Eigen::SparseMatrix<int> extract_connected_loc_mat_python_style(
     const std::vector<std::vector<int>>& CC, int num_spots, const std::string& format) {
 
     Eigen::MatrixXd CC_loc_arr = Eigen::MatrixXd::Zero(num_spots, CC.size());
@@ -228,7 +228,7 @@ Eigen::SparseMatrix<double> extract_connected_loc_mat_python_style(
         const auto& element = CC[num];
         for (int idx : element) {
             if (idx >= 0 && idx < num_spots) { // Safety check
-                CC_loc_arr(idx, num) = static_cast<double>(num) + 1.0; // Use double
+                CC_loc_arr(idx, num) = static_cast<int>(num) + 1;
             }
         }
     }
@@ -241,8 +241,8 @@ Eigen::SparseMatrix<double> extract_connected_loc_mat_python_style(
 }
 
 // Function to filter connected components based on expression percentile
-Eigen::SparseMatrix<double> filter_connected_loc_exp_python_style(
-    const Eigen::SparseMatrix<double>& CC_loc_mat,
+Eigen::SparseMatrix<int> filter_connected_loc_exp_python_style(
+    const Eigen::SparseMatrix<int>& CC_loc_mat,
     const Eigen::VectorXd& feat_data,
     double thres_per) {
 
@@ -345,7 +345,7 @@ Eigen::VectorXd topological_comp_res(
     std::vector<std::vector<int>> CC_list = extract_connected_comp_python_style(t, A, threshold, feat.size(), min_size);
 
     // Extract location of connected components as sparse matrix
-    Eigen::SparseMatrix<double> CC_loc_mat = extract_connected_loc_mat_python_style(CC_list, feat.size(), "sparse");
+    Eigen::SparseMatrix<int> CC_loc_mat = extract_connected_loc_mat_python_style(CC_list, feat.size(), "sparse");
 
     // Filter connected components based on feature expression percentile
     CC_loc_mat = filter_connected_loc_exp_python_style(CC_loc_mat, feat, thres_per);
