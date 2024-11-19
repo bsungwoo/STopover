@@ -246,74 +246,64 @@ Eigen::SparseMatrix<double> filter_connected_loc_exp_python_style(
     const Eigen::VectorXd& feat_data,
     int thres_per) {
 
-    // Step 1: Sum CC_loc_mat across columns to get CC_mat_sum (p x 1 vector)
-    // Since CC_loc_mat is binary, CC_mat_sum will represent the connected component label
-    // Assuming each spot belongs to only one connected component
-    Eigen::VectorXd CC_mat_sum = CC_loc_mat * Eigen::VectorXd::Ones(CC_loc_mat.cols());
+    // Vector to store the mean expression value of each connected component
+    std::vector<std::pair<int, double>> CC_mean;
 
-    // Step 2: Group by CC_mat_sum (connected component labels) and compute mean of feat_data
-    std::unordered_map<int, std::vector<double>> CC_groups;
-    CC_groups.reserve(CC_loc_mat.cols());
+    int num_components = CC_loc_mat.cols();
 
-    for (int i = 0; i < CC_mat_sum.size(); ++i) {
-        int label = static_cast<int>(CC_mat_sum(i));
-        if (label != 0) { // Exclude label 0 if applicable
-            CC_groups[label].emplace_back(feat_data(i));
+    // Compute mean expression for each connected component
+    for (int i = 0; i < num_components; ++i) {
+        int connected_component_label = i + 1; // Labels start from 1
+
+        // Get the indices of the spots in this connected component
+        std::vector<int> indices;
+        for (Eigen::SparseMatrix<double>::InnerIterator it(CC_loc_mat, i); it; ++it) {
+            indices.push_back(it.row());
+        }
+        if (!indices.empty()) {
+            // Compute the mean of feat_data over these indices
+            double sum = 0.0;
+            for (int idx : indices) {
+                sum += feat_data(idx);
+            }
+            double mean_value = sum / indices.size();
+            CC_mean.emplace_back(connected_component_label, mean_value);
         }
     }
 
-    // Step 3: Compute mean feature value per connected component
-    std::vector<std::pair<int, double>> CC_mean;
-    CC_mean.reserve(CC_groups.size());
-
-    for (const auto& pair : CC_groups) {
-        int label = pair.first;
-        const std::vector<double>& values = pair.second;
-        double sum = std::accumulate(values.begin(), values.end(), 0.0);
-        double mean_value = sum / static_cast<double>(values.size());
-        CC_mean.emplace_back(label, mean_value);
-    }
-
-    // Step 4: Sort connected components by mean values in descending order
+    // Sort components based on expression values in descending order
     std::sort(CC_mean.begin(), CC_mean.end(),
-              [](const std::pair<int, double>& a, const std::pair<int, double>& b) {
+              [](const std::pair<int, double>& a, const std::pair<int, double>& b) -> bool {
                   return a.second > b.second;
               });
 
-    // Step 5: Determine number of components to keep based on threshold
-    int num_components_to_keep = static_cast<int>(CC_mean.size() * (1.0 - (static_cast<double>(thres_per) / 100.0)));
+    // Determine number of components to keep based on threshold
+    int num_components_to_keep = static_cast<int>(CC_mean.size() * (1.0 - (thres_per / 100.0)));
     num_components_to_keep = std::max(0, std::min(num_components_to_keep, static_cast<int>(CC_mean.size())));
     CC_mean.resize(num_components_to_keep);
 
-    // Step 6: Get indices of components to keep (zero-based)
+    // Collect the indices of connected components to keep
     std::vector<int> components_to_keep;
-    components_to_keep.reserve(CC_mean.size());
-
     for (const auto& pair : CC_mean) {
         int label = pair.first;
-        components_to_keep.emplace_back(label - 1); // Convert to zero-based index
-    }
-
-    std::sort(components_to_keep.begin(), components_to_keep.end());
-
-    // Edge Case: If no components are kept, return an empty matrix or handle accordingly
-    if (components_to_keep.empty()) {
-        // Return an empty sparse matrix with the same number of rows and zero columns
-        return Eigen::SparseMatrix<double>(CC_loc_mat.rows(), 0);
-    }
-
-    // Step 7: Filter CC_loc_mat accordingly
-    Eigen::SparseMatrix<double> CC_loc_mat_fin(CC_loc_mat.rows(), components_to_keep.size());
-    std::vector<Eigen::Triplet<double>> tripletList_fin;
-    tripletList_fin.reserve(CC_loc_mat.nonZeros());
-
-    for (size_t idx = 0; idx < components_to_keep.size(); ++idx) {
-        int col_idx = components_to_keep[idx];
-        for (Eigen::SparseMatrix<double>::InnerIterator it(CC_loc_mat, col_idx); it; ++it) {
-            tripletList_fin.emplace_back(it.row(), static_cast<int>(idx), it.value());
+        if (label != 0) { // Exclude label 0
+            components_to_keep.push_back(label - 1); // Subtract 1 to get zero-based index
         }
     }
-    CC_loc_mat_fin.setFromTriplets(tripletList_fin.begin(), tripletList_fin.end());
+    std::sort(components_to_keep.begin(), components_to_keep.end());
+
+    // Create a new sparse matrix with filtered components
+    Eigen::SparseMatrix<double> CC_loc_mat_fin(CC_loc_mat.rows(), components_to_keep.size());
+    std::vector<Eigen::Triplet<double>> tripletList;
+
+    for (size_t idx = 0; idx < components_to_keep.size(); ++idx) {
+        int original_col = components_to_keep[idx];
+        for (Eigen::SparseMatrix<double>::InnerIterator it(CC_loc_mat, original_col); it; ++it) {
+            tripletList.emplace_back(it.row(), static_cast<int>(idx), it.value());
+        }
+    }
+
+    CC_loc_mat_fin.setFromTriplets(tripletList.begin(), tripletList.end());
     CC_loc_mat_fin.makeCompressed();
 
     return CC_loc_mat_fin;
