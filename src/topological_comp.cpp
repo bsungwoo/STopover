@@ -222,7 +222,8 @@ std::vector<std::vector<int>> extract_connected_comp_python_style(
 Eigen::SparseMatrix<double> extract_connected_loc_mat_python_style(
     const std::vector<std::vector<int>>& CC, int num_spots, const std::string& format) {
 
-    Eigen::MatrixXi CC_loc_arr = Eigen::MatrixXi::Zero(num_spots, CC.size());
+    // Initialize a double matrix with zeros
+    Eigen::MatrixXd CC_loc_arr = Eigen::MatrixXd::Zero(num_spots, CC.size());
 
     std::vector<bool> spot_assigned(num_spots, false); // Track spot assignments
 
@@ -233,9 +234,6 @@ Eigen::SparseMatrix<double> extract_connected_loc_mat_python_style(
                 if (!spot_assigned[idx]) { // Ensure exclusivity
                     CC_loc_arr(idx, num) = static_cast<double>(num) + 1.0;
                     spot_assigned[idx] = true;
-                } else {
-                    // Handle overlapping assignments, e.g., throw an error or skip
-                    // For identical behavior, assuming exclusivity is already handled
                 }
             }
         }
@@ -249,8 +247,8 @@ Eigen::SparseMatrix<double> extract_connected_loc_mat_python_style(
 }
 
 // Function to filter connected components based on expression percentile
-Eigen::SparseMatrix<int> filter_connected_loc_exp_python_style(
-    const Eigen::SparseMatrix<int>& CC_loc_mat,
+Eigen::SparseMatrix<double> filter_connected_loc_exp_python_style(
+    const Eigen::SparseMatrix<double>& CC_loc_mat, // Changed to double
     const Eigen::VectorXd& feat_data,
     double thres_per) {
 
@@ -270,7 +268,7 @@ Eigen::SparseMatrix<int> filter_connected_loc_exp_python_style(
             for (int idx : indices) {
                 sum += feat_data(idx);
             }
-            double mean_value = sum / indices.size();
+            double mean_value = sum / static_cast<double>(indices.size());
             CC_mean.emplace_back(i, mean_value);
         }
     }
