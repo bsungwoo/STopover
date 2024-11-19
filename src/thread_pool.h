@@ -10,7 +10,7 @@
 #include <atomic>
 #include <stdexcept>
 #include <iostream>
-#include "ThreadSafeQueue.h" // Include the enhanced ThreadSafeQueue
+#include "thread_safe_queue.h" // Include the enhanced ThreadSafeQueue
 
 class ThreadPool {
 public:
