@@ -353,7 +353,7 @@ Eigen::VectorXd topological_comp_res(
     Eigen::SparseMatrix<int> CC_loc_mat = extract_connected_loc_mat_python_style(CC_list, feat.size(), "sparse");
 
     // Filter connected components based on feature expression percentile
-    CC_loc_mat = filter_connected_loc_exp_python_style(CC_loc_mat, feat, thres_per);
+    CC_loc_mat = filter_connected_loc_exp_python_style(CC_loc_mat.cast<double>(), feat, thres_per).cast<int>();
 
     // Compute row sums
     Eigen::VectorXd row_sums = CC_loc_mat * Eigen::VectorXd::Ones(CC_loc_mat.cols());
