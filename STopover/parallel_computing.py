@@ -22,7 +22,7 @@ def create_batches(data, batch_size):
 def parallel_with_progress_topological_comp(
     locs, feats, spatial_type="visium", fwhm=2.5,
     min_size=5, thres_per=30, return_mode="all", num_workers=4,
-    log_callback_func=None, batch_size=10000,
+    log_callback_func=None, batch_size=1000,
 ):
     """
     Parallel computation for topological component extraction using batched task submission.
@@ -96,7 +96,7 @@ def parallel_with_progress_topological_comp(
 def parallel_with_progress_jaccard_composite(
     CCx_loc_sums, CCy_loc_sums, feat_xs=None, feat_ys=None,
     jaccard_type="default", num_workers=4,
-    log_callback_func=None, batch_size=10000,
+    log_callback_func=None, batch_size=1000,
 ):
     """
     Parallel computation for Jaccard composite index using batched task submission.
