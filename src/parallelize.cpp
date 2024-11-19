@@ -6,9 +6,6 @@
 #include <iostream>
 #include <fstream>
 #include "thread_safe_queue.h"
-#include "custom_streambuf.h"
-#include "cout_redirector.h"
-#include "logger.h"
 
 #include <stdexcept>
 #include <pybind11/pybind11.h>

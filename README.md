@@ -1,5 +1,6 @@
 # STopover
 Tool to capture spatial colocalization and interaction in the TME using topological analysis in spatial transcriptomics data  
+* C++ Version of the STopover  
 * Cite as: Bae S, Lee H, Na KJ, Lee DS, Choi H, Kim YT. STopover captures spatial colocalization and interaction in the tumor microenvironment using topological analysis in spatial transcriptomics data. bioRxiv, 2022.  
 * https://doi.org/10.1101/2022.11.16.516708  
 
@@ -9,7 +10,7 @@ Tool to capture spatial colocalization and interaction in the TME using topologi
 ```Plain Text  
   conda create -n STopover python=3.8
   conda activate STopover
-  pip install jupyter git+https://github.com/bsungwoo/STopover.git
+  pip install jupyter git+https://github.com/bsungwoo/STopover.git@pybind
   # Install additional packages for VisiumHD analysis
   pip install bin2cell tacco tensorflow
   python -m ipykernel install --user --name STopover --display-name STopover
