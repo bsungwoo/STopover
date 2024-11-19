@@ -222,13 +222,18 @@ std::vector<std::vector<int>> extract_connected_comp_python_style(
 Eigen::SparseMatrix<int> extract_connected_loc_mat_python_style(
     const std::vector<std::vector<int>>& CC, int num_spots, const std::string& format) {
 
-    Eigen::MatrixXd CC_loc_arr = Eigen::MatrixXd::Zero(num_spots, CC.size());
+    Eigen::MatrixXi CC_loc_arr = Eigen::MatrixXi::Zero(num_spots, CC.size());
+
+    std::vector<bool> spot_assigned(num_spots, false); // Track spot assignments
 
     for (size_t num = 0; num < CC.size(); ++num) {
         const auto& element = CC[num];
         for (int idx : element) {
             if (idx >= 0 && idx < num_spots) { // Safety check
-                CC_loc_arr(idx, num) = static_cast<int>(num) + 1;
+                if (!spot_assigned[idx]) { // Ensure exclusivity
+                    CC_loc_arr(idx, num) = static_cast<int>(num) + 1;
+                    spot_assigned[idx] = true;
+                }
             }
         }
     }
