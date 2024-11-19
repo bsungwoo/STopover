@@ -67,26 +67,6 @@ Eigen::MatrixXd array_to_matrix(const py::array_t<double>& array) {
     return Eigen::MatrixXd(mat);
 }
 
-// Placeholder for topological_comp_res function
-// Replace this with your actual implementation
-Eigen::VectorXd topological_comp_res(const Eigen::MatrixXd& loc, const std::string& spatial_type,
-                                     double fwhm, const Eigen::VectorXd& feat, int min_size,
-                                     double thres_per, const std::string& return_mode) {
-    // Simulate computation
-    Eigen::VectorXd result = loc.rowwise().sum(); // Example operation
-    return result;
-}
-
-// Placeholder for jaccard_composite function
-// Replace this with your actual implementation
-double jaccard_composite(const Eigen::VectorXd& CCx_sum, const Eigen::VectorXd& CCy_sum,
-                        const Eigen::VectorXd* feat_x, const Eigen::VectorXd* feat_y) {
-    // Simulate computation
-    double intersection = (CCx_sum.array() * CCy_sum.array()).sum();
-    double union_val = CCx_sum.sum() + CCy_sum.sum() - intersection;
-    return union_val > 0 ? intersection / union_val : 0.0;
-}
-
 // Parallel Topological Comp Function
 std::vector<Eigen::VectorXd> parallel_topological_comp(
     const std::vector<py::array_t<double>>& locs,
