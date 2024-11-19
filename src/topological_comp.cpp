@@ -219,21 +219,23 @@ std::vector<std::vector<int>> extract_connected_comp_python_style(
 }
 
 // Function to extract the connected location matrix
-Eigen::SparseMatrix<int> extract_connected_loc_mat_python_style(
+Eigen::SparseMatrix<double> extract_connected_loc_mat_python_style(
     const std::vector<std::vector<int>>& CC, int num_spots, const std::string& format) {
 
     Eigen::MatrixXi CC_loc_arr = Eigen::MatrixXi::Zero(num_spots, CC.size());
 
-    // Initialize assignment tracker to ensure exclusivity
-    std::vector<bool> spot_assigned(num_spots, false);
+    std::vector<bool> spot_assigned(num_spots, false); // Track spot assignments
 
     for (size_t num = 0; num < CC.size(); ++num) {
         const auto& element = CC[num];
         for (int idx : element) {
             if (idx >= 0 && idx < num_spots) { // Safety check
                 if (!spot_assigned[idx]) { // Ensure exclusivity
-                    CC_loc_arr(idx, num) = static_cast<int>(num) + 1;
+                    CC_loc_arr(idx, num) = static_cast<double>(num) + 1.0;
                     spot_assigned[idx] = true;
+                } else {
+                    // Handle overlapping assignments, e.g., throw an error or skip
+                    // For identical behavior, assuming exclusivity is already handled
                 }
             }
         }
@@ -351,13 +353,13 @@ Eigen::VectorXd topological_comp_res(
     std::vector<std::vector<int>> CC_list = extract_connected_comp_python_style(t, A, threshold, feat.size(), min_size);
 
     // Extract location of connected components as sparse matrix
-    Eigen::SparseMatrix<int> CC_loc_mat = extract_connected_loc_mat_python_style(CC_list, feat.size(), "sparse");
+    Eigen::SparseMatrix<double> CC_loc_mat = extract_connected_loc_mat_python_style(CC_list, feat.size(), "sparse");
 
     // Filter connected components based on feature expression percentile
-    CC_loc_mat = filter_connected_loc_exp_python_style(CC_loc_mat.cast<double>(), feat, thres_per).cast<int>();
+    CC_loc_mat = filter_connected_loc_exp_python_style(CC_loc_mat, feat, thres_per);
 
     // Compute row sums
-    Eigen::VectorXi row_sums = CC_loc_mat * Eigen::VectorXi::Ones(CC_loc_mat.cols());
+    Eigen::VectorXd row_sums = CC_loc_mat * Eigen::VectorXd::Ones(CC_loc_mat.cols());
 
     return row_sums;
 }
