@@ -1,19 +1,20 @@
 import numpy as np
 import tqdm
+import threading
 from .parallelize import parallel_topological_comp, parallel_jaccard_composite
 
-def log_callback(message):
+def default_log_callback(message):
     print(f"C++ Log: {message}", end='')  # 'end' to avoid adding extra newlines
 
 def parallel_with_progress_topological_comp(
     locs, feats, spatial_type="visium", fwhm=2.5,
     min_size=5, thres_per=30, return_mode="all", num_workers=4,
-    log_callback=None
+    log_callback=None, max_tasks_in_queue=1000
 ):
     """
     Parallel computation for topological component extraction.
     Progress is shown using a tqdm progress bar.
-    
+
     Args:
         locs (list): List of locations (NumPy arrays) to compute adjacency matrix for.
         feats (list): List of feature arrays (NumPy arrays).
@@ -24,7 +25,8 @@ def parallel_with_progress_topological_comp(
         return_mode (str): Return mode.
         num_workers (int): Number of parallel workers.
         log_callback (callable, optional): Function to handle log messages from C++.
-    
+        max_tasks_in_queue (int, optional): Maximum number of tasks allowed in the queue.
+
     Returns:
         list: A list of topological components for each feature.
     """
@@ -38,49 +40,82 @@ def parallel_with_progress_topological_comp(
     
     # Define a default log_callback if none is provided
     if log_callback is None:
-        def log_callback(message):
-            print(f"C++ Log: {message}", end='')  # 'end' to avoid adding extra newlines
+        log_callback = default_log_callback
+
+    # Initialize a semaphore to limit the number of tasks in the queue
+    semaphore = threading.Semaphore(max_tasks_in_queue)
     
+    # Initialize a list to hold threading.Thread objects
+    threads = []
+    
+    # Initialize a lock for thread-safe result assignment
+    result_lock = threading.Lock()
+    result = [None] * len(feats)  # Pre-allocate list for results
+
     # Create a progress bar
     with tqdm.tqdm(total=len(feats)) as pbar:
-        # Define a Python callback function to update progress
-        def update_progress():
+        # Define a Python callback function to update progress and release semaphore
+        def update_progress(index):
             pbar.update(1)
+            semaphore.release()  # Release semaphore to allow more tasks to be enqueued
+
+        # Define a wrapper function to enqueue tasks
+        def enqueue_task(index, loc, feat):
+            try:
+                semaphore.acquire()  # Acquire semaphore before enqueuing
+                # Enqueue the task and get the future
+                future = parallel_topological_comp(
+                    locs=[loc],
+                    spatial_type=spatial_type,
+                    fwhm=fwhm,
+                    feats=[feat],
+                    min_size=min_size,
+                    thres_per=thres_per,
+                    return_mode=return_mode,
+                    num_workers=1,  # Use single worker per enqueue to prevent over-subscription
+                    progress_callback=lambda: update_progress(index),
+                    log_callback=log_callback
+                )
+                # Retrieve the result
+                topo_result = future[0]  # Since we passed a single task
+                with result_lock:
+                    result[index] = topo_result
+            except Exception as e:
+                log_callback(f"\nException during task {index}: {e}\n")
+                semaphore.release()  # Ensure semaphore is released even on exception
+
+        # Launch threads to enqueue tasks
+        for index, (loc, feat) in enumerate(zip(locs, feats)):
+            thread = threading.Thread(target=enqueue_task, args=(index, loc, feat))
+            thread.start()
+            threads.append(thread)
         
-        try:
-            # Call the C++ function in parallel, passing both callbacks
-            result = parallel_topological_comp(
-                locs=locs,
-                spatial_type=spatial_type,
-                fwhm=fwhm,
-                feats=feats,
-                min_size=min_size,
-                thres_per=thres_per,
-                return_mode=return_mode,
-                num_workers=num_workers,
-                progress_callback=update_progress,
-                log_callback=log_callback
-            )
-        except Exception as e:
-            print(f"\nException during parallel_topological_comp: {e}")
-            raise
+        # Wait for all threads to complete
+        for thread in threads:
+            thread.join()
     
     return result
 
 
-def parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums, feat_xs=None, feat_ys=None, jaccard_type="default", num_workers=4):
+def parallel_with_progress_jaccard_composite(
+    CCx_loc_sums, CCy_loc_sums, feat_xs=None, feat_ys=None,
+    jaccard_type="default", num_workers=4,
+    log_callback=None, max_tasks_in_queue=1000
+):
     """
     Parallel computation for Jaccard composite index.
     Progress is shown using a tqdm progress bar.
-    
+
     Args:
         CCx_loc_sums (list or np.ndarray): List of NumPy arrays for connected component location sums for feature x.
         CCy_loc_sums (list or np.ndarray): List of NumPy arrays for connected component location sums for feature y.
         feat_xs (list or np.ndarray, optional): List of NumPy arrays for feature x values.
         feat_ys (list or np.ndarray, optional): List of NumPy arrays for feature y values.
         jaccard_type (str, optional): Type of Jaccard index to calculate. Either "default" or "weighted".
-        num_workers (int, optional): Number of parallel workers.
-        
+        num_workers (int): Number of parallel workers.
+        log_callback (callable, optional): Function to handle log messages from C++.
+        max_tasks_in_queue (int, optional): Maximum number of tasks allowed in the queue.
+
     Returns:
         list: A list of Jaccard composite indices.
     """
@@ -104,24 +139,60 @@ def parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums, feat_xs
     if isinstance(feat_ys, np.ndarray):
         feat_ys = feat_ys.tolist()
     
+    # Define a default log_callback if none is provided
+    if log_callback is None:
+        log_callback = default_log_callback
+
+    # Initialize a semaphore to limit the number of tasks in the queue
+    semaphore = threading.Semaphore(max_tasks_in_queue)
+    
+    # Initialize a list to hold threading.Thread objects
+    threads = []
+    
+    # Initialize a lock for thread-safe result assignment
+    result_lock = threading.Lock()
+    result = [None] * len(CCx_loc_sums)  # Pre-allocate list for results
+
     # Create a progress bar
     with tqdm.tqdm(total=len(CCx_loc_sums)) as pbar:
-        # Define a Python callback function to update progress
-        def update_progress():
+        # Define a Python callback function to update progress and release semaphore
+        def update_progress(index):
             pbar.update(1)
-        
-        # Call the C++ function in parallel, passing the progress callback
-        result = parallel_jaccard_composite(
-            CCx_loc_sums=CCx_loc_sums, 
-            CCy_loc_sums=CCy_loc_sums,
-            feat_xs=feat_xs,
-            feat_ys=feat_ys,
-            jaccard_type=jaccard_type,
-            num_workers=num_workers,
-            progress_callback=update_progress,
-            log_callback=log_callback
-        )
+            semaphore.release()  # Release semaphore to allow more tasks to be enqueued
 
+        # Define a wrapper function to enqueue tasks
+        def enqueue_task(index, CCx_sum, CCy_sum, feat_x, feat_y):
+            try:
+                semaphore.acquire()  # Acquire semaphore before enqueuing
+                # Enqueue the task and get the future
+                future = parallel_jaccard_composite(
+                    CCx_loc_sums=[CCx_sum],
+                    CCy_loc_sums=[CCy_sum],
+                    feat_xs=[feat_x],
+                    feat_ys=[feat_y],
+                    jaccard_type=jaccard_type,
+                    num_workers=1,  # Use single worker per enqueue to prevent over-subscription
+                    progress_callback=lambda: update_progress(index),
+                    log_callback=log_callback
+                )
+                # Retrieve the result
+                jaccard_result = future[0]  # Since we passed a single task
+                with result_lock:
+                    result[index] = jaccard_result
+            except Exception as e:
+                log_callback(f"\nException during task {index}: {e}\n")
+                semaphore.release()  # Ensure semaphore is released even on exception
+
+        # Launch threads to enqueue tasks
+        for index, (CCx_sum, CCy_sum, feat_x, feat_y) in enumerate(zip(CCx_loc_sums, CCy_loc_sums, feat_xs, feat_ys)):
+            thread = threading.Thread(target=enqueue_task, args=(index, CCx_sum, CCy_sum, feat_x, feat_y))
+            thread.start()
+            threads.append(thread)
+        
+        # Wait for all threads to complete
+        for thread in threads:
+            thread.join()
+    
     return result
 
 
@@ -136,5 +207,5 @@ def parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums, feat_xs
 
 # Example calls:
 # result_extract_adjacency = parallel_with_progress_extract_adjacency(locs)
-# result_topological_comp = parallel_with_progress_topological_comp(feats, A_matrices, masks)
+# result_topological_comp = parallel_with_progress_topological_comp(locs, feats)
 # result_jaccard_composite = parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums)
