@@ -224,7 +224,8 @@ Eigen::SparseMatrix<int> extract_connected_loc_mat_python_style(
 
     Eigen::MatrixXi CC_loc_arr = Eigen::MatrixXi::Zero(num_spots, CC.size());
 
-    std::vector<bool> spot_assigned(num_spots, false); // Track spot assignments
+    // Initialize assignment tracker to ensure exclusivity
+    std::vector<bool> spot_assigned(num_spots, false);
 
     for (size_t num = 0; num < CC.size(); ++num) {
         const auto& element = CC[num];
@@ -356,7 +357,7 @@ Eigen::VectorXd topological_comp_res(
     CC_loc_mat = filter_connected_loc_exp_python_style(CC_loc_mat.cast<double>(), feat, thres_per).cast<int>();
 
     // Compute row sums
-    Eigen::VectorXd row_sums = CC_loc_mat * Eigen::VectorXd::Ones(CC_loc_mat.cols());
+    Eigen::VectorXi row_sums = CC_loc_mat * Eigen::VectorXi::Ones(CC_loc_mat.cols());
 
     return row_sums;
 }
