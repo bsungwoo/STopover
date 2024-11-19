@@ -10,7 +10,7 @@
 #include <atomic>
 #include <stdexcept>
 #include <iostream>
-#include "ThreadSafeQueue.h" // Include the templated ThreadSafeQueue
+#include "thread_safe_queue.h" // Include the templated ThreadSafeQueue
 
 class ThreadPool {
 public:
