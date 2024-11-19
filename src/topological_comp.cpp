@@ -156,7 +156,7 @@ Eigen::VectorXd smooth_feature_vector_python_style(const Eigen::VectorXd& feat, 
 
 // Function to compute thresholds similar to np.setdiff1d(t, 0) sorted descendingly
 std::vector<double> compute_thresholds_python_style(const Eigen::VectorXd& t) {
-    const double EPSILON = 0;  // Define a small threshold value
+    const double EPSILON = 1e-8;  // Define a small threshold value
     std::vector<double> threshold;
     for (int i = 0; i < t.size(); ++i) {
         if (t[i] > EPSILON) {  // Only add values significantly greater than zero
