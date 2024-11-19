@@ -2,16 +2,6 @@
 #include "make_original_dendrogram.h"
 #include "make_smoothed_dendrogram.h"
 #include "make_dendrogram_bar.h"
-#include <limits>
-#include <algorithm>
-#include <cmath>
-#include <stdexcept>
-#include <tuple>
-#include <vector>
-#include <iostream>
-#include <Eigen/Sparse>
-#include <Eigen/Dense>
-#include <unordered_map>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -260,23 +250,26 @@ Eigen::SparseMatrix<double> filter_connected_loc_exp_python_style(
     Eigen::VectorXd ones = Eigen::VectorXd::Ones(CC_loc_mat.cols());
     Eigen::VectorXd CC_mat_sum = CC_loc_mat * ones;
 
-    // Step 2: Concatenate CC_mat_sum and feat_data into a matrix
-    Eigen::MatrixXd df_CC_loc_exp(CC_mat_sum.size(), 2);
-    df_CC_loc_exp.col(0) = CC_mat_sum;
-    df_CC_loc_exp.col(1) = feat_data;
+    // Step 2: Combine CC_mat_sum and feat_data
+    // Not necessary to create a combined matrix; we can process them directly
 
     // Step 3: Group by CC_mat_sum (connected component labels) and compute mean of feat_data
-    std::unordered_map<double, std::vector<double>> CC_groups;
-    for (int i = 0; i < df_CC_loc_exp.rows(); ++i) {
-        double label = df_CC_loc_exp(i, 0);
-        double value = df_CC_loc_exp(i, 1);
-        CC_groups[label].push_back(value);
+    std::unordered_map<int, std::vector<double>> CC_groups;
+    CC_groups.reserve(CC_loc_mat.cols()); // Reserve space based on number of components
+
+    for (int i = 0; i < CC_mat_sum.size(); ++i) {
+        int label = static_cast<int>(CC_mat_sum(i));
+        if (label != 0) { // Exclude label 0
+            CC_groups[label].emplace_back(feat_data(i));
+        }
     }
 
     // Step 4: Compute mean feature value per connected component
-    std::vector<std::pair<double, double>> CC_mean;
+    std::vector<std::pair<int, double>> CC_mean;
+    CC_mean.reserve(CC_groups.size());
+
     for (const auto& pair : CC_groups) {
-        double label = pair.first;
+        int label = pair.first;
         const std::vector<double>& values = pair.second;
         double sum = std::accumulate(values.begin(), values.end(), 0.0);
         double mean_value = sum / values.size();
@@ -285,28 +278,30 @@ Eigen::SparseMatrix<double> filter_connected_loc_exp_python_style(
 
     // Step 5: Sort connected components by mean values in descending order
     std::sort(CC_mean.begin(), CC_mean.end(),
-              [](const std::pair<double, double>& a, const std::pair<double, double>& b) {
+              [](const std::pair<int, double>& a, const std::pair<int, double>& b) {
                   return a.second > b.second;
               });
 
     // Step 6: Determine number of components to keep based on threshold
-    int num_components_to_keep = static_cast<int>(CC_mean.size() * (1.0 - thres_per / 100.0));
+    int num_components_to_keep = static_cast<int>(CC_mean.size() * (1.0 - (thres_per / 100.0)));
     num_components_to_keep = std::max(0, std::min(num_components_to_keep, static_cast<int>(CC_mean.size())));
     CC_mean.resize(num_components_to_keep);
 
-    // Step 7: Get indices of components to keep
+    // Step 7: Get indices of components to keep (zero-based)
     std::vector<int> components_to_keep;
+    components_to_keep.reserve(CC_mean.size());
+
     for (const auto& pair : CC_mean) {
-        double label = pair.first;
-        if (label != 0) { // Exclude label 0
-            components_to_keep.push_back(static_cast<int>(label) - 1); // Subtract 1 for zero-based indexing
-        }
+        int label = pair.first;
+        components_to_keep.emplace_back(label - 1); // Convert to zero-based index
     }
+
     std::sort(components_to_keep.begin(), components_to_keep.end());
 
     // Step 8: Filter CC_loc_mat accordingly
     Eigen::SparseMatrix<double> CC_loc_mat_fin(CC_loc_mat.rows(), components_to_keep.size());
     std::vector<Eigen::Triplet<double>> tripletList;
+    tripletList.reserve(CC_loc_mat.nonZeros());
 
     for (size_t idx = 0; idx < components_to_keep.size(); ++idx) {
         int col_idx = components_to_keep[idx];

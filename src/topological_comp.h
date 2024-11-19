@@ -3,9 +3,16 @@
 
 #include <Eigen/Sparse>
 #include <Eigen/Dense>
+#include <string>
+#include <limits>
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
 #include <tuple>
 #include <vector>
-#include <string>
+#include <iostream>
+#include <numeric> // Added to use std::accumulate
+#include <unordered_map>
 
 // Function declarations with consistent types
 
