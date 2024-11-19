@@ -1,3 +1,4 @@
+// thread_pool.h
 #ifndef THREAD_POOL_H
 #define THREAD_POOL_H
 
@@ -10,22 +11,30 @@
 #include <condition_variable>
 #include <atomic>
 #include <stdexcept>
-#include <iostream> // For exception logging (optional)
+#include <iostream>
 
-// ThreadPool Class Definition
 class ThreadPool {
 public:
-    // Constructor with threads and max_queue_size
-    ThreadPool(size_t threads, size_t max_queue_size);
-    ~ThreadPool();
+    // Deleted methods to enforce Singleton property
+    ThreadPool(const ThreadPool&) = delete;
+    ThreadPool& operator=(const ThreadPool&) = delete;
+
+    // Static method to get the Singleton instance
+    static ThreadPool& getInstance(size_t threads = std::thread::hardware_concurrency());
 
     // Enqueue a task and return a future
     template<class F, class... Args>
     auto enqueue(F&& f, Args&&... args) 
         -> std::future<typename std::invoke_result<F, Args...>::type>;
 
+    // Destructor
+    ~ThreadPool();
+
 private:
-    // Workers
+    // Private constructor for Singleton
+    ThreadPool(size_t threads);
+
+    // Worker threads
     std::vector<std::thread> workers;
 
     // Task queue
@@ -34,16 +43,28 @@ private:
     // Synchronization
     std::mutex queue_mutex;
     std::condition_variable condition;
-    std::condition_variable queue_not_full; // For bounded queue
-    size_t max_queue_size;
+
+    // Atomic flag to stop the pool
     std::atomic<bool> stop;
 };
 
-// Constructor Implementation
-inline ThreadPool::ThreadPool(size_t threads, size_t max_queue)
-    : stop(false), max_queue_size(max_queue)
+// Implementation
+
+// Singleton accessor
+inline ThreadPool& ThreadPool::getInstance(size_t threads) {
+    static ThreadPool instance(threads);
+    return instance;
+}
+
+// Constructor
+inline ThreadPool::ThreadPool(size_t threads)
+    : stop(false)
 {
-    for(size_t i = 0; i < threads; ++i)
+    if (threads == 0) {
+        threads = 4; // Fallback to 4 threads if hardware_concurrency is not available
+    }
+
+    for(size_t i = 0;i < threads;++i)
         workers.emplace_back(
             [this]
             {
@@ -54,22 +75,18 @@ inline ThreadPool::ThreadPool(size_t threads, size_t max_queue)
                     {
                         std::unique_lock<std::mutex> lock(this->queue_mutex);
                         this->condition.wait(lock,
-                            [this]{ return this->stop || !this->tasks.empty(); });
-                        if(this->stop && this->tasks.empty())
+                            [this]{ return this->stop.load() || !this->tasks.empty(); });
+                        if(this->stop.load() && this->tasks.empty())
                             return;
                         task = std::move(this->tasks.front());
                         this->tasks.pop();
-                        // Notify that there's space in the queue
-                        this->queue_not_full.notify_one();
                     }
 
                     try {
                         task();
                     } catch(const std::exception& e) {
-                        // Handle known exceptions
                         std::cerr << "Task exception: " << e.what() << std::endl;
                     } catch(...) {
-                        // Handle any other exceptions
                         std::cerr << "Task unknown exception." << std::endl;
                     }
                 }
@@ -77,17 +94,17 @@ inline ThreadPool::ThreadPool(size_t threads, size_t max_queue)
         );
 }
 
-// Destructor Implementation
+// Destructor
 inline ThreadPool::~ThreadPool()
 {
-    stop = true;
+    stop.store(true);
     condition.notify_all();
-    queue_not_full.notify_all();
     for(std::thread &worker: workers)
-        worker.join();
+        if(worker.joinable())
+            worker.join();
 }
 
-// Enqueue Method Implementation
+// Enqueue method
 template<class F, class... Args>
 auto ThreadPool::enqueue(F&& f, Args&&... args) 
     -> std::future<typename std::invoke_result<F, Args...>::type>
@@ -97,15 +114,12 @@ auto ThreadPool::enqueue(F&& f, Args&&... args)
     auto task = std::make_shared< std::packaged_task<return_type()> >(
         std::bind(std::forward<F>(f), std::forward<Args>(args)...)
     );
-        
+
     std::future<return_type> res = task->get_future();
     {
-        std::unique_lock<std::mutex> lock(queue_mutex);
+        std::lock_guard<std::mutex> lock(queue_mutex);
 
-        // Wait until the queue has space or the pool is stopping
-        queue_not_full.wait(lock, [this]{ return this->tasks.size() < this->max_queue_size || this->stop; });
-
-        if(stop)
+        if(stop.load())
             throw std::runtime_error("enqueue on stopped ThreadPool");
 
         tasks.emplace([task](){ (*task)(); });
