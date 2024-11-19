@@ -4,7 +4,7 @@
 
 #include <iostream>
 #include <fstream>
-#include "thread_safe_queue.h"
+#include "thread_pool.h"
 
 #include <stdexcept>
 #include <pybind11/pybind11.h>
