@@ -1,14 +1,20 @@
-// parallelize.cpp
-#include "thread_pool.h"
+#include "parallelize.h"
+#include "topological_comp.h"
+#include "jaccard.h"
+
+#include <iostream>
+#include <fstream>
+#include "thread_safe_queue.h"
+
+#include <stdexcept>
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
-#include <vector>
 #include <future>
+#include <vector>
 #include <utility>
 #include <mutex>
-#include <stdexcept>
 
 namespace py = pybind11;
 

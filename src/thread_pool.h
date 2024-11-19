@@ -1,10 +1,8 @@
-// thread_pool.h
 #ifndef THREAD_POOL_H
 #define THREAD_POOL_H
 
 #include <vector>
 #include <thread>
-#include <queue>
 #include <future>
 #include <functional>
 #include <mutex>
@@ -12,6 +10,7 @@
 #include <atomic>
 #include <stdexcept>
 #include <iostream>
+#include "ThreadSafeQueue.h" // Include the enhanced ThreadSafeQueue
 
 class ThreadPool {
 public:
@@ -37,12 +36,8 @@ private:
     // Worker threads
     std::vector<std::thread> workers;
 
-    // Task queue
-    std::queue<std::function<void()>> tasks;
-
-    // Synchronization
-    std::mutex queue_mutex;
-    std::condition_variable condition;
+    // Task queue using ThreadSafeQueue
+    ThreadSafeQueue<std::function<void()>> tasks;
 
     // Atomic flag to stop the pool
     std::atomic<bool> stop;
@@ -71,23 +66,16 @@ inline ThreadPool::ThreadPool(size_t threads)
                 while(true)
                 {
                     std::function<void()> task;
-
-                    {
-                        std::unique_lock<std::mutex> lock(this->queue_mutex);
-                        this->condition.wait(lock,
-                            [this]{ return this->stop.load() || !this->tasks.empty(); });
-                        if(this->stop.load() && this->tasks.empty())
-                            return;
-                        task = std::move(this->tasks.front());
-                        this->tasks.pop();
-                    }
-
-                    try {
-                        task();
-                    } catch(const std::exception& e) {
-                        std::cerr << "Task exception: " << e.what() << std::endl;
-                    } catch(...) {
-                        std::cerr << "Task unknown exception." << std::endl;
+                    if (tasks.pop(task)) { // Retrieve task from ThreadSafeQueue
+                        try {
+                            task();
+                        } catch(const std::exception& e) {
+                            std::cerr << "Task exception: " << e.what() << std::endl;
+                        } catch(...) {
+                            std::cerr << "Task unknown exception." << std::endl;
+                        }
+                    } else { // If pop returns false, queue is finished
+                        return;
                     }
                 }
             }
@@ -97,8 +85,7 @@ inline ThreadPool::ThreadPool(size_t threads)
 // Destructor
 inline ThreadPool::~ThreadPool()
 {
-    stop.store(true);
-    condition.notify_all();
+    tasks.set_finished(); // Signal all worker threads to finish
     for(std::thread &worker: workers)
         if(worker.joinable())
             worker.join();
@@ -116,15 +103,9 @@ auto ThreadPool::enqueue(F&& f, Args&&... args)
     );
 
     std::future<return_type> res = task->get_future();
-    {
-        std::lock_guard<std::mutex> lock(queue_mutex);
-
-        if(stop.load())
-            throw std::runtime_error("enqueue on stopped ThreadPool");
-
-        tasks.emplace([task](){ (*task)(); });
+    if (!tasks.push([task]() { (*task)(); })) { // Push task into ThreadSafeQueue
+        throw std::runtime_error("enqueue on stopped ThreadPool");
     }
-    condition.notify_one();
     return res;
 }
 
