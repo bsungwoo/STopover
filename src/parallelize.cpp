@@ -215,57 +215,6 @@ std::vector<double> parallel_jaccard_composite_py(
     return output;
 }
 
-// Function to perform a simple computation with LoggerSimple only
-std::vector<int> test_logging_function(int num_tasks, py::function progress_callback, py::function log_callback) {
-    // Initialize LoggerSimple only
-    LoggerSimple logger(log_callback);
-
-    logger.log("Starting test_logging_function with " + std::to_string(num_tasks) + " tasks.\n");
-
-    // Initialize ThreadPool
-    ThreadPool pool(4);
-    std::vector<std::future<int>> futures;
-
-    for(int i = 0; i < num_tasks; ++i) {
-        logger.log("Enqueuing task " + std::to_string(i) + "\n");
-        futures.emplace_back(pool.enqueue([i, &logger]() -> int {
-            logger.log("Task " + std::to_string(i) + " is running\n");
-            // Simulate computation
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            logger.log("Task " + std::to_string(i) + " completed\n");
-            return i * i;
-        }));
-        if(progress_callback) {
-            try {
-                py::gil_scoped_acquire acquire;  // Acquire GIL
-                progress_callback();
-            }
-            catch (const py::error_already_set& e) {
-                std::cerr << "Python error in progress_callback: " << e.what() << std::endl;
-            }
-        }
-    }
-
-    logger.log("All tasks enqueued.\n");
-
-    // Collect results
-    std::vector<int> results;
-    for(auto &fut : futures) {
-        try {
-            results.emplace_back(fut.get());
-        }
-        catch (const std::exception& e) {
-            logger.log("Exception while getting result: " + std::string(e.what()) + "\n");
-            throw;
-        }
-    }
-
-    logger.log("All tasks completed. Results collected.\n");
-
-    return results;
-}
-
-
 // Expose to Python via Pybind11
 PYBIND11_MODULE(parallelize, m) {  // Module name within the STopover package
     m.def("parallel_topological_comp", &parallel_topological_comp, "Parallelized topological_comp_res function",
