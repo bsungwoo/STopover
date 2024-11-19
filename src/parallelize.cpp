@@ -72,7 +72,7 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     const std::vector<py::array_t<double>>& locs,
     const std::string& spatial_type, double fwhm,
     const std::vector<py::array_t<double>>& feats,
-    int min_size, int thres_per, const std::string& return_mode, int num_workers,
+    int min_size, double thres_per, const std::string& return_mode, int num_workers,
     py::function progress_callback,
     py::function log_callback) {
 
