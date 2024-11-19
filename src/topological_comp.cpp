@@ -273,25 +273,48 @@ Eigen::SparseMatrix<double> filter_connected_loc_exp_python_style(
                   return a.second > b.second;
               });
 
-    // Determine cutoff based on threshold percentage
-    int cutoff = static_cast<int>(CC_mean.size() * (1.0 - (static_cast<double>(thres_per) / 100.0)));
-    if (cutoff < 0) cutoff = 0;
-    if (cutoff > static_cast<int>(CC_mean.size())) cutoff = static_cast<int>(CC_mean.size());
+    // Determine the number of components to keep based on the threshold percentile
+    int total_components = static_cast<int>(CC_mean.size());
+    int cutoff = static_cast<int>(total_components * (1.0 - (thres_per / 100.0)));
+
+    // Clamp cutoff to [0, total_components]
+    cutoff = std::max(0, std::min(cutoff, total_components));
+
+    // Resize CC_mean to include only the top components
     CC_mean.resize(cutoff);
 
-    // Create a new sparse matrix with filtered components
-    Eigen::SparseMatrix<double> CC_loc_mat_fin(CC_loc_mat.rows(), cutoff);
-    std::vector<Eigen::Triplet<double>> tripletList;
-    tripletList.reserve(CC_loc_mat.nonZeros());
+    // Get the indices of components to keep (zero-based)
+    std::vector<int> components_to_keep;
+    components_to_keep.reserve(CC_mean.size());
 
-    for (size_t idx = 0; idx < CC_mean.size(); ++idx) {
-        int original_col = CC_mean[idx].first;
+    for (const auto& pair : CC_mean) {
+        int col_idx = pair.first; // column index, 0-based
+        components_to_keep.emplace_back(col_idx);
+    }
+
+    // Sort components_to_keep in ascending order to match Python's selection
+    std::sort(components_to_keep.begin(), components_to_keep.end());
+
+    // Handle the case where no components are kept
+    if (components_to_keep.empty()) {
+        // Return an empty sparse matrix with the same number of rows and zero columns
+        return Eigen::SparseMatrix<double>(CC_loc_mat.rows(), 0);
+    }
+
+    // Create a new sparse matrix with filtered connected components
+    Eigen::SparseMatrix<double> CC_loc_mat_fin(CC_loc_mat.rows(), components_to_keep.size());
+    std::vector<Eigen::Triplet<double>> tripletList_fin;
+    tripletList_fin.reserve(CC_loc_mat.nonZeros()); // Reserve enough space
+
+    for (size_t idx = 0; idx < components_to_keep.size(); ++idx) {
+        int original_col = components_to_keep[idx];
         for (Eigen::SparseMatrix<double>::InnerIterator it(CC_loc_mat, original_col); it; ++it) {
-            tripletList.emplace_back(it.row(), static_cast<int>(idx), it.value());
+            tripletList_fin.emplace_back(it.row(), static_cast<int>(idx), it.value());
         }
     }
 
-    CC_loc_mat_fin.setFromTriplets(tripletList.begin(), tripletList.end());
+    // Populate the filtered sparse matrix
+    CC_loc_mat_fin.setFromTriplets(tripletList_fin.begin(), tripletList_fin.end());
     CC_loc_mat_fin.makeCompressed();
 
     return CC_loc_mat_fin;
