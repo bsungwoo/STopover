@@ -284,9 +284,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
                                                         feat_ys=[np.ascontiguousarray(feat[3]).astype(np.float64) for feat in CCxy_loc_mat_list],
                                                         jaccard_type=jaccard_type,
                                                         num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
-    feat_x = data_mod.obs['Comb_CC_tS2'].astype(bool)
-    feat_y = data_mod.obs['Comb_CC_Cytotoxic CD8+ T'].astype(bool)
-    print((feat_x * feat_y).sum() / (feat_x + feat_y).sum())
+
     # Create dataframe for J metrics
     output_j = pd.DataFrame(output_j, columns=['J_comp'])
     # Create dataframe with pairwise topological similarity measures

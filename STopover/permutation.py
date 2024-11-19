@@ -227,28 +227,17 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
     print("Elapsed time: %.2f seconds " % (time.time()-start_time))
 
     # Start the multiprocessing for extracting adjacency matrix and mask
-    print(f"Calculation of adjacency matrix for {spatial_type}")
-    adjacency_mask = parallel_with_progress_extract_adjacency(loc_list, spatial_type=spatial_type, 
-                                                              fwhm=fwhm, num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
-    if spatial_type=='visium':
-        feat_A_mask_pair = [(feat[perm_idx][:,feat_idx].reshape((-1,1)),
-                            adjacency_mask[grp_idx][0], adjacency_mask[grp_idx][1]) \
-                            for grp_idx, feat in enumerate(val_list) \
-                            for perm_idx in range(nperm) for feat_idx in range(feat[0].shape[1])]
-    else:
-        feat_A_mask_pair = [(feat[perm_idx][:,feat_idx].reshape((-1,1)),
-                            adjacency_mask[grp_idx], None) \
-                            for grp_idx, feat in enumerate(val_list) \
-                            for perm_idx in range(nperm) for feat_idx in range(feat[0].shape[1])]
-
+    loc_feat_pair = [(loc_list[grp_idx], feat[:,feat_idx].reshape((-1,1))) \
+        for grp_idx, feat in enumerate(val_list) for feat_idx in range(feat.shape[1])]
+    
     # Start the multiprocessing for finding connected components of each feature
     print("Calculation of connected components for each feature")
-    output_cc = parallel_with_progress_topological_comp(feats=[feat[0] for feat in feat_A_mask_pair],
-                                                        A_matrices=[feat[1] for feat in feat_A_mask_pair],
-                                                        masks = [feat[2] for feat in feat_A_mask_pair],
+    output_cc = parallel_with_progress_topological_comp(locs = [np.ascontiguousarray(feat[0]).astype(np.float64) for feat in loc_feat_pair],
+                                                        feats = [np.ascontiguousarray(feat[1]).astype(np.float64) for feat in loc_feat_pair],
                                                         spatial_type=spatial_type,
                                                         min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
                                                         num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
+
 
     # Make dataframe for the similarity between feature 1 and 2 across the groups
     print('Calculation of composite jaccard indexes between feature pairs')
@@ -296,10 +285,11 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
     data_mod.uns[f"cc_loc_{adata_keys[-1]}_perm"] = output_cc_loc
 
     # Get the output for jaccard
-    output_j = parallel_with_progress_jaccard_composite(CCx_loc_sums=[feat[0] for feat in CCxy_loc_mat_list], 
-                                                        CCy_loc_sums=[feat[1] for feat in CCxy_loc_mat_list],
-                                                        feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
-                                                        feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
+    output_j = parallel_with_progress_jaccard_composite(CCx_loc_sums=[np.ascontiguousarray(feat[0]).astype(np.float64) for feat in CCxy_loc_mat_list], 
+                                                        CCy_loc_sums=[np.ascontiguousarray(feat[1]).astype(np.float64) for feat in CCxy_loc_mat_list],
+                                                        feat_xs=[np.ascontiguousarray(feat[2]).astype(np.float64) for feat in CCxy_loc_mat_list],
+                                                        feat_ys=[np.ascontiguousarray(feat[3]).astype(np.float64) for feat in CCxy_loc_mat_list],
+                                                        jaccard_type=jaccard_type,
                                                         num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
 
     # Create a dataframe for J metrics and calculate p-values
