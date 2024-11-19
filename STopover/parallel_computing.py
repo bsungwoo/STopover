@@ -1,18 +1,31 @@
 import numpy as np
 import tqdm
-import threading
 from .parallelize import parallel_topological_comp, parallel_jaccard_composite
 
 def default_log_callback(message):
     print(f"C++ Log: {message}", end='')  # 'end' to avoid adding extra newlines
 
+def create_batches(data, batch_size):
+    """
+    Splits the data into smaller batches.
+
+    Args:
+        data (list): The data to split into batches.
+        batch_size (int): The number of items per batch.
+
+    Yields:
+        list: A batch of data items.
+    """
+    for i in range(0, len(data), batch_size):
+        yield data[i:i + batch_size]
+
 def parallel_with_progress_topological_comp(
     locs, feats, spatial_type="visium", fwhm=2.5,
     min_size=5, thres_per=30, return_mode="all", num_workers=4,
-    log_callback=None, max_tasks_in_queue=1000
+    log_callback_func=None, batch_size=10000,
 ):
     """
-    Parallel computation for topological component extraction.
+    Parallel computation for topological component extraction using batched task submission.
     Progress is shown using a tqdm progress bar.
 
     Args:
@@ -24,86 +37,69 @@ def parallel_with_progress_topological_comp(
         thres_per (int): Percentile threshold for filtering connected components.
         return_mode (str): Return mode.
         num_workers (int): Number of parallel workers.
-        log_callback (callable, optional): Function to handle log messages from C++.
-        max_tasks_in_queue (int, optional): Maximum number of tasks allowed in the queue.
+        log_callback_func (callable, optional): Function to handle log messages from C++.
+        batch_size (int, optional): Number of tasks to process per batch.
 
     Returns:
         list: A list of topological components for each feature.
     """
     # Reshape feats to one-dimensional arrays
     feats = [feat.reshape(-1) if feat.ndim > 1 else feat for feat in feats]
-    
-    # Optionally, verify shapes
+
+    # Verify shapes
     for i, feat in enumerate(feats):
         if feat.ndim != 1:
             raise ValueError(f"feats[{i}] is not one-dimensional after reshape.")
-    
-    # Define a default log_callback if none is provided
-    if log_callback is None:
-        log_callback = default_log_callback
 
-    # Initialize a semaphore to limit the number of tasks in the queue
-    semaphore = threading.Semaphore(max_tasks_in_queue)
-    
-    # Initialize a list to hold threading.Thread objects
-    threads = []
-    
-    # Initialize a lock for thread-safe result assignment
-    result_lock = threading.Lock()
-    result = [None] * len(feats)  # Pre-allocate list for results
+    # Define a default log_callback if none is provided
+    if log_callback_func is None:
+        log_callback_func = default_log_callback
+
+    # Prepare batches
+    batched_locs = list(create_batches(locs, batch_size))
+    batched_feats = list(create_batches(feats, batch_size))
+
+    # Initialize the overall result list
+    total_tasks = len(locs)
+    results = [None] * total_tasks  # Pre-allocate list for results
 
     # Create a progress bar
-    with tqdm.tqdm(total=len(feats)) as pbar:
-        # Define a Python callback function to update progress and release semaphore
-        def update_progress(index):
-            pbar.update(1)
-            semaphore.release()  # Release semaphore to allow more tasks to be enqueued
-
-        # Define a wrapper function to enqueue tasks
-        def enqueue_task(index, loc, feat):
+    with tqdm.tqdm(total=total_tasks) as pbar:
+        for batch_index, (batch_locs, batch_feats) in enumerate(zip(batched_locs, batched_feats)):
             try:
-                semaphore.acquire()  # Acquire semaphore before enqueuing
-                # Enqueue the task and get the future
-                future = parallel_topological_comp(
-                    locs=[loc],
+                # Call the C++ function for the current batch
+                batch_results = parallel_topological_comp(
+                    locs=batch_locs,
                     spatial_type=spatial_type,
                     fwhm=fwhm,
-                    feats=[feat],
+                    feats=batch_feats,
                     min_size=min_size,
                     thres_per=thres_per,
                     return_mode=return_mode,
-                    num_workers=1,  # Use single worker per enqueue to prevent over-subscription
-                    progress_callback=lambda: update_progress(index),
-                    log_callback=log_callback
+                    num_workers=num_workers,
+                    progress_callback=lambda: pbar.update(1),
+                    log_callback=log_callback_func
                 )
-                # Retrieve the result
-                topo_result = future[0]  # Since we passed a single task
-                with result_lock:
-                    result[index] = topo_result
-            except Exception as e:
-                log_callback(f"\nException during task {index}: {e}\n")
-                semaphore.release()  # Ensure semaphore is released even on exception
 
-        # Launch threads to enqueue tasks
-        for index, (loc, feat) in enumerate(zip(locs, feats)):
-            thread = threading.Thread(target=enqueue_task, args=(index, loc, feat))
-            thread.start()
-            threads.append(thread)
-        
-        # Wait for all threads to complete
-        for thread in threads:
-            thread.join()
-    
-    return result
+                # Assign batch results to the overall results list
+                start_idx = batch_index * batch_size
+                for i, res in enumerate(batch_results):
+                    results[start_idx + i] = res
+
+            except Exception as e:
+                log_callback_func(f"\nException during batch {batch_index}: {e}\n")
+                raise
+
+    return results
 
 
 def parallel_with_progress_jaccard_composite(
     CCx_loc_sums, CCy_loc_sums, feat_xs=None, feat_ys=None,
     jaccard_type="default", num_workers=4,
-    log_callback=None, max_tasks_in_queue=1000
+    log_callback_func=None, batch_size=10000,
 ):
     """
-    Parallel computation for Jaccard composite index.
+    Parallel computation for Jaccard composite index using batched task submission.
     Progress is shown using a tqdm progress bar.
 
     Args:
@@ -113,8 +109,8 @@ def parallel_with_progress_jaccard_composite(
         feat_ys (list or np.ndarray, optional): List of NumPy arrays for feature y values.
         jaccard_type (str, optional): Type of Jaccard index to calculate. Either "default" or "weighted".
         num_workers (int): Number of parallel workers.
-        log_callback (callable, optional): Function to handle log messages from C++.
-        max_tasks_in_queue (int, optional): Maximum number of tasks allowed in the queue.
+        log_callback_func (callable, optional): Function to handle log messages from C++.
+        batch_size (int, optional): Number of tasks to process per batch.
 
     Returns:
         list: A list of Jaccard composite indices.
@@ -124,11 +120,11 @@ def parallel_with_progress_jaccard_composite(
         feat_xs = [np.array([0.0]) for _ in range(len(CCx_loc_sums))]
     if feat_ys is None:
         feat_ys = [np.array([0.0]) for _ in range(len(CCx_loc_sums))]
-    
+
     # Ensure that all input lists have the same length
     if not (len(CCx_loc_sums) == len(CCy_loc_sums) == len(feat_xs) == len(feat_ys)):
         raise ValueError("All input lists must have the same length.")
-    
+
     # Convert inputs to lists of NumPy arrays if they are not already
     if isinstance(CCx_loc_sums, np.ndarray):
         CCx_loc_sums = CCx_loc_sums.tolist()
@@ -138,62 +134,47 @@ def parallel_with_progress_jaccard_composite(
         feat_xs = feat_xs.tolist()
     if isinstance(feat_ys, np.ndarray):
         feat_ys = feat_ys.tolist()
-    
-    # Define a default log_callback if none is provided
-    if log_callback is None:
-        log_callback = default_log_callback
 
-    # Initialize a semaphore to limit the number of tasks in the queue
-    semaphore = threading.Semaphore(max_tasks_in_queue)
-    
-    # Initialize a list to hold threading.Thread objects
-    threads = []
-    
-    # Initialize a lock for thread-safe result assignment
-    result_lock = threading.Lock()
-    result = [None] * len(CCx_loc_sums)  # Pre-allocate list for results
+    # Define a default log_callback if none is provided
+    if log_callback_func is None:
+        log_callback_func = default_log_callback
+
+    # Prepare batches
+    batched_CCx = list(create_batches(CCx_loc_sums, batch_size))
+    batched_CCy = list(create_batches(CCy_loc_sums, batch_size))
+    batched_feat_x = list(create_batches(feat_xs, batch_size))
+    batched_feat_y = list(create_batches(feat_ys, batch_size))
+
+    # Initialize the overall result list
+    total_tasks = len(CCx_loc_sums)
+    results = [None] * total_tasks  # Pre-allocate list for results
 
     # Create a progress bar
-    with tqdm.tqdm(total=len(CCx_loc_sums)) as pbar:
-        # Define a Python callback function to update progress and release semaphore
-        def update_progress(index):
-            pbar.update(1)
-            semaphore.release()  # Release semaphore to allow more tasks to be enqueued
-
-        # Define a wrapper function to enqueue tasks
-        def enqueue_task(index, CCx_sum, CCy_sum, feat_x, feat_y):
+    with tqdm.tqdm(total=total_tasks) as pbar:
+        for batch_index, (batch_CCx, batch_CCy, batch_feat_x, batch_feat_y) in enumerate(zip(batched_CCx, batched_CCy, batched_feat_x, batched_feat_y)):
             try:
-                semaphore.acquire()  # Acquire semaphore before enqueuing
-                # Enqueue the task and get the future
-                future = parallel_jaccard_composite(
-                    CCx_loc_sums=[CCx_sum],
-                    CCy_loc_sums=[CCy_sum],
-                    feat_xs=[feat_x],
-                    feat_ys=[feat_y],
+                # Call the C++ function for the current batch
+                batch_results = parallel_jaccard_composite(
+                    CCx_loc_sums=batch_CCx,
+                    CCy_loc_sums=batch_CCy,
+                    feat_xs=batch_feat_x,
+                    feat_ys=batch_feat_y,
                     jaccard_type=jaccard_type,
-                    num_workers=1,  # Use single worker per enqueue to prevent over-subscription
-                    progress_callback=lambda: update_progress(index),
-                    log_callback=log_callback
+                    num_workers=num_workers,
+                    progress_callback=lambda: pbar.update(1),
+                    log_callback=log_callback_func
                 )
-                # Retrieve the result
-                jaccard_result = future[0]  # Since we passed a single task
-                with result_lock:
-                    result[index] = jaccard_result
-            except Exception as e:
-                log_callback(f"\nException during task {index}: {e}\n")
-                semaphore.release()  # Ensure semaphore is released even on exception
 
-        # Launch threads to enqueue tasks
-        for index, (CCx_sum, CCy_sum, feat_x, feat_y) in enumerate(zip(CCx_loc_sums, CCy_loc_sums, feat_xs, feat_ys)):
-            thread = threading.Thread(target=enqueue_task, args=(index, CCx_sum, CCy_sum, feat_x, feat_y))
-            thread.start()
-            threads.append(thread)
-        
-        # Wait for all threads to complete
-        for thread in threads:
-            thread.join()
-    
-    return result
+                # Assign batch results to the overall results list
+                start_idx = batch_index * batch_size
+                for i, res in enumerate(batch_results):
+                    results[start_idx + i] = res
+
+            except Exception as e:
+                log_callback_func(f"\nException during batch {batch_index}: {e}\n")
+                raise
+
+    return results
 
 
 # Example Usage:
