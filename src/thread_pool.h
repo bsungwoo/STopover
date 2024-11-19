@@ -10,7 +10,7 @@
 #include <atomic>
 #include <stdexcept>
 #include <iostream>
-#include "thread_safe_queue.h" // Include the enhanced ThreadSafeQueue
+#include "ThreadSafeQueue.h" // Include the templated ThreadSafeQueue
 
 class ThreadPool {
 public:
@@ -70,9 +70,9 @@ inline ThreadPool::ThreadPool(size_t threads)
                         try {
                             task();
                         } catch(const std::exception& e) {
-                            std::cerr << "Task exception: " << e.what() << std::endl;
+                            std::cerr << "ThreadPool: Task exception: " << e.what() << std::endl;
                         } catch(...) {
-                            std::cerr << "Task unknown exception." << std::endl;
+                            std::cerr << "ThreadPool: Task unknown exception." << std::endl;
                         }
                     } else { // If pop returns false, queue is finished
                         return;
