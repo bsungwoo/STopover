@@ -281,7 +281,7 @@ Eigen::SparseMatrix<double> filter_connected_loc_exp_python_style(
     });
 
     // Determine cutoff based on threshold percentage
-    int cutoff = static_cast<int>(CC_mean.size() * (static_cast<double>(thres_per) / 100.0));
+    int cutoff = static_cast<int>(CC_mean.size() * (1.0 - static_cast<double>(thres_per) / 100.0));
     if (cutoff < 0) cutoff = 0;
     if (cutoff > static_cast<int>(CC_mean.size())) cutoff = static_cast<int>(CC_mean.size());
     CC_mean.resize(cutoff);
