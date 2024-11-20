@@ -64,8 +64,8 @@ def parallel_with_progress_topological_comp(
     results = [None] * total_tasks
 
     # Process batches sequentially
-    for batch_idx, (batch_locs, batch_feats) in enumerate(zip(batches_locs, batches_feats)):
-        with tqdm.tqdm(total=total_tasks) as pbar:
+    with tqdm.tqdm(total=total_tasks) as pbar:
+        for batch_idx, (batch_locs, batch_feats) in enumerate(zip(batches_locs, batches_feats)):
             # Define a Python callback function to update progress
             def update_progress():
                 pbar.update(1)
@@ -127,16 +127,12 @@ def parallel_with_progress_jaccard_composite(
     # Ensure that all input lists have the same length
     if not (len(CCx_loc_sums) == len(CCy_loc_sums) == len(feat_xs) == len(feat_ys)):
         raise ValueError("All input lists must have the same length.")
-
-    # Convert inputs to lists of NumPy arrays if they are not already
-    if isinstance(CCx_loc_sums, np.ndarray):
-        CCx_loc_sums = CCx_loc_sums.tolist()
-    if isinstance(CCy_loc_sums, np.ndarray):
-        CCy_loc_sums = CCy_loc_sums.tolist()
-    if isinstance(feat_xs, np.ndarray):
-        feat_xs = feat_xs.tolist()
-    if isinstance(feat_ys, np.ndarray):
-        feat_ys = feat_ys.tolist()
+    
+    # Convert all NumPy arrays to Python lists
+    CCx_loc_sums = [arr.tolist() for arr in CCx_loc_sums]
+    CCy_loc_sums = [arr.tolist() for arr in CCy_loc_sums]
+    feat_xs = [arr.tolist() for arr in feat_xs]
+    feat_ys = [arr.tolist() for arr in feat_ys]
 
     # Create batches
     batches_CCx = list(create_batches(CCx_loc_sums, batch_size))
@@ -149,11 +145,13 @@ def parallel_with_progress_jaccard_composite(
     results = [None] * total_tasks
 
     # Process batches sequentially
-
-    for batch_idx, (batch_CCx, batch_CCy, batch_feat_x, batch_feat_y) in enumerate(
-        zip(batches_CCx, batches_CCy, batches_feat_x, batches_feat_y)
-    ):
-        with tqdm.tqdm(total=total_tasks) as pbar:
+    with tqdm.tqdm(total=total_tasks) as pbar:
+        for batch_idx, (batch_CCx, batch_CCy, batch_feat_x, batch_feat_y) in enumerate(
+            zip(batches_CCx, batches_CCy, batches_feat_x, batches_feat_y)
+        ):
+            # Define a Python callback function to update progress
+            def update_progress():
+                pbar.update(1)
             try:
                 batch_results = parallel_jaccard_composite(
                     CCx_loc_sums=batch_CCx,
@@ -162,7 +160,7 @@ def parallel_with_progress_jaccard_composite(
                     feat_ys=batch_feat_y,
                     jaccard_type=jaccard_type,
                     num_workers=num_workers,  # 0 to auto-detect
-                    progress_callback=lambda: pbar.update(len(batch_CCx)),
+                    progress_callback=update_progress,
                     log_callback=log_callback_func,
                 )
 
