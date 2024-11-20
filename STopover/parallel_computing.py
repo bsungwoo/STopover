@@ -1,7 +1,7 @@
 import numpy as np
 import tqdm
 import gc
-from .parallelize import parallel_topological_comp_omp, parallel_jaccard_composite
+from .parallelize import parallel_topological_comp, parallel_jaccard_composite
 
 def default_log_callback(message):
     print(f"C++ Log: {message}", end='')  # 'end' to avoid adding extra newlines
@@ -60,7 +60,7 @@ def parallel_with_progress_topological_comp(
 
         try:
             # Call the C++ function, which handles parallelism with OpenMP
-            output = parallel_topological_comp_omp(
+            output = parallel_topological_comp(
                 locs_eigen=locs,
                 feats_eigen=feats,
                 spatial_type=spatial_type,
