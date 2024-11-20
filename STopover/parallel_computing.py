@@ -175,18 +175,3 @@ def parallel_with_progress_jaccard_composite(
                 raise
 
     return results
-
-
-# Example Usage:
-# Assuming you have the locs, feats, adjacency matrices, masks, and other inputs properly formatted.
-# locs = [numpy arrays for locations]
-# feats = [numpy arrays for features]
-# A_matrices = [scipy sparse matrices for adjacency matrices]
-# masks = [numpy arrays for masks]
-# CCx_loc_sums = [numpy arrays for CCx locations]
-# CCy_loc_sums = [numpy arrays for CCy locations]
-
-# Example calls:
-# result_extract_adjacency = parallel_with_progress_extract_adjacency(locs)
-# result_topological_comp = parallel_with_progress_topological_comp(locs, feats)
-# result_jaccard_composite = parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums)

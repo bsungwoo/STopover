@@ -1,4 +1,3 @@
-// ThreadSafeQueue.h
 #pragma once
 
 #include <queue>
@@ -12,7 +11,7 @@ template<typename T>
 class ThreadSafeQueue {
 public:
     ThreadSafeQueue(size_t max_size) : max_size_(max_size), stop_(false) {}
-    
+
     // Pushes an item into the queue. Blocks if the queue is full.
     void push(const T& item) {
         std::unique_lock<std::mutex> lock(mtx_);
@@ -23,7 +22,7 @@ public:
         queue_.push(item);
         cond_not_empty_.notify_one();
     }
-    
+
     // Pops an item from the queue. Blocks if the queue is empty.
     bool pop(T& item) {
         std::unique_lock<std::mutex> lock(mtx_);
@@ -36,7 +35,7 @@ public:
         cond_not_full_.notify_one();
         return true;
     }
-    
+
     // Signals the queue to stop processing. Unblocks any waiting threads.
     void set_finished() {
         std::lock_guard<std::mutex> lock(mtx_);
@@ -44,7 +43,7 @@ public:
         cond_not_empty_.notify_all();
         cond_not_full_.notify_all();
     }
-    
+
     // Returns the current size of the queue
     size_t size() const {
         std::lock_guard<std::mutex> lock(mtx_);

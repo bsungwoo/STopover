@@ -9,53 +9,48 @@
 
 class ThreadPool {
 public:
-    // Get the singleton instance of ThreadPool
-    static ThreadPool& getInstance(size_t num_threads = std::thread::hardware_concurrency(), size_t max_queue_size = 1000) {
-        static ThreadPool instance(num_threads, max_queue_size);
-        return instance;
-    }
-    
+    // Constructor
+    ThreadPool(size_t num_threads, size_t max_queue_size);
+
     // Delete copy and move constructors and assignment operators
     ThreadPool(const ThreadPool&) = delete;
     ThreadPool(ThreadPool&&) = delete;
     ThreadPool& operator=(const ThreadPool&) = delete;
     ThreadPool& operator=(ThreadPool&&) = delete;
-    
+
     // Enqueue a task. Blocks if the queue is full.
     template<class F, class... Args>
     auto enqueue(F&& f, Args&&... args) 
         -> std::future<typename std::result_of<F(Args...)>::type>
     {
         using return_type = typename std::result_of<F(Args...)>::type;
-        
+
         // Package the task
         auto task = std::make_shared< std::packaged_task<return_type()> >(
             std::bind(std::forward<F>(f), std::forward<Args>(args)...)
         );
-        
+
         std::future<return_type> res = task->get_future();
-        
+
         // Enqueue the task. This will block if the queue is full.
         tasks_.push([task](){ (*task)(); });
-        
+
         return res;
     }
-    
+
     // Destructor
     ~ThreadPool();
-    
+
 private:
-    ThreadPool(size_t num_threads, size_t max_queue_size);
-    
     // Vector of worker threads
     std::vector<std::thread> workers_;
-    
+
     // Bounded task queue
     ThreadSafeQueue<std::function<void()>> tasks_;
-    
+
     // Synchronization
     bool stop_;
-    
+
     // Worker thread function
     void worker_thread();
 };

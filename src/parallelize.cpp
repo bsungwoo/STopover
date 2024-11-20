@@ -49,7 +49,6 @@ Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
     return Eigen::VectorXd(vec);
 }
 
-
 Eigen::MatrixXd array_to_matrix(const py::array_t<double>& array) {
     if (array.ndim() != 2) {
         throw std::invalid_argument("Input array must be two-dimensional.");
@@ -94,8 +93,8 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         feats_eigen.emplace_back(array_to_vector(feats[i]));
     }
 
-    // Initialize ThreadPool using the singleton instance
-    ThreadPool& pool = ThreadPool::getInstance(num_workers, 1000); // max_queue_size=1000
+    // Initialize ThreadPool with specified number of workers
+    ThreadPool pool(num_workers, 1000); // max_queue_size=1000
 
     std::vector<std::future<std::pair<size_t, Eigen::VectorXd>>> results;
     results.reserve(total_tasks);
@@ -104,12 +103,13 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
 
     for (size_t i = 0; i < total_tasks; ++i) {
         size_t index = i;
-        const Eigen::MatrixXd& loc = locs_eigen[i];
-        const Eigen::VectorXd& feat = feats_eigen[i];
+        // Create copies of loc and feat to ensure they remain valid
+        Eigen::MatrixXd loc = locs_eigen[i];
+        Eigen::VectorXd feat = feats_eigen[i];
 
-        // Enqueue the task
+        // Enqueue the task with explicit captures by value
         results.emplace_back(
-            pool.enqueue([=]() -> std::pair<size_t, Eigen::VectorXd> {
+            pool.enqueue([index, loc, spatial_type, fwhm, feat, min_size, thres_per, return_mode, progress_callback, log_callback]() -> std::pair<size_t, Eigen::VectorXd> {
                 try {
                     // Release GIL during computation
                     py::gil_scoped_release release;
@@ -117,34 +117,28 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
                     Eigen::VectorXd res = topological_comp_res(loc, spatial_type, fwhm, feat, min_size, thres_per, return_mode);
 
                     // Acquire GIL before invoking Python callbacks
-                    {
+                    if (progress_callback) {
                         std::lock_guard<std::mutex> lock(callback_mutex);
-                        if (progress_callback) {
-                            py::gil_scoped_acquire acquire;
-                            progress_callback();
-                        }
+                        py::gil_scoped_acquire acquire;
+                        progress_callback();
                     }
 
                     return {index, res};
                 }
                 catch (const std::exception& e) {
                     // Log exception
-                    {
+                    if (log_callback) {
                         std::lock_guard<std::mutex> lock(callback_mutex);
-                        if (log_callback) {
-                            py::gil_scoped_acquire acquire;
-                            log_callback(std::string("topological_comp_res exception: ") + e.what());
-                        }
+                        py::gil_scoped_acquire acquire;
+                        log_callback(std::string("topological_comp_res exception: ") + e.what());
                     }
                     throw; // Re-throw to be handled later
                 }
                 catch (...) {
-                    {
+                    if (log_callback) {
                         std::lock_guard<std::mutex> lock(callback_mutex);
-                        if (log_callback) {
-                            py::gil_scoped_acquire acquire;
-                            log_callback("topological_comp_res encountered an unknown exception.");
-                        }
+                        py::gil_scoped_acquire acquire;
+                        log_callback("topological_comp_res encountered an unknown exception.");
                     }
                     throw;
                 }
@@ -162,12 +156,10 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         }
         catch (const std::exception& e) {
             // Handle task exceptions
-            {
+            if (log_callback) {
                 std::lock_guard<std::mutex> lock(callback_mutex);
-                if (log_callback) {
-                    py::gil_scoped_acquire acquire;
-                    log_callback(std::string("Task exception: ") + e.what());
-                }
+                py::gil_scoped_acquire acquire;
+                log_callback(std::string("Task exception: ") + e.what());
             }
             // Depending on requirements, decide how to handle failed tasks
             // For example, skip, fill with default values, or re-throw
@@ -225,8 +217,8 @@ std::vector<double> parallel_jaccard_composite(
         }
     }
 
-    // Initialize ThreadPool using the singleton instance
-    ThreadPool& pool = ThreadPool::getInstance(num_workers, 1000); // max_queue_size=1000
+    // Initialize ThreadPool with specified number of workers
+    ThreadPool pool(num_workers, 1000); // max_queue_size=1000
 
     std::vector<std::future<std::pair<size_t, double>>> results;
     results.reserve(list_size);
@@ -235,14 +227,15 @@ std::vector<double> parallel_jaccard_composite(
 
     for (size_t i = 0; i < list_size; ++i) {
         size_t index = i;
+        // Create copies to ensure thread safety
         Eigen::VectorXd CCx_sum = CCx_loc_sums_vec[i];
         Eigen::VectorXd CCy_sum = CCy_loc_sums_vec[i];
         Eigen::VectorXd feat_x = feat_xs_vec[i];
         Eigen::VectorXd feat_y = feat_ys_vec[i];
 
-        // Enqueue the task
+        // Enqueue the task with explicit captures by value
         results.emplace_back(
-            pool.enqueue([=]() -> std::pair<size_t, double> {
+            pool.enqueue([index, CCx_sum, CCy_sum, feat_x, feat_y, jaccard_type, progress_callback, log_callback]() -> std::pair<size_t, double> {
                 try {
                     double jaccard_index; // Declare outside of if-else to ensure scope
                     if (jaccard_type == "default") {
@@ -252,41 +245,35 @@ std::vector<double> parallel_jaccard_composite(
                     } else {
                         throw std::invalid_argument("Invalid jaccard_type: " + jaccard_type);
                     }
+
+                    // Acquire GIL before invoking Python callbacks
+                    if (progress_callback) {
+                        std::lock_guard<std::mutex> lock(callback_mutex);
+                        py::gil_scoped_acquire acquire;
+                        progress_callback();
+                    }
+
                     return {index, jaccard_index};
                 }
                 catch (const std::exception& e) {
                     // Log exception
-                    {
+                    if (log_callback) {
                         std::lock_guard<std::mutex> lock(callback_mutex);
-                        if (log_callback) {
-                            py::gil_scoped_acquire acquire;
-                            log_callback(std::string("jaccard_composite exception: ") + e.what());
-                        }
+                        py::gil_scoped_acquire acquire;
+                        log_callback(std::string("jaccard_composite exception: ") + e.what());
                     }
                     throw; // Re-throw to be handled later
                 }
                 catch (...) {
-                    {
+                    if (log_callback) {
                         std::lock_guard<std::mutex> lock(callback_mutex);
-                        if (log_callback) {
-                            py::gil_scoped_acquire acquire;
-                            log_callback("jaccard_composite encountered an unknown exception.");
-                        }
+                        py::gil_scoped_acquire acquire;
+                        log_callback("jaccard_composite encountered an unknown exception.");
                     }
                     throw;
                 }
             })
         );
-
-        // Update progress
-        if (progress_callback) {
-            // Acquire GIL before invoking the callback
-            {
-                std::lock_guard<std::mutex> lock(callback_mutex);
-                py::gil_scoped_acquire acquire;
-                progress_callback();
-            }
-        }
     }
 
     // Collect the results
@@ -299,12 +286,10 @@ std::vector<double> parallel_jaccard_composite(
         }
         catch (const std::exception& e) {
             // Handle task exceptions
-            {
+            if (log_callback) {
                 std::lock_guard<std::mutex> lock(callback_mutex);
-                if (log_callback) {
-                    py::gil_scoped_acquire acquire;
-                    log_callback(std::string("Task exception: ") + e.what());
-                }
+                py::gil_scoped_acquire acquire;
+                log_callback(std::string("Task exception: ") + e.what());
             }
             // Depending on requirements, decide how to handle failed tasks
             // For example, skip, fill with default values, or re-throw

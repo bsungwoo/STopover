@@ -13,7 +13,7 @@ ThreadPool::~ThreadPool()
     // Signal all threads to stop
     tasks_.set_finished();
     stop_ = true;
-    
+
     // Join all threads
     for(auto &worker: workers_)
         if(worker.joinable())
@@ -29,6 +29,11 @@ void ThreadPool::worker_thread()
             // Queue is finished and empty
             break;
         }
-        task();
+        try {
+            task();
+        } catch (const std::exception& e) {
+            // Handle exceptions from tasks if necessary
+            // For example, log them or propagate
+        }
     }
 }
