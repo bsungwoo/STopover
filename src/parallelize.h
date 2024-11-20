@@ -30,10 +30,10 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
 
 // Parallel function for jaccard_composite
 std::vector<double> parallel_jaccard_composite(
-    py::list CCx_loc_sums_list,
-    py::list CCy_loc_sums_list,
-    py::list feat_xs_list,
-    py::list feat_ys_list,
+    py::list CCx_loc_sums,
+    py::list CCy_loc_sums,
+    py::list feat_xs,
+    py::list feat_ys,
     const std::string& jaccard_type,
     int num_workers,
     py::function progress_callback,

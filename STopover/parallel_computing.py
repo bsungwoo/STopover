@@ -61,8 +61,8 @@ def parallel_with_progress_topological_comp(
         try:
             # Call the C++ function, which handles parallelism with OpenMP
             output = parallel_topological_comp(
-                locs_eigen=locs,
-                feats_eigen=feats,
+                locs=locs,
+                feats=feats,
                 spatial_type=spatial_type,
                 fwhm=fwhm,
                 min_size=min_size,
