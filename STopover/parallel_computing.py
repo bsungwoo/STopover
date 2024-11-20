@@ -21,7 +21,7 @@ def create_batches(data, batch_size):
 
 def parallel_with_progress_topological_comp(
     locs, feats, spatial_type="visium", fwhm=2.5,
-    min_size=5, thres_per=30, return_mode="all", num_workers=4,
+    min_size=5, thres_per=30, return_mode="all", num_workers=0,
     log_callback_func=None, batch_size=500,
 ):
     """
@@ -36,7 +36,7 @@ def parallel_with_progress_topological_comp(
         min_size (int): Minimum size of connected component.
         thres_per (int): Percentile threshold for filtering connected components.
         return_mode (str): Return mode.
-        num_workers (int): Number of parallel workers.
+        num_workers (int): Number of parallel workers (0 to auto-detect).
         log_callback_func (callable, optional): Function to handle log messages from C++.
         batch_size (int, optional): Number of tasks to process per batch.
 
@@ -76,7 +76,7 @@ def parallel_with_progress_topological_comp(
                     min_size=min_size,
                     thres_per=thres_per,
                     return_mode=return_mode,
-                    num_workers=num_workers,
+                    num_workers=num_workers,  # 0 to auto-detect
                     progress_callback=lambda: pbar.update(1),
                     log_callback=log_callback_func
                 )
@@ -92,10 +92,9 @@ def parallel_with_progress_topological_comp(
 
     return results
 
-
 def parallel_with_progress_jaccard_composite(
     CCx_loc_sums, CCy_loc_sums, feat_xs=None, feat_ys=None,
-    jaccard_type="default", num_workers=4,
+    jaccard_type="default", num_workers=0,
     log_callback_func=None, batch_size=500,
 ):
     """
@@ -108,7 +107,7 @@ def parallel_with_progress_jaccard_composite(
         feat_xs (list or np.ndarray, optional): List of NumPy arrays for feature x values.
         feat_ys (list or np.ndarray, optional): List of NumPy arrays for feature y values.
         jaccard_type (str, optional): Type of Jaccard index to calculate. Either "default" or "weighted".
-        num_workers (int): Number of parallel workers.
+        num_workers (int): Number of parallel workers (0 to auto-detect).
         log_callback_func (callable, optional): Function to handle log messages from C++.
         batch_size (int, optional): Number of tasks to process per batch.
 
@@ -160,7 +159,7 @@ def parallel_with_progress_jaccard_composite(
                     feat_xs=batch_feat_x,
                     feat_ys=batch_feat_y,
                     jaccard_type=jaccard_type,
-                    num_workers=num_workers,
+                    num_workers=num_workers,  # 0 to auto-detect
                     progress_callback=lambda: pbar.update(1),
                     log_callback=log_callback_func
                 )

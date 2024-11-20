@@ -9,8 +9,9 @@
 
 class ThreadPool {
 public:
-    // Constructor
-    ThreadPool(size_t num_threads, size_t max_queue_size);
+    // Constructor with dynamic thread and queue size determination
+    ThreadPool(size_t num_threads = std::thread::hardware_concurrency(),
+               size_t max_queue_size = 2 * std::thread::hardware_concurrency());
 
     // Delete copy and move constructors and assignment operators
     ThreadPool(const ThreadPool&) = delete;

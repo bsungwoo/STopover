@@ -93,8 +93,19 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         feats_eigen.emplace_back(array_to_vector(feats[i]));
     }
 
-    // Initialize ThreadPool with specified number of workers
-    ThreadPool pool(num_workers, 1000); // max_queue_size=1000
+    // Dynamically determine the number of workers if not specified
+    if (num_workers <= 0) {
+        num_workers = std::thread::hardware_concurrency();
+        if (num_workers == 0) {
+            num_workers = 4; // Fallback to 4 if hardware_concurrency cannot determine
+        }
+    }
+
+    // Dynamically determine the max queue size
+    size_t max_queue_size = 2 * num_workers; // Example heuristic
+
+    // Initialize ThreadPool with dynamically determined parameters
+    ThreadPool pool(num_workers, max_queue_size);
 
     std::vector<std::future<std::pair<size_t, Eigen::VectorXd>>> results;
     results.reserve(total_tasks);
@@ -217,8 +228,19 @@ std::vector<double> parallel_jaccard_composite(
         }
     }
 
-    // Initialize ThreadPool with specified number of workers
-    ThreadPool pool(num_workers, 1000); // max_queue_size=1000
+    // Dynamically determine the number of workers if not specified
+    if (num_workers <= 0) {
+        num_workers = std::thread::hardware_concurrency();
+        if (num_workers == 0) {
+            num_workers = 4; // Fallback to 4 if hardware_concurrency cannot determine
+        }
+    }
+
+    // Dynamically determine the max queue size
+    size_t max_queue_size = 2 * num_workers; // Example heuristic
+
+    // Initialize ThreadPool with dynamically determined parameters
+    ThreadPool pool(num_workers, max_queue_size);
 
     std::vector<std::future<std::pair<size_t, double>>> results;
     results.reserve(list_size);

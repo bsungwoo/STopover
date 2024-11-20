@@ -23,12 +23,12 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     const std::vector<py::array_t<double>>& locs,
     const std::string& spatial_type, double fwhm,
     const std::vector<py::array_t<double>>& feats,
-    int min_size, double thres_per, const std::string& return_mode, int num_workers,
+    int min_size, double thres_per, const std::string& return_mode, 
+    int num_workers,
     py::function progress_callback,
     py::function log_callback);
 
 // Parallel function for jaccard_composite
-// **Updated to accept py::list parameters**
 std::vector<double> parallel_jaccard_composite(
     py::list CCx_loc_sums_list,
     py::list CCy_loc_sums_list,
