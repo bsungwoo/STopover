@@ -232,12 +232,12 @@ std::vector<double> parallel_jaccard_composite(
 
 // Expose to Python via Pybind11
 PYBIND11_MODULE(parallelize, m) {  // Module name within the STopover package
-    m.def("parallel_topological_comp_omp", &parallel_topological_comp_omp, "Parallelized topological_comp_res function using OpenMP",
+    m.def("parallel_topological_comp", &parallel_topological_comp, "Parallelized topological_comp_res function using OpenMP",
           py::arg("locs"), py::arg("spatial_type") = "visium", py::arg("fwhm") = 2.5, py::arg("feats"), 
           py::arg("min_size") = 5, py::arg("thres_per") = 30, py::arg("return_mode") = "all", 
           py::arg("num_workers") = 4, py::arg("progress_callback"), py::arg("log_callback"));
 
-    m.def("parallel_jaccard_composite_omp", &parallel_jaccard_composite_omp, "Parallelized jaccard_composite function using OpenMP",
+    m.def("parallel_jaccard_composite", &parallel_jaccard_composite, "Parallelized jaccard_composite function using OpenMP",
           py::arg("CCx_loc_sums"), py::arg("CCy_loc_sums"), py::arg("feat_xs"), py::arg("feat_ys"), 
           py::arg("jaccard_type") = "default", py::arg("num_workers") = 4, py::arg("progress_callback"), py::arg("log_callback"));
 }
