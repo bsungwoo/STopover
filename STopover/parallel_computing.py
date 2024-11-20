@@ -70,7 +70,7 @@ def parallel_with_progress_topological_comp(
                 return_mode=return_mode,
                 num_workers=num_workers,
                 progress_callback=progress_callback,
-                log_callback=log_callback_func
+                log_callback=None
             )
         except Exception as e:
             log_callback_func(f"Error during topological_comp computation: {e}\n")
@@ -147,7 +147,7 @@ def parallel_with_progress_jaccard_composite(
                 jaccard_type=jaccard_type,
                 num_workers=num_workers,
                 progress_callback=progress_callback,
-                log_callback=log_callback_func
+                log_callback=None
             )
         except Exception as e:
             log_callback_func(f"Error during jaccard_composite computation: {e}\n")
