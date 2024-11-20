@@ -64,8 +64,12 @@ def parallel_with_progress_topological_comp(
     results = [None] * total_tasks
 
     # Process batches sequentially
-    with tqdm.tqdm(total=total_tasks) as pbar:
-        for batch_idx, (batch_locs, batch_feats) in enumerate(zip(batches_locs, batches_feats)):
+    for batch_idx, (batch_locs, batch_feats) in enumerate(zip(batches_locs, batches_feats)):
+        with tqdm.tqdm(total=total_tasks) as pbar:
+            # Define a Python callback function to update progress
+            def update_progress():
+                pbar.update(1)
+                
             try:
                 batch_results = parallel_topological_comp(
                     locs=batch_locs,
@@ -76,7 +80,7 @@ def parallel_with_progress_topological_comp(
                     thres_per=thres_per,
                     return_mode=return_mode,
                     num_workers=num_workers,  # 0 to auto-detect
-                    progress_callback=lambda: pbar.update(len(batch_locs)),
+                    progress_callback=update_progress,
                     log_callback=log_callback_func,
                 )
 
@@ -90,6 +94,7 @@ def parallel_with_progress_topological_comp(
                 raise
 
     return results
+
 
 def parallel_with_progress_jaccard_composite(
     CCx_loc_sums, CCy_loc_sums, feat_xs=None, feat_ys=None,
@@ -144,10 +149,11 @@ def parallel_with_progress_jaccard_composite(
     results = [None] * total_tasks
 
     # Process batches sequentially
-    with tqdm.tqdm(total=total_tasks) as pbar:
-        for batch_idx, (batch_CCx, batch_CCy, batch_feat_x, batch_feat_y) in enumerate(
-            zip(batches_CCx, batches_CCy, batches_feat_x, batches_feat_y)
-        ):
+
+    for batch_idx, (batch_CCx, batch_CCy, batch_feat_x, batch_feat_y) in enumerate(
+        zip(batches_CCx, batches_CCy, batches_feat_x, batches_feat_y)
+    ):
+        with tqdm.tqdm(total=total_tasks) as pbar:
             try:
                 batch_results = parallel_jaccard_composite(
                     CCx_loc_sums=batch_CCx,
