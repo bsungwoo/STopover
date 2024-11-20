@@ -1,5 +1,6 @@
 import numpy as np
 import tqdm
+import gc
 from .parallelize import parallel_topological_comp, parallel_jaccard_composite
 
 def default_log_callback(message):
@@ -91,6 +92,9 @@ def parallel_with_progress_topological_comp(
             except Exception as e:
                 log_callback_func(f"\nException during batch {batch_idx}: {e}\n")
                 raise
+
+            # Clear memory after each batch
+            gc.collect()
 
     return results
 
@@ -185,5 +189,7 @@ def parallel_with_progress_jaccard_composite(
                 else:
                     print(f"\nException during batch {batch_idx}: {e}\n")
                 raise
+            # Clear memory after each batch
+            gc.collect()
 
     return results
