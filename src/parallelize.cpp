@@ -1,8 +1,7 @@
-// parallelize.cpp
 #include "parallelize.h"
 #include "topological_comp.h"
 #include "jaccard.h"
-#include "ThreadPool.h"
+#include "thread_pool.h"
 
 #include <iostream>
 #include <fstream>
@@ -14,7 +13,7 @@
 #include <pybind11/numpy.h>      // For handling NumPy arrays
 #include <future>                // For std::future
 #include <vector>
-#include <utility>               // For std::pair
+#include <utility>               // For std::pair>
 #include <mutex>
 
 namespace py = pybind11;
@@ -98,14 +97,15 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
 
     // Automatically determine the number of worker threads if not specified
     if (num_workers <= 0) {
-        num_workers = std::min(static_cast<size_t>(4), std::thread::hardware_concurrency());
-        if (num_workers == 0) num_workers = 4; // Fallback to 4 threads
+        unsigned int hw_threads = std::thread::hardware_concurrency();
+        size_t hw_threads_size = static_cast<size_t>(hw_threads);
+        num_workers = std::min(static_cast<size_t>(4), hw_threads_size);
+        if (hw_threads_size == 0) num_workers = 4; // Fallback to 4 threads
     }
 
     // Initialize ThreadPool with limited number of threads
     ThreadPool pool(num_workers);
     std::vector<std::future<std::pair<size_t, Eigen::VectorXd>>> results;
-    results.reserve(total_tasks);
 
     // Prepare the output vector
     std::vector<Eigen::VectorXd> output(total_tasks);
@@ -152,13 +152,6 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
                 }
             })
         );
-
-        // Update progress
-        if (progress_callback) {
-            std::lock_guard<std::mutex> lock(callback_mutex);
-            py::gil_scoped_acquire acquire;
-            progress_callback();
-        }
     }
 
     // Collect the results in the correct order
@@ -234,14 +227,15 @@ std::vector<double> parallel_jaccard_composite_py(
 
     // Automatically determine the number of worker threads if not specified
     if (num_workers <= 0) {
-        num_workers = std::min(static_cast<size_t>(4), std::thread::hardware_concurrency());
-        if (num_workers == 0) num_workers = 4; // Fallback to 4 threads
+        unsigned int hw_threads = std::thread::hardware_concurrency();
+        size_t hw_threads_size = static_cast<size_t>(hw_threads);
+        num_workers = std::min(static_cast<size_t>(4), hw_threads_size);
+        if (hw_threads_size == 0) num_workers = 4; // Fallback to 4 threads
     }
 
     // Initialize ThreadPool with limited number of threads
     ThreadPool pool(num_workers);
     std::vector<std::future<std::pair<size_t, double>>> results;
-    results.reserve(list_size);
 
     // Prepare the output vector
     std::vector<double> output(list_size, 0.0);
@@ -294,16 +288,9 @@ std::vector<double> parallel_jaccard_composite_py(
                 }
             })
         );
-
-        // Update progress
-        if (progress_callback) {
-            std::lock_guard<std::mutex> lock(callback_mutex);
-            py::gil_scoped_acquire acquire;
-            progress_callback();
-        }
     }
 
-    // Collect the results in the correct order
+    // Collect the results
     for (auto& result_future : results) {
         try {
             auto result_pair = result_future.get();

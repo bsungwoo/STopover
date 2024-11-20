@@ -1,4 +1,3 @@
-// ThreadPool.h
 #ifndef THREAD_POOL_H
 #define THREAD_POOL_H
 
@@ -18,7 +17,7 @@ public:
 
     // Enqueue a task and return a future
     template<class F, class... Args>
-    auto enqueue(F&& f, Args&& args) 
+    auto enqueue(F&& f, Args&&... args) 
         -> std::future<typename std::result_of<F(Args...)>::type>;
 
 private:
@@ -71,9 +70,9 @@ inline ThreadPool::~ThreadPool()
         worker.join();
 }
 
-// Enqueue method
+// Enqueue method implementation
 template<class F, class... Args>
-auto ThreadPool::enqueue(F&& f, Args&& args) 
+auto ThreadPool::enqueue(F&& f, Args&&... args) 
     -> std::future<typename std::result_of<F(Args...)>::type>
 {
     using return_type = typename std::result_of<F(Args...)>::type;

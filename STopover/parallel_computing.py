@@ -7,8 +7,8 @@ def default_log_callback(message):
 
 def parallel_with_progress_topological_comp(
     locs, feats, spatial_type="visium", fwhm=2.5,
-    min_size=5, thres_per=30, return_mode="all", num_workers=4,
-    log_callback_func=None
+    min_size=5, thres_per=30, return_mode="all", num_workers=0,
+    log_callback_func=None,
 ):
     """
     Parallel computation for topological component extraction.
@@ -22,7 +22,7 @@ def parallel_with_progress_topological_comp(
         min_size (int): Minimum size of connected component.
         thres_per (int): Percentile threshold for filtering connected components.
         return_mode (str): Return mode.
-        num_workers (int): Number of parallel workers (default: 4).
+        num_workers (int): Number of parallel workers (0 to auto-detect).
         log_callback_func (callable, optional): Function to handle log messages from C++.
 
     Returns:
@@ -47,7 +47,7 @@ def parallel_with_progress_topological_comp(
     # Create a progress bar
     with tqdm.tqdm(total=total_tasks) as pbar:
         try:
-            # Call the C++ function for all tasks
+            # Call the C++ function
             batch_results = parallel_topological_comp(
                 locs=locs,
                 spatial_type=spatial_type,
@@ -61,20 +61,20 @@ def parallel_with_progress_topological_comp(
                 log_callback=log_callback_func
             )
 
-            # Assign results
+            # Assign results to the overall results list
             for i, res in enumerate(batch_results):
                 results[i] = res
 
         except Exception as e:
-            log_callback_func(f"\nException during topological_comp: {e}\n")
+            log_callback_func(f"\nException during computation: {e}\n")
             raise
 
     return results
 
 def parallel_with_progress_jaccard_composite(
     CCx_loc_sums, CCy_loc_sums, feat_xs=None, feat_ys=None,
-    jaccard_type="default", num_workers=4,
-    log_callback_func=None
+    jaccard_type="default", num_workers=0,
+    log_callback_func=None,
 ):
     """
     Parallel computation for Jaccard composite index.
@@ -86,7 +86,7 @@ def parallel_with_progress_jaccard_composite(
         feat_xs (list or np.ndarray, optional): List of NumPy arrays for feature x values.
         feat_ys (list or np.ndarray, optional): List of NumPy arrays for feature y values.
         jaccard_type (str, optional): Type of Jaccard index to calculate. Either "default" or "weighted".
-        num_workers (int): Number of parallel workers (default: 4).
+        num_workers (int): Number of parallel workers (0 to auto-detect).
         log_callback_func (callable, optional): Function to handle log messages from C++.
 
     Returns:
@@ -123,7 +123,7 @@ def parallel_with_progress_jaccard_composite(
     # Create a progress bar
     with tqdm.tqdm(total=total_tasks) as pbar:
         try:
-            # Call the C++ function for all tasks
+            # Call the C++ function
             batch_results = parallel_jaccard_composite(
                 CCx_loc_sums=CCx_loc_sums,
                 CCy_loc_sums=CCy_loc_sums,
@@ -135,12 +135,12 @@ def parallel_with_progress_jaccard_composite(
                 log_callback=log_callback_func
             )
 
-            # Assign results
+            # Assign results to the overall results list
             for i, res in enumerate(batch_results):
                 results[i] = res
 
         except Exception as e:
-            log_callback_func(f"\nException during jaccard_composite: {e}\n")
+            log_callback_func(f"\nException during computation: {e}\n")
             raise
 
     return results
