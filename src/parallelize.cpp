@@ -16,11 +16,49 @@ namespace py = pybind11;
 
 // Utility functions (assuming these are correctly defined in your project)
 Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
-    // ... (same as previously defined)
+    // Ensure the array is one-dimensional
+    if (array.ndim() != 1) {
+        throw std::invalid_argument("Input array must be one-dimensional.");
+    }
+
+    // Request a buffer descriptor from the NumPy array
+    py::buffer_info buf = array.request();
+
+    // Check if the array data type is double
+    if (buf.format != py::format_descriptor<double>::format()) {
+        throw std::invalid_argument("Input array must be of type float64.");
+    }
+
+    size_t size = buf.shape[0];
+    double* data_ptr = static_cast<double*>(buf.ptr);
+    ssize_t stride = buf.strides[0] / sizeof(double);
+
+    // Create an Eigen::Map with custom stride
+    typedef Eigen::Stride<Eigen::Dynamic, 1> StrideType;
+    Eigen::Map<Eigen::VectorXd, 0, StrideType> vec(
+        data_ptr, size, StrideType(stride, 1));
+
+    // Make a copy of the vector to return
+    return Eigen::VectorXd(vec);
 }
 
 Eigen::MatrixXd array_to_matrix(const py::array_t<double>& array) {
-    // ... (same as previously defined)
+    if (array.ndim() != 2) {
+        throw std::invalid_argument("Input array must be two-dimensional.");
+    }
+
+    py::buffer_info buf = array.request();
+    size_t rows = buf.shape[0];
+    size_t cols = buf.shape[1];
+
+    double* data_ptr = static_cast<double*>(buf.ptr);
+    ssize_t stride_row = buf.strides[0] / sizeof(double);
+    ssize_t stride_col = buf.strides[1] / sizeof(double);
+
+    Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>>
+        mat(data_ptr, rows, cols, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>(stride_row, stride_col));
+
+    return Eigen::MatrixXd(mat); // Make a deep copy if necessary
 }
 
 // Parallel function for topological_comp_res using OpenMP
@@ -33,15 +71,20 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     double thres_per,
     const std::string& return_mode,
     int num_workers,
-    py::function progress_callback,
-    py::function log_callback
+    py::object progress_callback_obj,
+    py::object log_callback_obj
 ) {
+    // Convert py::object to py::function, handling None
+    py::function progress_callback = progress_callback_obj.is_none() ? nullptr : progress_callback_obj.cast<py::function>();
+    py::function log_callback = log_callback_obj.is_none() ? nullptr : log_callback_obj.cast<py::function>();
+
     // Validate input sizes
     size_t list_size = locs.size();
     if (feats.size() != list_size) {
         std::string error_msg = "locs and feats must have the same length.";
-        py::gil_scoped_acquire acquire;
-        log_callback(error_msg.c_str());
+        if (log_callback) {
+            log_callback(error_msg.c_str());
+        }
         throw std::invalid_argument(error_msg);
     }
 
@@ -62,8 +105,9 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         catch (const std::exception& e) {
             std::string error_msg = "Error converting arrays to Eigen types: ";
             error_msg += e.what();
-            py::gil_scoped_acquire acquire;
-            log_callback(error_msg.c_str());
+            if (log_callback) {
+                log_callback(error_msg.c_str());
+            }
             throw;
         }
     }
@@ -88,8 +132,10 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
             {
                 std::string error_msg = "Error in topological_comp_res: ";
                 error_msg += e.what();
-                py::gil_scoped_acquire acquire;
-                log_callback(error_msg.c_str());
+                if (log_callback) {
+                    py::gil_scoped_acquire acquire;
+                    log_callback(error_msg.c_str());
+                }
             }
             // Assign a default Eigen::VectorXd or handle as needed
             output[i] = Eigen::VectorXd();
@@ -107,8 +153,10 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
                 catch (const py::error_already_set& e) {
                     std::string error_msg = "Error in progress_callback: ";
                     error_msg += e.what();
-                    py::gil_scoped_acquire acquire;
-                    log_callback(error_msg.c_str());
+                    if (log_callback) {
+                        py::gil_scoped_acquire acquire;
+                        log_callback(error_msg.c_str());
+                    }
                     throw std::runtime_error(error_msg);
                 }
             }
@@ -126,17 +174,22 @@ std::vector<double> parallel_jaccard_composite(
     const std::vector<py::array_t<double>>& feat_ys,
     const std::string& jaccard_type,
     int num_workers,
-    py::function progress_callback,
-    py::function log_callback
+    py::object progress_callback_obj,
+    py::object log_callback_obj
 ) {
+    // Convert py::object to py::function, handling None
+    py::function progress_callback = progress_callback_obj.is_none() ? nullptr : progress_callback_obj.cast<py::function>();
+    py::function log_callback = log_callback_obj.is_none() ? nullptr : log_callback_obj.cast<py::function>();
+
     // Validate input sizes
     size_t list_size = CCx_loc_sums.size();
     if (CCy_loc_sums.size() != list_size ||
         feat_xs.size() != list_size ||
         feat_ys.size() != list_size) {
         std::string error_msg = "All input lists must have the same length.";
-        py::gil_scoped_acquire acquire;
-        log_callback(error_msg.c_str());
+        if (log_callback) {
+            log_callback(error_msg.c_str());
+        }
         throw std::invalid_argument(error_msg);
     }
 
@@ -166,8 +219,9 @@ std::vector<double> parallel_jaccard_composite(
         catch (const std::exception& e) {
             std::string error_msg = "Error converting lists to Eigen vectors: ";
             error_msg += e.what();
-            py::gil_scoped_acquire acquire;
-            log_callback(error_msg.c_str());
+            if (log_callback) {
+                log_callback(error_msg.c_str());
+            }
             throw;
         }
     }
@@ -200,8 +254,10 @@ std::vector<double> parallel_jaccard_composite(
             {
                 std::string error_msg = "Error in jaccard_composite: ";
                 error_msg += e.what();
-                py::gil_scoped_acquire acquire;
-                log_callback(error_msg.c_str());
+                if (log_callback) {
+                    py::gil_scoped_acquire acquire;
+                    log_callback(error_msg.c_str());
+                }
             }
             // Assign a default value or handle as needed
             output[i] = 0.0;
@@ -219,8 +275,10 @@ std::vector<double> parallel_jaccard_composite(
                 catch (const py::error_already_set& e) {
                     std::string error_msg = "Error in progress_callback: ";
                     error_msg += e.what();
-                    py::gil_scoped_acquire acquire;
-                    log_callback(error_msg.c_str());
+                    if (log_callback) {
+                        py::gil_scoped_acquire acquire;
+                        log_callback(error_msg.c_str());
+                    }
                     throw std::runtime_error(error_msg);
                 }
             }
@@ -233,11 +291,24 @@ std::vector<double> parallel_jaccard_composite(
 // Expose to Python via Pybind11
 PYBIND11_MODULE(parallelize, m) {  // Module name within the STopover package
     m.def("parallel_topological_comp", &parallel_topological_comp, "Parallelized topological_comp_res function using OpenMP",
-          py::arg("locs"), py::arg("spatial_type") = "visium", py::arg("fwhm") = 2.5, py::arg("feats"), 
-          py::arg("min_size") = 5, py::arg("thres_per") = 30, py::arg("return_mode") = "all", 
-          py::arg("num_workers") = 4, py::arg("progress_callback"), py::arg("log_callback"));
+          py::arg("locs"),
+          py::arg("spatial_type") = "visium",
+          py::arg("fwhm") = 2.5,
+          py::arg("feats"),
+          py::arg("min_size") = 5,
+          py::arg("thres_per") = 30,
+          py::arg("return_mode") = "all",
+          py::arg("num_workers") = 4,
+          py::arg("progress_callback") = py::none(),
+          py::arg("log_callback") = py::none());
 
     m.def("parallel_jaccard_composite", &parallel_jaccard_composite, "Parallelized jaccard_composite function using OpenMP",
-          py::arg("CCx_loc_sums"), py::arg("CCy_loc_sums"), py::arg("feat_xs"), py::arg("feat_ys"), 
-          py::arg("jaccard_type") = "default", py::arg("num_workers") = 4, py::arg("progress_callback"), py::arg("log_callback"));
+          py::arg("CCx_loc_sums"),
+          py::arg("CCy_loc_sums"),
+          py::arg("feat_xs"),
+          py::arg("feat_ys"),
+          py::arg("jaccard_type") = "default",
+          py::arg("num_workers") = 4,
+          py::arg("progress_callback") = py::none(),
+          py::arg("log_callback") = py::none());
 }
