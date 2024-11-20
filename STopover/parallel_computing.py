@@ -1,7 +1,7 @@
 import numpy as np
 import tqdm
 import gc
-from .parallelize import parallel_topological_comp, parallel_jaccard_composite
+from .parallelize import parallel_topological_comp_omp, parallel_jaccard_composite
 
 def default_log_callback(message):
     print(f"C++ Log: {message}", end='')  # 'end' to avoid adding extra newlines
@@ -9,11 +9,10 @@ def default_log_callback(message):
 def parallel_with_progress_topological_comp(
     locs, feats, spatial_type="visium", fwhm=2.5,
     min_size=5, thres_per=30, return_mode="all", num_workers=0,
-    log_callback_func=None, batch_size=500
+    log_callback_func=None
 ):
     """
-    Batched parallel computation for topological component extraction.
-    Delegates internal batching to C++.
+    Parallel computation for topological component extraction using OpenMP.
     
     Args:
         locs (list): List of locations (NumPy arrays).
@@ -25,7 +24,6 @@ def parallel_with_progress_topological_comp(
         return_mode (str): Return mode.
         num_workers (int): Number of parallel workers (0 to auto-detect).
         log_callback_func (callable, optional): Function to handle log messages from C++.
-        batch_size (int, optional): Maximum number of tasks per batch.
     
     Returns:
         list: A list of topological components for each feature.
@@ -61,10 +59,10 @@ def parallel_with_progress_topological_comp(
             pbar.update(n)
 
         try:
-            # Call the C++ function, which handles internal batching
-            output = parallel_topological_comp(
-                locs=locs,
-                feats=feats,
+            # Call the C++ function, which handles parallelism with OpenMP
+            output = parallel_topological_comp_omp(
+                locs_eigen=locs,
+                feats_eigen=feats,
                 spatial_type=spatial_type,
                 fwhm=fwhm,
                 min_size=min_size,
@@ -72,12 +70,14 @@ def parallel_with_progress_topological_comp(
                 return_mode=return_mode,
                 num_workers=num_workers,
                 progress_callback=progress_callback,
-                log_callback=log_callback_func,
-                batch_size=batch_size
+                log_callback=log_callback_func
             )
         except Exception as e:
             log_callback_func(f"Error during topological_comp computation: {e}\n")
             raise
+
+    # Optionally, trigger garbage collection
+    gc.collect()
 
     return output
 
@@ -85,10 +85,10 @@ def parallel_with_progress_topological_comp(
 def parallel_with_progress_jaccard_composite(
     CCx_loc_sums, CCy_loc_sums, feat_xs=None, feat_ys=None,
     jaccard_type="default", num_workers=0,
-    log_callback_func=None, batch_size=500
+    log_callback_func=None
 ):
     """
-    Batched parallel computation for Jaccard composite index.
+    Parallel computation for Jaccard composite index.
     Delegates internal batching to C++.
     
     Args:
@@ -99,7 +99,6 @@ def parallel_with_progress_jaccard_composite(
         jaccard_type (str, optional): Type of Jaccard index to calculate. Either "default" or "weighted".
         num_workers (int): Number of parallel workers (0 to auto-detect).
         log_callback_func (callable, optional): Function to handle log messages from C++.
-        batch_size (int, optional): Maximum number of tasks per batch.
     
     Returns:
         list: A list of Jaccard composite indices.
@@ -139,7 +138,7 @@ def parallel_with_progress_jaccard_composite(
             pbar.update(n)
 
         try:
-            # Call the C++ function, which handles internal batching
+            # Call the C++ function, which handles parallelism with OpenMP
             output_j = parallel_jaccard_composite(
                 CCx_loc_sums=CCx_loc_sums,
                 CCy_loc_sums=CCy_loc_sums,
@@ -148,11 +147,13 @@ def parallel_with_progress_jaccard_composite(
                 jaccard_type=jaccard_type,
                 num_workers=num_workers,
                 progress_callback=progress_callback,
-                log_callback=log_callback_func,
-                batch_size=batch_size
+                log_callback=log_callback_func
             )
         except Exception as e:
             log_callback_func(f"Error during jaccard_composite computation: {e}\n")
             raise
+
+    # Optionally, trigger garbage collection
+    gc.collect()
 
     return output_j

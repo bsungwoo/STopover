@@ -230,7 +230,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
                                                         feats = [feat[1] for feat in loc_feat_pair],
                                                         spatial_type=spatial_type,
                                                         min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
-                                                        num_workers=0)
+                                                        num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
 
     # Make dataframe for the similarity between feature 1 and 2 across the groups
     print('Calculation of composite jaccard indexes between feature pairs')
@@ -283,7 +283,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
                                                         feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
                                                         feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
                                                         jaccard_type=jaccard_type,
-                                                        num_workers=0)
+                                                        num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))))
 
     # Create dataframe for J metrics
     output_j = pd.DataFrame(output_j, columns=['J_comp'])

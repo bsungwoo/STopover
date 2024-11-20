@@ -26,8 +26,7 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     int min_size, double thres_per, const std::string& return_mode, 
     int num_workers,
     py::function progress_callback,
-    py::function log_callback,
-    int batch_size);  // Added batch_size
+    py::function log_callback);
 
 // Parallel function for jaccard_composite
 std::vector<double> parallel_jaccard_composite(
@@ -38,7 +37,6 @@ std::vector<double> parallel_jaccard_composite(
     const std::string& jaccard_type,
     int num_workers,
     py::function progress_callback,
-    py::function log_callback,
-    int batch_size);  // Added batch_size
+    py::function log_callback);
 
 #endif // PARALLELIZE_H

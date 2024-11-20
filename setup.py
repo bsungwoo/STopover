@@ -15,13 +15,13 @@ except ImportError:
 def install_eigen_with_conda(conda_prefix):
     """
     Install Eigen using Conda if it's not already installed.
-    
+
     Args:
         conda_prefix (str): The prefix path of the active Conda environment.
-        
+
     Returns:
         str: The path to the Eigen include directory.
-        
+
     Raises:
         RuntimeError: If Conda installation fails.
         FileNotFoundError: If Eigen is not found after installation.
@@ -46,10 +46,10 @@ def find_eigen_include():
     """
     Dynamically find the Eigen include directory within the active Conda environment or system paths.
     Allows user override via EIGEN_INCLUDE environment variable.
-    
+
     Returns:
         str: The path to the Eigen include directory.
-        
+
     Raises:
         FileNotFoundError: If Eigen is not found in any of the expected directories.
     """
@@ -115,6 +115,36 @@ except FileNotFoundError as e:
     print(str(e))
     sys.exit(1)
 
+# Function to get OpenMP flags based on compiler and platform
+def get_openmp_flags():
+    """
+    Determine the appropriate OpenMP compiler and linker flags based on the platform and compiler.
+
+    Returns:
+        tuple: (compile_flags, link_flags)
+    """
+    compile_flags = []
+    link_flags = []
+    compiler = sys.platform
+    if compiler == "win32":
+        # For MSVC
+        compile_flags = ['/openmp']
+        link_flags = []
+    elif compiler == "darwin":
+        # For macOS, assuming GCC is installed via Homebrew
+        # Clang on macOS has limited OpenMP support
+        # Users should install GCC via Homebrew and set CC/CXX accordingly
+        compile_flags = ['-fopenmp']
+        link_flags = ['-fopenmp']
+    else:
+        # For Linux and other Unix-like systems, assuming GCC or Clang
+        compile_flags = ['-fopenmp']
+        link_flags = ['-fopenmp']
+    return (compile_flags, link_flags)
+
+# Get OpenMP flags
+OPENMP_COMPILE_FLAGS, OPENMP_LINK_FLAGS = get_openmp_flags()
+
 # Define the extension module with all necessary source files
 ext_modules = [
     Extension(
@@ -139,8 +169,8 @@ ext_modules = [
             "src"  # Assuming headers are in 'src'
         ],
         language="c++",
-        extra_compile_args=["-O3", "-Wall", "-std=c++17", "-fopenmp"],
-        extra_link_args=["-fopenmp"]
+        extra_compile_args=["-O3", "-Wall", "-std=c++17"] + OPENMP_COMPILE_FLAGS,
+        extra_link_args=OPENMP_LINK_FLAGS
     ),
     Extension(
         "STopover.connected_components",  # Another module name
@@ -158,25 +188,32 @@ ext_modules = [
             "src"
         ],
         language="c++",
-        extra_compile_args=["-O3", "-Wall", "-std=c++17", "-fopenmp"],
-        extra_link_args=["-fopenmp"]
+        extra_compile_args=["-O3", "-Wall", "-std=c++17"] + OPENMP_COMPILE_FLAGS,
+        extra_link_args=OPENMP_LINK_FLAGS
     ),
 ]
 
 # Define a custom build extension to handle compiler specifics
 class BuildExt(build_ext):
     def build_extensions(self):
-        # Apply compiler-specific options for GCC or Clang on Unix-based systems
-        compiler = self.compiler.compiler_type
-        if compiler == "unix":
-            for ext in self.extensions:
-                # Ensures ABI compatibility if needed
-                ext.extra_compile_args += ["-D_GLIBCXX_USE_CXX11_ABI=0"]
-        elif compiler == "msvc":
-            for ext in self.extensions:
-                ext.extra_compile_args = ["/O2", "/openmp"]
-        
-        super().build_extensions()
+        # Apply compiler-specific options
+        compiler_type = self.compiler.compiler_type
+        for ext in self.extensions:
+            if compiler_type == "msvc":
+                # For MSVC, ensure that OpenMP flags are correctly set
+                ext.extra_compile_args = ['/O2'] + ext.extra_compile_args
+                # Link flags for MSVC typically don't require OpenMP flags
+            elif compiler_type in ["unix", "cygwin"]:
+                # For GCC and Clang on Unix-like systems
+                # Optionally, add more flags or optimization levels
+                pass
+            elif compiler_type == "mingw32":
+                # For MinGW on Windows
+                pass
+            else:
+                # Other compilers
+                pass
+        build_ext.build_extensions(self)
 
 # Final setup function including Pybind11 extension and existing Python package configuration
 setup(

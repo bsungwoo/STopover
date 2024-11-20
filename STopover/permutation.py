@@ -227,8 +227,9 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
     print("Elapsed time: %.2f seconds " % (time.time()-start_time))
 
     # Start the multiprocessing for extracting adjacency matrix and mask
-    loc_feat_pair = [(loc_list[grp_idx], feat[:,feat_idx].reshape((-1,1))) \
-        for grp_idx, feat in enumerate(val_list) for feat_idx in range(feat.shape[1])]
+    loc_feat_pair = [(loc_list[grp_idx], feat[perm_idx][:,feat_idx].reshape((-1,1))) \
+        for grp_idx, feat in enumerate(val_list) \
+            for perm_idx in range(nperm) for feat_idx in range(feat[0].shape[1])]
     
     # Start the multiprocessing for finding connected components of each feature
     print("Calculation of connected components for each feature")
