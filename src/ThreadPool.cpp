@@ -51,6 +51,3 @@ auto ThreadPool::enqueue(F&& f, Args&&... args)
     
     return res;
 }
-
-// Explicit template instantiation
-template auto ThreadPool::enqueue(std::function<void()>&&, ...)->std::future<void>;

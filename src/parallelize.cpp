@@ -177,68 +177,82 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     return output;
 }
 
-std::vector<double> parallel_jaccard_composite(
-    const std::vector<py::array_t<double>>& CCx_loc_sums,
-    const std::vector<py::array_t<double>>& CCy_loc_sums,
-    const std::vector<py::array_t<double>>& feat_xs,
-    const std::vector<py::array_t<double>>& feat_ys,
+// Updated parallel_jaccard_composite function to handle lists of NumPy arrays
+std::vector<double> parallel_jaccard_composite_py(
+    py::list CCx_loc_sums_list,
+    py::list CCy_loc_sums_list,
+    py::list feat_xs_list,
+    py::list feat_ys_list,
     const std::string& jaccard_type,
     int num_workers,
     py::function progress_callback,
-    py::function log_callback) 
-{
-    size_t total_tasks = CCx_loc_sums.size();
-    std::vector<Eigen::VectorXd> CCx_eigen;
-    std::vector<Eigen::VectorXd> CCy_eigen;
-    std::vector<Eigen::VectorXd> feat_x_eigen;
-    std::vector<Eigen::VectorXd> feat_y_eigen;
+    py::function log_callback) {
 
-    CCx_eigen.reserve(total_tasks);
-    CCy_eigen.reserve(total_tasks);
-    feat_x_eigen.reserve(total_tasks);
-    feat_y_eigen.reserve(total_tasks);
-
-    for (size_t i = 0; i < total_tasks; ++i) {
-        CCx_eigen.emplace_back(array_to_vector(CCx_loc_sums[i]));
-        CCy_eigen.emplace_back(array_to_vector(CCy_loc_sums[i]));
-        feat_x_eigen.emplace_back(array_to_vector(feat_xs[i]));
-        feat_y_eigen.emplace_back(array_to_vector(feat_ys[i]));
+    // Check that all lists have the same size
+    size_t list_size = CCx_loc_sums_list.size();
+    if (CCy_loc_sums_list.size() != list_size ||
+        feat_xs_list.size() != list_size ||
+        feat_ys_list.size() != list_size) {
+        throw std::invalid_argument("All input lists must have the same length.");
     }
 
-    // Initialize ThreadPool
+    // Convert each NumPy array in the lists to Eigen::VectorXd
+    std::vector<Eigen::VectorXd> CCx_loc_sums_vec;
+    std::vector<Eigen::VectorXd> CCy_loc_sums_vec;
+    std::vector<Eigen::VectorXd> feat_xs_vec;
+    std::vector<Eigen::VectorXd> feat_ys_vec;
+
+    CCx_loc_sums_vec.reserve(list_size);
+    CCy_loc_sums_vec.reserve(list_size);
+    feat_xs_vec.reserve(list_size);
+    feat_ys_vec.reserve(list_size);
+
+    for (size_t i = 0; i < list_size; ++i) {
+        try {
+            // Convert each array to Eigen::VectorXd
+            Eigen::VectorXd CCx_sum = array_to_vector(CCx_loc_sums_list[i].cast<py::array_t<double>>());
+            Eigen::VectorXd CCy_sum = array_to_vector(CCy_loc_sums_list[i].cast<py::array_t<double>>());
+            Eigen::VectorXd feat_x = array_to_vector(feat_xs_list[i].cast<py::array_t<double>>());
+            Eigen::VectorXd feat_y = array_to_vector(feat_ys_list[i].cast<py::array_t<double>>());
+
+            CCx_loc_sums_vec.push_back(CCx_sum);
+            CCy_loc_sums_vec.push_back(CCy_sum);
+            feat_xs_vec.push_back(feat_x);
+            feat_ys_vec.push_back(feat_y);
+        }
+        catch (const py::cast_error& e) {
+            throw std::invalid_argument("All elements in input lists must be NumPy arrays of type float64.");
+        }
+    }
+
+    // Initialize ThreadPool using the singleton instance
     ThreadPool& pool = ThreadPool::getInstance(num_workers, 1000); // max_queue_size=1000
 
     std::vector<std::future<std::pair<size_t, double>>> results;
-    results.reserve(total_tasks);
+    results.reserve(list_size);
 
-    std::vector<double> output(total_tasks);
+    std::vector<double> output(list_size, 0.0);
 
-    for (size_t i = 0; i < total_tasks; ++i) {
+    for (size_t i = 0; i < list_size; ++i) {
         size_t index = i;
-        const Eigen::VectorXd& CCx_sum = CCx_eigen[i];
-        const Eigen::VectorXd& CCy_sum = CCy_eigen[i];
-        const Eigen::VectorXd& feat_x = feat_x_eigen[i];
-        const Eigen::VectorXd& feat_y = feat_y_eigen[i];
+        Eigen::VectorXd CCx_sum = CCx_loc_sums_vec[i];
+        Eigen::VectorXd CCy_sum = CCy_loc_sums_vec[i];
+        Eigen::VectorXd feat_x = feat_xs_vec[i];
+        Eigen::VectorXd feat_y = feat_ys_vec[i];
 
         // Enqueue the task
         results.emplace_back(
-            pool.enqueue([=, &jaccard_type, &progress_callback, &log_callback]() -> std::pair<size_t, double> {
+            pool.enqueue([=]() -> std::pair<size_t, double> {
                 try {
-                    // Release GIL during computation
-                    py::gil_scoped_release release;
-
-                    double res = jaccard_composite(CCx_sum, CCy_sum, &feat_x, &feat_y, jaccard_type);
-
-                    // Acquire GIL before invoking Python callbacks
-                    {
-                        std::lock_guard<std::mutex> lock(callback_mutex);
-                        if (progress_callback) {
-                            py::gil_scoped_acquire acquire;
-                            progress_callback();
-                        }
+                    double jaccard_index; // Declare outside of if-else to ensure scope
+                    if (jaccard_type == "default") {
+                        jaccard_index = jaccard_composite(CCx_sum, CCy_sum, nullptr, nullptr, jaccard_type);
+                    } else if (jaccard_type == "weighted") {
+                        jaccard_index = jaccard_composite(CCx_sum, CCy_sum, &feat_x, &feat_y, jaccard_type);
+                    } else {
+                        throw std::invalid_argument("Invalid jaccard_type: " + jaccard_type);
                     }
-
-                    return {index, res};
+                    return {index, jaccard_index};
                 }
                 catch (const std::exception& e) {
                     // Log exception
@@ -263,9 +277,19 @@ std::vector<double> parallel_jaccard_composite(
                 }
             })
         );
+
+        // Update progress
+        if (progress_callback) {
+            // Acquire GIL before invoking the callback
+            {
+                std::lock_guard<std::mutex> lock(callback_mutex);
+                py::gil_scoped_acquire acquire;
+                progress_callback();
+            }
+        }
     }
 
-    // Collect results
+    // Collect the results
     for (auto& result_future : results) {
         try {
             auto result_pair = result_future.get();
