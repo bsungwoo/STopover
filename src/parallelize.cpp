@@ -74,15 +74,15 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     py::object progress_callback_obj,
     py::object log_callback_obj
 ) {
-    // Convert py::object to py::function, handling None
-    py::function progress_callback = progress_callback_obj.is_none() ? nullptr : progress_callback_obj.cast<py::function>();
-    py::function log_callback = log_callback_obj.is_none() ? nullptr : log_callback_obj.cast<py::function>();
+    // Use py::object to allow for None
+    py::object progress_callback = progress_callback_obj.is_none() ? py::none() : progress_callback_obj;
+    py::object log_callback = log_callback_obj.is_none() ? py::none() : log_callback_obj;
 
     // Validate input sizes
     size_t list_size = locs.size();
     if (feats.size() != list_size) {
         std::string error_msg = "locs and feats must have the same length.";
-        if (log_callback) {
+        if (!log_callback.is_none()) {
             log_callback(error_msg.c_str());
         }
         throw std::invalid_argument(error_msg);
@@ -105,7 +105,7 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         catch (const std::exception& e) {
             std::string error_msg = "Error converting arrays to Eigen types: ";
             error_msg += e.what();
-            if (log_callback) {
+            if (!log_callback.is_none()) {
                 log_callback(error_msg.c_str());
             }
             throw;
@@ -132,7 +132,7 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
             {
                 std::string error_msg = "Error in topological_comp_res: ";
                 error_msg += e.what();
-                if (log_callback) {
+                if (!log_callback.is_none()) {
                     py::gil_scoped_acquire acquire;
                     log_callback(error_msg.c_str());
                 }
@@ -144,7 +144,7 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         // Update progress
         #pragma omp critical
         {
-            if (progress_callback) {
+            if (!progress_callback.is_none()) {
                 try {
                     // Acquire GIL before calling Python functions
                     py::gil_scoped_acquire acquire;
@@ -153,7 +153,7 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
                 catch (const py::error_already_set& e) {
                     std::string error_msg = "Error in progress_callback: ";
                     error_msg += e.what();
-                    if (log_callback) {
+                    if (!log_callback.is_none()) {
                         py::gil_scoped_acquire acquire;
                         log_callback(error_msg.c_str());
                     }
@@ -177,9 +177,9 @@ std::vector<double> parallel_jaccard_composite(
     py::object progress_callback_obj,
     py::object log_callback_obj
 ) {
-    // Convert py::object to py::function, handling None
-    py::function progress_callback = progress_callback_obj.is_none() ? nullptr : progress_callback_obj.cast<py::function>();
-    py::function log_callback = log_callback_obj.is_none() ? nullptr : log_callback_obj.cast<py::function>();
+    // Use py::object to allow for None
+    py::object progress_callback = progress_callback_obj.is_none() ? py::none() : progress_callback_obj;
+    py::object log_callback = log_callback_obj.is_none() ? py::none() : log_callback_obj;
 
     // Validate input sizes
     size_t list_size = CCx_loc_sums.size();
@@ -187,7 +187,7 @@ std::vector<double> parallel_jaccard_composite(
         feat_xs.size() != list_size ||
         feat_ys.size() != list_size) {
         std::string error_msg = "All input lists must have the same length.";
-        if (log_callback) {
+        if (!log_callback.is_none()) {
             log_callback(error_msg.c_str());
         }
         throw std::invalid_argument(error_msg);
@@ -219,7 +219,7 @@ std::vector<double> parallel_jaccard_composite(
         catch (const std::exception& e) {
             std::string error_msg = "Error converting lists to Eigen vectors: ";
             error_msg += e.what();
-            if (log_callback) {
+            if (!log_callback.is_none()) {
                 log_callback(error_msg.c_str());
             }
             throw;
@@ -254,7 +254,7 @@ std::vector<double> parallel_jaccard_composite(
             {
                 std::string error_msg = "Error in jaccard_composite: ";
                 error_msg += e.what();
-                if (log_callback) {
+                if (!log_callback.is_none()) {
                     py::gil_scoped_acquire acquire;
                     log_callback(error_msg.c_str());
                 }
@@ -266,7 +266,7 @@ std::vector<double> parallel_jaccard_composite(
         // Update progress
         #pragma omp critical
         {
-            if (progress_callback) {
+            if (!progress_callback.is_none()) {
                 try {
                     // Acquire GIL before calling Python functions
                     py::gil_scoped_acquire acquire;
@@ -275,7 +275,7 @@ std::vector<double> parallel_jaccard_composite(
                 catch (const py::error_already_set& e) {
                     std::string error_msg = "Error in progress_callback: ";
                     error_msg += e.what();
-                    if (log_callback) {
+                    if (!log_callback.is_none()) {
                         py::gil_scoped_acquire acquire;
                         log_callback(error_msg.c_str());
                     }
@@ -290,7 +290,9 @@ std::vector<double> parallel_jaccard_composite(
 
 // Expose to Python via Pybind11
 PYBIND11_MODULE(parallelize, m) {  // Module name within the STopover package
-    m.def("parallel_topological_comp", &parallel_topological_comp, "Parallelized topological_comp_res function using OpenMP",
+    m.def("parallel_topological_comp", 
+          static_cast<std::vector<Eigen::VectorXd> (*)(const std::vector<py::array_t<double>>&, const std::string&, double, const std::vector<py::array_t<double>>&, int, double, const std::string&, int, py::object, py::object)>(&parallel_topological_comp), 
+          "Parallelized topological_comp_res function using OpenMP",
           py::arg("locs"),
           py::arg("spatial_type") = "visium",
           py::arg("fwhm") = 2.5,
@@ -302,7 +304,9 @@ PYBIND11_MODULE(parallelize, m) {  // Module name within the STopover package
           py::arg("progress_callback") = py::none(),
           py::arg("log_callback") = py::none());
 
-    m.def("parallel_jaccard_composite", &parallel_jaccard_composite, "Parallelized jaccard_composite function using OpenMP",
+    m.def("parallel_jaccard_composite", 
+          static_cast<std::vector<double> (*)(const std::vector<py::array_t<double>>&, const std::vector<py::array_t<double>>&, const std::vector<py::array_t<double>>&, const std::vector<py::array_t<double>>&, const std::string&, int, py::object, py::object)>(&parallel_jaccard_composite), 
+          "Parallelized jaccard_composite function using OpenMP",
           py::arg("CCx_loc_sums"),
           py::arg("CCy_loc_sums"),
           py::arg("feat_xs"),
