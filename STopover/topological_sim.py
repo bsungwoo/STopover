@@ -226,8 +226,8 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     
     # Start the multiprocessing for finding connected components of each feature
     print("Calculation of connected components for each feature")
-    output_cc = parallel_with_progress_topological_comp(locs = [np.ascontiguousarray(feat[0]).astype(np.float64) for feat in loc_feat_pair],
-                                                        feats = [np.ascontiguousarray(feat[1]).astype(np.float64) for feat in loc_feat_pair],
+    output_cc = parallel_with_progress_topological_comp(locs = [feat[0] for feat in loc_feat_pair],
+                                                        feats = [feat[1] for feat in loc_feat_pair],
                                                         spatial_type=spatial_type,
                                                         min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
                                                         num_workers=0)
@@ -278,10 +278,10 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type = 'visium', group_list
     data_mod.obs = data_mod.obs.join(output_cc_loc, lsuffix='_prev'+str(data_count))
 
     # Get the output for jaccard
-    output_j = parallel_with_progress_jaccard_composite(CCx_loc_sums=[np.ascontiguousarray(feat[0]).astype(np.float64) for feat in CCxy_loc_mat_list], 
-                                                        CCy_loc_sums=[np.ascontiguousarray(feat[1]).astype(np.float64) for feat in CCxy_loc_mat_list],
-                                                        feat_xs=[np.ascontiguousarray(feat[2]).astype(np.float64) for feat in CCxy_loc_mat_list],
-                                                        feat_ys=[np.ascontiguousarray(feat[3]).astype(np.float64) for feat in CCxy_loc_mat_list],
+    output_j = parallel_with_progress_jaccard_composite(CCx_loc_sums=[feat[0] for feat in CCxy_loc_mat_list], 
+                                                        CCy_loc_sums=[feat[1] for feat in CCxy_loc_mat_list],
+                                                        feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
+                                                        feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
                                                         jaccard_type=jaccard_type,
                                                         num_workers=0)
 

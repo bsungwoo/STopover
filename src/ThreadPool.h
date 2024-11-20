@@ -9,6 +9,8 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <exception>
+#include <iostream>
 
 class ThreadPool {
 public:
@@ -44,7 +46,7 @@ inline ThreadPool::ThreadPool(size_t threads)
                 while(true)
                 {
                     std::function<void()> task;
-    
+
                     {
                         std::unique_lock<std::mutex> lock(this->queue_mutex);
                         this->condition.wait(lock,
@@ -54,8 +56,18 @@ inline ThreadPool::ThreadPool(size_t threads)
                         task = std::move(this->tasks.front());
                         this->tasks.pop();
                     }
-    
-                    task();
+
+                    try {
+                        task();
+                    }
+                    catch (const std::exception& e) {
+                        std::cerr << "Exception in ThreadPool task: " << e.what() << std::endl;
+                        // Optionally, rethrow or handle the exception as needed
+                    }
+                    catch (...) {
+                        std::cerr << "Unknown exception in ThreadPool task." << std::endl;
+                        // Optionally, rethrow or handle the exception as needed
+                    }
                 }
             }
         );
@@ -67,7 +79,8 @@ inline ThreadPool::~ThreadPool()
     stop = true;
     condition.notify_all();
     for(std::thread &worker: workers)
-        worker.join();
+        if(worker.joinable())
+            worker.join();
 }
 
 // Enqueue method
@@ -89,7 +102,19 @@ auto ThreadPool::enqueue(F&& f, Args&&... args)
         if(stop)
             throw std::runtime_error("enqueue on stopped ThreadPool");
 
-        tasks.emplace([task](){ (*task)(); });
+        tasks.emplace([task](){ 
+            try {
+                (*task)(); 
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Exception in enqueued task: " << e.what() << std::endl;
+                throw; // Re-throw to allow future to capture it
+            }
+            catch (...) {
+                std::cerr << "Unknown exception in enqueued task." << std::endl;
+                throw;
+            }
+        });
     }
     condition.notify_one();
     return res;
