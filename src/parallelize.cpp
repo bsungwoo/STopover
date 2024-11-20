@@ -246,9 +246,9 @@ std::vector<double> parallel_jaccard_composite_py(
                 try {
                     double jaccard_index; // Declare outside of if-else to ensure scope
                     if (jaccard_type == "default") {
-                        jaccard_index = jaccard_composite(CCx_sum, CCy_sum, nullptr, nullptr, jaccard_type);
+                        jaccard_index = jaccard_composite(CCx_sum, CCy_sum, nullptr, nullptr);
                     } else if (jaccard_type == "weighted") {
-                        jaccard_index = jaccard_composite(CCx_sum, CCy_sum, &feat_x, &feat_y, jaccard_type);
+                        jaccard_index = jaccard_composite(CCx_sum, CCy_sum, &feat_x, &feat_y);
                     } else {
                         throw std::invalid_argument("Invalid jaccard_type: " + jaccard_type);
                     }
