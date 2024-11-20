@@ -19,6 +19,9 @@
 
 namespace py = pybind11;
 
+// Global mutex for synchronizing callback invocations
+std::mutex callback_mutex;
+
 Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
     // Ensure the array is one-dimensional
     if (array.ndim() != 1) {

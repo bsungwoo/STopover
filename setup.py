@@ -127,6 +127,7 @@ ext_modules = [
             "src/make_original_dendrogram.cpp",
             "src/make_smoothed_dendrogram.cpp",
             "src/utils.cpp",
+            "src/ThreadPool.cpp",
             # "src/logger.cpp",
             # "src/custom_streambuf.cpp",
             # "src/cout_redirector.cpp"
