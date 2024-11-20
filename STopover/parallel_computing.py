@@ -51,7 +51,7 @@ def parallel_with_progress_topological_comp(
         if feat.ndim != 1:
             raise ValueError(f"feats[{i}] is not one-dimensional after reshape.")
 
-    # Define a default log_callback if none is provided
+   # Assign log_callback_func early to ensure it's not None during exception handling
     if log_callback_func is None:
         log_callback_func = default_log_callback
 
@@ -65,11 +65,10 @@ def parallel_with_progress_topological_comp(
 
     # Process batches sequentially
     with tqdm.tqdm(total=total_tasks) as pbar:
-        for batch_idx, (batch_locs, batch_feats) in enumerate(zip(batches_locs, batches_feats)):
+        for batch_idx, (batch_locs, batch_feats) in enumerate(zip(batches_locs, batches_feats)):                
             # Define a Python callback function to update progress
             def update_progress():
                 pbar.update(1)
-                
             try:
                 batch_results = parallel_topological_comp(
                     locs=batch_locs,
@@ -118,21 +117,30 @@ def parallel_with_progress_jaccard_composite(
     Returns:
         list: A list of Jaccard composite indices.
     """
-    # If feat_xs or feat_ys are not provided, initialize them with zero arrays matching the length
+    # Assign log_callback_func early to ensure it's not None during exception handling
+    if log_callback_func is None:
+        log_callback_func = default_log_callback
+
+    # Initialize feat_xs and feat_ys if not provided
     if feat_xs is None:
         feat_xs = [np.array([0.0]) for _ in range(len(CCx_loc_sums))]
     if feat_ys is None:
-        feat_ys = [np.array([0.0]) for _ in range(len(CCx_loc_sums))]
+        feat_ys = [np.array([0.0]) for _ in range(len(CCy_loc_sums))]
 
-    # Ensure that all input lists have the same length
+    # Validate input lengths
     if not (len(CCx_loc_sums) == len(CCy_loc_sums) == len(feat_xs) == len(feat_ys)):
+        log_callback_func("Error: All input lists must have the same length.\n")
         raise ValueError("All input lists must have the same length.")
-    
-    # Convert all NumPy arrays to Python lists
-    CCx_loc_sums = [arr.tolist() for arr in CCx_loc_sums]
-    CCy_loc_sums = [arr.tolist() for arr in CCy_loc_sums]
-    feat_xs = [arr.tolist() for arr in feat_xs]
-    feat_ys = [arr.tolist() for arr in feat_ys]
+
+    try:
+        # Convert all NumPy arrays to Python lists
+        CCx_loc_sums = [arr.tolist() for arr in CCx_loc_sums]
+        CCy_loc_sums = [arr.tolist() for arr in CCy_loc_sums]
+        feat_xs = [arr.tolist() for arr in feat_xs]
+        feat_ys = [arr.tolist() for arr in feat_ys]
+    except Exception as e:
+        log_callback_func(f"Error during conversion of NumPy arrays to lists: {e}\n")
+        raise
 
     # Create batches
     batches_CCx = list(create_batches(CCx_loc_sums, batch_size))
@@ -140,18 +148,19 @@ def parallel_with_progress_jaccard_composite(
     batches_feat_x = list(create_batches(feat_xs, batch_size))
     batches_feat_y = list(create_batches(feat_ys, batch_size))
 
-    # Initialize result container
+    # Initialize results list
     total_tasks = len(CCx_loc_sums)
     results = [None] * total_tasks
 
-    # Process batches sequentially
-    with tqdm.tqdm(total=total_tasks) as pbar:
+    # Initialize progress bar
+    with tqdm.tqdm(total=total_tasks, desc="Processing Jaccard Composite") as pbar:
         for batch_idx, (batch_CCx, batch_CCy, batch_feat_x, batch_feat_y) in enumerate(
             zip(batches_CCx, batches_CCy, batches_feat_x, batches_feat_y)
         ):
             # Define a Python callback function to update progress
             def update_progress():
-                pbar.update(1)
+                pbar.update(len(batch_CCx))
+
             try:
                 batch_results = parallel_jaccard_composite(
                     CCx_loc_sums=batch_CCx,
@@ -166,11 +175,15 @@ def parallel_with_progress_jaccard_composite(
 
                 # Store batch results in the main results list
                 start_idx = batch_idx * batch_size
-                for i, res in enumerate(batch_results):
-                    results[start_idx + i] = res
+                end_idx = start_idx + len(batch_results)
+                results[start_idx:end_idx] = batch_results
 
             except Exception as e:
-                log_callback_func(f"\nException during batch {batch_idx}: {e}\n")
+                # Ensure that log_callback_func is callable before invoking
+                if callable(log_callback_func):
+                    log_callback_func(f"\nException during batch {batch_idx}: {e}\n")
+                else:
+                    print(f"\nException during batch {batch_idx}: {e}\n")
                 raise
 
     return results
