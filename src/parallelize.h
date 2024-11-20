@@ -1,3 +1,4 @@
+// parallelize.h
 #ifndef PARALLELIZE_H
 #define PARALLELIZE_H
 
@@ -27,11 +28,12 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     py::function log_callback);
 
 // Parallel function for jaccard_composite
+// **Updated to accept py::list parameters**
 std::vector<double> parallel_jaccard_composite(
-    const std::vector<Eigen::VectorXd>& CCx_loc_sums, 
-    const std::vector<Eigen::VectorXd>& CCy_loc_sums,
-    const std::vector<Eigen::VectorXd>& feat_xs, 
-    const std::vector<Eigen::VectorXd>& feat_ys, 
+    py::list CCx_loc_sums_list,
+    py::list CCy_loc_sums_list,
+    py::list feat_xs_list,
+    py::list feat_ys_list,
     const std::string& jaccard_type,
     int num_workers,
     py::function progress_callback,

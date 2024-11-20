@@ -4,12 +4,14 @@
 #include <queue>
 #include <mutex>
 #include <condition_variable>
+#include <functional>
+#include <stdexcept>
 
 // A thread-safe queue with bounded capacity
 template<typename T>
 class ThreadSafeQueue {
 public:
-    ThreadSafeQueue(size_t max_size) : max_size_(max_size) {}
+    ThreadSafeQueue(size_t max_size) : max_size_(max_size), stop_(false) {}
     
     // Pushes an item into the queue. Blocks if the queue is full.
     void push(const T& item) {
@@ -55,5 +57,5 @@ private:
     std::condition_variable cond_not_full_;
     std::queue<T> queue_;
     size_t max_size_;
-    bool stop_ = false;
+    bool stop_;
 };

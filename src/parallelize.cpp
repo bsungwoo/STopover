@@ -94,7 +94,7 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         feats_eigen.emplace_back(array_to_vector(feats[i]));
     }
 
-    // Initialize ThreadPool
+    // Initialize ThreadPool using the singleton instance
     ThreadPool& pool = ThreadPool::getInstance(num_workers, 1000); // max_queue_size=1000
 
     std::vector<std::future<std::pair<size_t, Eigen::VectorXd>>> results;
@@ -109,7 +109,7 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
 
         // Enqueue the task
         results.emplace_back(
-            pool.enqueue([=, &spatial_type, &return_mode, &progress_callback, &log_callback]() -> std::pair<size_t, Eigen::VectorXd> {
+            pool.enqueue([=]() -> std::pair<size_t, Eigen::VectorXd> {
                 try {
                     // Release GIL during computation
                     py::gil_scoped_release release;
@@ -178,7 +178,7 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
 }
 
 // Updated parallel_jaccard_composite function to handle lists of NumPy arrays
-std::vector<double> parallel_jaccard_composite_py(
+std::vector<double> parallel_jaccard_composite(
     py::list CCx_loc_sums_list,
     py::list CCy_loc_sums_list,
     py::list feat_xs_list,
@@ -314,6 +314,7 @@ std::vector<double> parallel_jaccard_composite_py(
     return output;
 }
 
+// Pybind11 Module Definitions
 PYBIND11_MODULE(parallelize, m) {
     m.doc() = "Parallelize module using C++ ThreadPool and Pybind11";
 

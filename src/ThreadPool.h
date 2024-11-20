@@ -24,7 +24,22 @@ public:
     // Enqueue a task. Blocks if the queue is full.
     template<class F, class... Args>
     auto enqueue(F&& f, Args&&... args) 
-        -> std::future<typename std::result_of<F(Args...)>::type>;
+        -> std::future<typename std::result_of<F(Args...)>::type>
+    {
+        using return_type = typename std::result_of<F(Args...)>::type;
+        
+        // Package the task
+        auto task = std::make_shared< std::packaged_task<return_type()> >(
+            std::bind(std::forward<F>(f), std::forward<Args>(args)...)
+        );
+        
+        std::future<return_type> res = task->get_future();
+        
+        // Enqueue the task. This will block if the queue is full.
+        tasks_.push([task](){ (*task)(); });
+        
+        return res;
+    }
     
     // Destructor
     ~ThreadPool();
