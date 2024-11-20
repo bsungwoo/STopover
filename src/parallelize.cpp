@@ -13,15 +13,10 @@
 #include <pybind11/numpy.h>      // For handling NumPy arrays
 #include <future>                // For std::future
 #include <vector>
-#include <utility>               // For std::pair>
-#include <mutex>
+#include <utility>               // For std::pair
 
 namespace py = pybind11;
 
-// Global mutex for synchronizing callback invocations
-std::mutex callback_mutex;
-
-// Convert a NumPy array to Eigen::VectorXd
 Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
     // Ensure the array is one-dimensional
     if (array.ndim() != 1) {
@@ -49,7 +44,7 @@ Eigen::VectorXd array_to_vector(const py::array_t<double>& array) {
     return Eigen::VectorXd(vec);
 }
 
-// Convert a NumPy array to Eigen::MatrixXd
+
 Eigen::MatrixXd array_to_matrix(const py::array_t<double>& array) {
     if (array.ndim() != 2) {
         throw std::invalid_argument("Input array must be two-dimensional.");
@@ -79,11 +74,7 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     py::function progress_callback,
     py::function log_callback) 
 {
-    if (locs.size() != feats.size()) {
-        throw std::invalid_argument("The size of 'locs' and 'feats' must be equal.");
-    }
-
-    size_t total_tasks = feats.size();
+    // Pre-convert locs and feats to Eigen types by copying data
     std::vector<Eigen::MatrixXd> locs_eigen;
     std::vector<Eigen::VectorXd> feats_eigen;
 
@@ -91,8 +82,13 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     feats_eigen.reserve(feats.size());
 
     for (size_t i = 0; i < feats.size(); ++i) {
-        locs_eigen.emplace_back(array_to_matrix(locs[i]));
-        feats_eigen.emplace_back(array_to_vector(feats[i]));
+        // Convert locs[i] to Eigen::MatrixXd
+        Eigen::MatrixXd loc = array_to_matrix(locs[i]);
+        locs_eigen.push_back(loc);
+
+        // Convert feats[i] to Eigen::VectorXd
+        Eigen::VectorXd feat = array_to_vector(feats[i]);
+        feats_eigen.push_back(feat);
     }
 
     // Automatically determine the number of worker threads if not specified
@@ -103,75 +99,35 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
         if (hw_threads_size == 0) num_workers = 4; // Fallback to 4 threads
     }
 
-    // Initialize ThreadPool with limited number of threads
+    // Initialize ThreadPool
     ThreadPool pool(num_workers);
     std::vector<std::future<std::pair<size_t, Eigen::VectorXd>>> results;
 
-    // Prepare the output vector
-    std::vector<Eigen::VectorXd> output(total_tasks);
-
-    for (size_t i = 0; i < total_tasks; ++i) {
+    // Dispatch parallel tasks
+    for (size_t i = 0; i < feats.size(); ++i) {
         size_t index = i;
         Eigen::MatrixXd loc = locs_eigen[i];
         Eigen::VectorXd feat = feats_eigen[i];
 
-        // Enqueue the task with necessary captures by value
-        results.emplace_back(
-            pool.enqueue([index, loc, spatial_type, fwhm, feat, min_size, thres_per, return_mode, progress_callback, log_callback]() -> std::pair<size_t, Eigen::VectorXd> {
-                try {
-                    // Release GIL during computation
-                    py::gil_scoped_release release;
+        // Enqueue the task
+        results.emplace_back(pool.enqueue([=]() -> std::pair<size_t, Eigen::VectorXd> {
+            Eigen::VectorXd res = topological_comp_res(loc, spatial_type, fwhm, feat, min_size, thres_per, return_mode);
+            return {index, res};
+        }));
 
-                    Eigen::VectorXd res = topological_comp_res(loc, spatial_type, fwhm, feat, min_size, thres_per, return_mode);
-
-                    // Acquire GIL before invoking Python callbacks
-                    if (progress_callback) {
-                        std::lock_guard<std::mutex> lock(callback_mutex);
-                        py::gil_scoped_acquire acquire;
-                        progress_callback();
-                    }
-
-                    return {index, res};
-                }
-                catch (const std::exception& e) {
-                    // Log exception
-                    if (log_callback) {
-                        std::lock_guard<std::mutex> lock(callback_mutex);
-                        py::gil_scoped_acquire acquire;
-                        log_callback(std::string("topological_comp_res exception: ") + e.what());
-                    }
-                    throw; // Re-throw to be handled later
-                }
-                catch (...) {
-                    if (log_callback) {
-                        std::lock_guard<std::mutex> lock(callback_mutex);
-                        py::gil_scoped_acquire acquire;
-                        log_callback("topological_comp_res encountered an unknown exception.");
-                    }
-                    throw;
-                }
-            })
-        );
+        // Call the progress callback
+        if (progress_callback) {
+            progress_callback();
+        }
     }
 
     // Collect the results in the correct order
+    std::vector<Eigen::VectorXd> output(feats.size());
     for (auto& result_future : results) {
-        try {
-            auto result_pair = result_future.get();
-            size_t index = result_pair.first;
-            Eigen::VectorXd res = result_pair.second;
-            output[index] = res;
-        }
-        catch (const std::exception& e) {
-            // Handle task exceptions
-            if (log_callback) {
-                std::lock_guard<std::mutex> lock(callback_mutex);
-                py::gil_scoped_acquire acquire;
-                log_callback(std::string("Task exception: ") + e.what());
-            }
-            // Depending on requirements, decide how to handle failed tasks
-            // For example, skip, fill with default values, or re-throw
-        }
+        auto result_pair = result_future.get();
+        size_t index = result_pair.first;
+        Eigen::VectorXd res = result_pair.second;
+        output[index] = res;
     }
 
     return output;
@@ -233,81 +189,44 @@ std::vector<double> parallel_jaccard_composite_py(
         if (hw_threads_size == 0) num_workers = 4; // Fallback to 4 threads
     }
 
-    // Initialize ThreadPool with limited number of threads
     ThreadPool pool(num_workers);
     std::vector<std::future<std::pair<size_t, double>>> results;
 
-    // Prepare the output vector
-    std::vector<double> output(list_size, 0.0);
-
+    // Dispatch parallel tasks
     for (size_t i = 0; i < list_size; ++i) {
+        // Capture index and data by value
         size_t index = i;
         Eigen::VectorXd CCx_sum = CCx_loc_sums_vec[i];
         Eigen::VectorXd CCy_sum = CCy_loc_sums_vec[i];
         Eigen::VectorXd feat_x = feat_xs_vec[i];
         Eigen::VectorXd feat_y = feat_ys_vec[i];
 
-        // Enqueue the task with necessary captures by value
-        results.emplace_back(
-            pool.enqueue([index, CCx_sum, CCy_sum, feat_x, feat_y, jaccard_type, progress_callback, log_callback]() -> std::pair<size_t, double> {
-                try {
-                    double jaccard_index;
-                    if (jaccard_type == "default") {
-                        jaccard_index = jaccard_composite(CCx_sum, CCy_sum, nullptr, nullptr);
-                    } else if (jaccard_type == "weighted") {
-                        jaccard_index = jaccard_composite(CCx_sum, CCy_sum, &feat_x, &feat_y);
-                    } else {
-                        throw std::invalid_argument("Invalid jaccard_type: " + jaccard_type);
-                    }
+        results.emplace_back(pool.enqueue([=]() -> std::pair<size_t, double> {
+            // Perform computations using C++ types
+            double jaccard_index; // Declare outside of if-else to ensure scope
+            if (jaccard_type == "default") {
+                jaccard_index = jaccard_composite(CCx_sum, CCy_sum, nullptr, nullptr);
+            } else if (jaccard_type == "weighted") {
+                jaccard_index = jaccard_composite(CCx_sum, CCy_sum, &feat_x, &feat_y);
+            } else {
+                throw std::invalid_argument("Invalid jaccard_type: " + jaccard_type);
+            }
+            return {index, jaccard_index};
+        }));
 
-                    // Acquire GIL before invoking Python callbacks
-                    if (progress_callback) {
-                        std::lock_guard<std::mutex> lock(callback_mutex);
-                        py::gil_scoped_acquire acquire;
-                        progress_callback();
-                    }
-
-                    return {index, jaccard_index};
-                }
-                catch (const std::exception& e) {
-                    // Log exception
-                    if (log_callback) {
-                        std::lock_guard<std::mutex> lock(callback_mutex);
-                        py::gil_scoped_acquire acquire;
-                        log_callback(std::string("jaccard_composite exception: ") + e.what());
-                    }
-                    throw; // Re-throw to be handled later
-                }
-                catch (...) {
-                    if (log_callback) {
-                        std::lock_guard<std::mutex> lock(callback_mutex);
-                        py::gil_scoped_acquire acquire;
-                        log_callback("jaccard_composite encountered an unknown exception.");
-                    }
-                    throw;
-                }
-            })
-        );
+        // Update progress
+        if (progress_callback) {
+            progress_callback();
+        }
     }
 
     // Collect the results
+    std::vector<double> output(list_size, 0.0);
     for (auto& result_future : results) {
-        try {
-            auto result_pair = result_future.get();
-            size_t index = result_pair.first;
-            double res = result_pair.second;
-            output[index] = res;
-        }
-        catch (const std::exception& e) {
-            // Handle task exceptions
-            if (log_callback) {
-                std::lock_guard<std::mutex> lock(callback_mutex);
-                py::gil_scoped_acquire acquire;
-                log_callback(std::string("Task exception: ") + e.what());
-            }
-            // Depending on requirements, decide how to handle failed tasks
-            // For example, skip, fill with default values, or re-throw
-        }
+        auto result_pair = result_future.get();
+        size_t index = result_pair.first;
+        double value = result_pair.second;
+        output[index] = value;
     }
 
     return output;
@@ -318,9 +237,9 @@ PYBIND11_MODULE(parallelize, m) {  // Module name within the STopover package
     m.def("parallel_topological_comp", &parallel_topological_comp, "Parallelized topological_comp_res function",
           py::arg("locs"), py::arg("spatial_type") = "visium", py::arg("fwhm") = 2.5, py::arg("feats"), 
           py::arg("min_size") = 5, py::arg("thres_per") = 30, py::arg("return_mode") = "all", 
-          py::arg("num_workers") = 4, py::arg("progress_callback") = py::none(), py::arg("log_callback") = py::none());
+          py::arg("num_workers") = 4, py::arg("progress_callback"), py::arg("log_callback"));
 
     m.def("parallel_jaccard_composite", &parallel_jaccard_composite_py, "Parallelized jaccard_composite function accepting lists of NumPy arrays",
-          py::arg("CCx_loc_sums"), py::arg("CCy_loc_sums"), py::arg("feat_xs") = py::none(), py::arg("feat_ys") = py::none(), 
-          py::arg("jaccard_type") = "default", py::arg("num_workers") = 4, py::arg("progress_callback") = py::none(), py::arg("log_callback") = py::none());
+          py::arg("CCx_loc_sums"), py::arg("CCy_loc_sums"), py::arg("feat_xs"), py::arg("feat_ys"), 
+          py::arg("jaccard_type") = "default", py::arg("num_workers") = 4, py::arg("progress_callback"), py::arg("log_callback"));
 }

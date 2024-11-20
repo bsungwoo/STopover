@@ -44,7 +44,7 @@ inline ThreadPool::ThreadPool(size_t threads)
                 while(true)
                 {
                     std::function<void()> task;
-
+    
                     {
                         std::unique_lock<std::mutex> lock(this->queue_mutex);
                         this->condition.wait(lock,
@@ -54,7 +54,7 @@ inline ThreadPool::ThreadPool(size_t threads)
                         task = std::move(this->tasks.front());
                         this->tasks.pop();
                     }
-
+    
                     task();
                 }
             }
@@ -70,7 +70,7 @@ inline ThreadPool::~ThreadPool()
         worker.join();
 }
 
-// Enqueue method implementation
+// Enqueue method
 template<class F, class... Args>
 auto ThreadPool::enqueue(F&& f, Args&&... args) 
     -> std::future<typename std::result_of<F(Args...)>::type>
