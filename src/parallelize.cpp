@@ -244,4 +244,96 @@ std::vector<double> parallel_jaccard_composite_py(
     results.reserve(list_size);
 
     // Prepare the output vector
-    std::vector<doubl
+    std::vector<double> output(list_size, 0.0);
+
+    for (size_t i = 0; i < list_size; ++i) {
+        size_t index = i;
+        Eigen::VectorXd CCx_sum = CCx_loc_sums_vec[i];
+        Eigen::VectorXd CCy_sum = CCy_loc_sums_vec[i];
+        Eigen::VectorXd feat_x = feat_xs_vec[i];
+        Eigen::VectorXd feat_y = feat_ys_vec[i];
+
+        // Enqueue the task with necessary captures by value
+        results.emplace_back(
+            pool.enqueue([index, CCx_sum, CCy_sum, feat_x, feat_y, jaccard_type, progress_callback, log_callback]() -> std::pair<size_t, double> {
+                try {
+                    double jaccard_index;
+                    if (jaccard_type == "default") {
+                        jaccard_index = jaccard_composite(CCx_sum, CCy_sum, nullptr, nullptr);
+                    } else if (jaccard_type == "weighted") {
+                        jaccard_index = jaccard_composite(CCx_sum, CCy_sum, &feat_x, &feat_y);
+                    } else {
+                        throw std::invalid_argument("Invalid jaccard_type: " + jaccard_type);
+                    }
+
+                    // Acquire GIL before invoking Python callbacks
+                    if (progress_callback) {
+                        std::lock_guard<std::mutex> lock(callback_mutex);
+                        py::gil_scoped_acquire acquire;
+                        progress_callback();
+                    }
+
+                    return {index, jaccard_index};
+                }
+                catch (const std::exception& e) {
+                    // Log exception
+                    if (log_callback) {
+                        std::lock_guard<std::mutex> lock(callback_mutex);
+                        py::gil_scoped_acquire acquire;
+                        log_callback(std::string("jaccard_composite exception: ") + e.what());
+                    }
+                    throw; // Re-throw to be handled later
+                }
+                catch (...) {
+                    if (log_callback) {
+                        std::lock_guard<std::mutex> lock(callback_mutex);
+                        py::gil_scoped_acquire acquire;
+                        log_callback("jaccard_composite encountered an unknown exception.");
+                    }
+                    throw;
+                }
+            })
+        );
+
+        // Update progress
+        if (progress_callback) {
+            std::lock_guard<std::mutex> lock(callback_mutex);
+            py::gil_scoped_acquire acquire;
+            progress_callback();
+        }
+    }
+
+    // Collect the results in the correct order
+    for (auto& result_future : results) {
+        try {
+            auto result_pair = result_future.get();
+            size_t index = result_pair.first;
+            double res = result_pair.second;
+            output[index] = res;
+        }
+        catch (const std::exception& e) {
+            // Handle task exceptions
+            if (log_callback) {
+                std::lock_guard<std::mutex> lock(callback_mutex);
+                py::gil_scoped_acquire acquire;
+                log_callback(std::string("Task exception: ") + e.what());
+            }
+            // Depending on requirements, decide how to handle failed tasks
+            // For example, skip, fill with default values, or re-throw
+        }
+    }
+
+    return output;
+}
+
+// Expose to Python via Pybind11
+PYBIND11_MODULE(parallelize, m) {  // Module name within the STopover package
+    m.def("parallel_topological_comp", &parallel_topological_comp, "Parallelized topological_comp_res function",
+          py::arg("locs"), py::arg("spatial_type") = "visium", py::arg("fwhm") = 2.5, py::arg("feats"), 
+          py::arg("min_size") = 5, py::arg("thres_per") = 30, py::arg("return_mode") = "all", 
+          py::arg("num_workers") = 4, py::arg("progress_callback") = py::none(), py::arg("log_callback") = py::none());
+
+    m.def("parallel_jaccard_composite", &parallel_jaccard_composite_py, "Parallelized jaccard_composite function accepting lists of NumPy arrays",
+          py::arg("CCx_loc_sums"), py::arg("CCy_loc_sums"), py::arg("feat_xs") = py::none(), py::arg("feat_ys") = py::none(), 
+          py::arg("jaccard_type") = "default", py::arg("num_workers") = 4, py::arg("progress_callback") = py::none(), py::arg("log_callback") = py::none());
+}
