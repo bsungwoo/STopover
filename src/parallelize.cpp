@@ -1,7 +1,7 @@
 #include "parallelize.h"
 #include "topological_comp.h"
 #include "jaccard.h"
-#include "thread_pool.h"
+#include "ThreadPool.h"
 
 #include <iostream>
 #include <fstream>
