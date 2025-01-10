@@ -390,7 +390,7 @@ class STopover_imageST(STopover_visium):
                 adata_mod, adata_cell = read_imageST(sp_adata_cell=sp_adata, sc_adata=sc_adata, sc_celltype_colname=sc_celltype_colname, 
                                                      ST_type=ST_type, grid_method=grid_method, annot_method=annot_method, 
                                                      min_counts=min_counts, min_cells=min_cells, sc_norm_total=sc_norm_total,
-                                                     x_bins=x_bins, y_bins=y_bins, annotate_sp_adata=annotate_sp_adata)
+                                                     cell_id_colname=cell_id_colname, x_bins=x_bins, y_bins=y_bins, annotate_sp_adata=annotate_sp_adata)
             else:
                 if annotate_sp_adata:
                     adata_mod = annotate_ST(adata_mod, sc_norm_total = sc_norm_total, sc_celltype_colname = sc_celltype_colname, 
