@@ -215,6 +215,9 @@ def read_imageST(load_path=None, sp_adata_cell=None, sc_adata=None, min_counts=1
         sp_adata_cell, df_celltype = annotate_ST(sp_adata_cell, sc_adata, sc_norm_total=sc_norm_total, 
                                                  sc_celltype_colname = sc_celltype_colname, annot_method=annot_method,
                                                  cell_id = cell_id, return_df=True)
+    else:
+      sc.pp.normalize_total(sp_adata_cell, target_sum=sc_norm_total, inplace=True)
+      sc.pp.log1p(sp_adata_cell)
     print("End of annotating image-based ST cell-level anndata: %.2f seconds" % (time.time()-start_time))
 
     if grid_method == "transcript":
