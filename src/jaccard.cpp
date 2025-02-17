@@ -1,108 +1,41 @@
 #include "jaccard.h"
-#include <iostream>   // Optional: For debugging or logging
-#include <stdexcept>  // For std::invalid_argument
 
-// Function to calculate the Jaccard composite index
-double jaccard_composite(const Eigen::VectorXd& CCx_loc_sum,
-                         const Eigen::VectorXd& CCy_loc_sum,
-                         const Eigen::VectorXd* feat_x,
-                         const Eigen::VectorXd* feat_y) {
-    // Ensure input vectors have the same size
-    if (CCx_loc_sum.size() != CCy_loc_sum.size()) {
-        throw std::invalid_argument("CCx_loc_sum and CCy_loc_sum must have the same length.");
+// Function to calculate the Jaccard composite index from connected component locations
+double jaccard_composite(const Eigen::MatrixXd& CCx_loc_sum, const Eigen::MatrixXd& CCy_loc_sum,
+                         const Eigen::MatrixXd& feat_x, const Eigen::MatrixXd& feat_y) {
+    Eigen::MatrixXd CCxy_loc_sum;
+
+    if (CCx_loc_sum.rows() != CCy_loc_sum.rows()) {
+        throw std::invalid_argument("'CCx_loc_sum' and 'CCy_loc_sum' must have the same number of rows");
     }
 
-    const int N = CCx_loc_sum.size();
+    // Combine the locations for features x and y
+    CCxy_loc_sum.resize(CCx_loc_sum.rows(), 2);
+    CCxy_loc_sum << CCx_loc_sum, CCy_loc_sum;
 
-    // Concatenate CCx_loc_sum and CCy_loc_sum into a matrix
-    Eigen::MatrixXd CCxy_loc_sum(N, 2);
-    CCxy_loc_sum.col(0) = CCx_loc_sum;
-    CCxy_loc_sum.col(1) = CCy_loc_sum;
-
-    // Check if all elements are zero
-    if ((CCxy_loc_sum.array() != 0.0).count() == 0) {
+    if (CCxy_loc_sum.nonZeros() == 0) {
         return 0.0;
     }
 
-    // If feature vectors are not provided (jaccard_type == "default")
-    if (feat_x == nullptr && feat_y == nullptr) {
-        // Convert CCxy_loc_sum to binary (non-zero elements are 1)
-        Eigen::ArrayXXi CCxy_binary = (CCxy_loc_sum.array() != 0.0).cast<int>();
+    // If features are not provided, calculate the default Jaccard index
+    if (feat_x.size() == 0 && feat_y.size() == 0) {
+        // Compute Jaccard using basic logic
+        // In C++, we don't have a built-in pdist function. You'll need to implement a custom pairwise Jaccard calculation.
+        Eigen::MatrixXd binary_mat = (CCxy_loc_sum.array() != 0).cast<double>();
+        double intersection = (binary_mat.col(0).array() * binary_mat.col(1).array()).sum();
+        double union_sum = binary_mat.array().rowwise().any().cast<double>().sum();
 
-        // Extract the two binary columns
-        Eigen::ArrayXi col1_binary = CCxy_binary.col(0);
-        Eigen::ArrayXi col2_binary = CCxy_binary.col(1);
+        return 1.0 - (intersection / union_sum);
+    } else {
+        // Weighted Jaccard index
+        Eigen::MatrixXd feat_val(CCx_loc_sum.rows(), 2);
+        feat_val << feat_x, feat_y;
 
-        // Compute intersection and union counts
-        Eigen::ArrayXi intersection_array = col1_binary * col2_binary;
-        int intersection = intersection_array.sum();
+        // Normalize the feature values
+        feat_val = (CCxy_loc_sum.array() != 0).select(feat_val.array(), 0);
+        feat_val.col(0) = (feat_val.col(0).array() - feat_val.col(0).minCoeff()) / (feat_val.col(0).maxCoeff() - feat_val.col(0).minCoeff());
+        feat_val.col(1) = (feat_val.col(1).array() - feat_val.col(1).minCoeff()) / (feat_val.col(1).maxCoeff() - feat_val.col(1).minCoeff());
 
-        Eigen::ArrayXi union_array = col1_binary.max(col2_binary);
-        int union_count = union_array.sum();
-
-        // Calculate Jaccard similarity
-        if (union_count == 0) {
-            return 0.0;
-        } else {
-            return static_cast<double>(intersection) / static_cast<double>(union_count);
-        }
-    }
-    // If feature vectors are provided (jaccard_type == "weighted")
-    else {
-        // Ensure both feature vectors are provided
-        if (feat_x == nullptr || feat_y == nullptr) {
-            throw std::invalid_argument("Both feat_x and feat_y must be provided.");
-        }
-
-        // Ensure feature vectors have the correct size
-        if (feat_x->size() != N || feat_y->size() != N) {
-            throw std::invalid_argument("Feature vectors must have the same length as CCx_loc_sum and CCy_loc_sum.");
-        }
-
-        // Concatenate feat_x and feat_y into a matrix
-        Eigen::MatrixXd feat_val(N, 2);
-        feat_val.col(0) = *feat_x;
-        feat_val.col(1) = *feat_y;
-
-        // Compute the minimum and maximum per column
-        Eigen::RowVectorXd min_col = feat_val.colwise().minCoeff();
-        Eigen::RowVectorXd max_col = feat_val.colwise().maxCoeff();
-
-        // Compute the denominator for normalization
-        Eigen::RowVectorXd denom_col = max_col - min_col;
-
-        // Initialize normalized feature matrix
-        Eigen::MatrixXd feat_val_normalized = Eigen::MatrixXd::Zero(N, 2);
-
-        // Normalize features per column, handling zero denominators
-        for (int i = 0; i < 2; ++i) {
-            if (denom_col(i) == 0.0) {
-                // Avoid division by zero; all values are the same
-                feat_val_normalized.col(i).setZero();
-            } else {
-                feat_val_normalized.col(i) = (feat_val.col(i).array() - min_col(i)) / denom_col(i);
-            }
-        }
-
-        // Create a mask for non-zero connected component locations
-        Eigen::ArrayXXd mask = (CCxy_loc_sum.array() != 0.0).cast<double>();
-
-        // Apply the mask to the normalized features
-        feat_val_normalized = feat_val_normalized.array() * mask;
-
-        // Compute the minimum and maximum per row
-        Eigen::VectorXd feat_min = feat_val_normalized.rowwise().minCoeff();
-        Eigen::VectorXd feat_max = feat_val_normalized.rowwise().maxCoeff();
-
-        // Sum over all elements
-        double sum_min = feat_min.sum();
-        double sum_max = feat_max.sum();
-
-        // Calculate Jaccard composite index
-        if (sum_max == 0.0) {
-            return 0.0;
-        } else {
-            return sum_min / sum_max;
-        }
+        return (feat_val.rowwise().minCoeff().sum()) / (feat_val.rowwise().maxCoeff().sum());
     }
 }

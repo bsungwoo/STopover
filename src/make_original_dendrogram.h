@@ -1,26 +1,24 @@
-#ifndef MAKE_ORIGINAL_DENDROGRAM_CC_H
-#define MAKE_ORIGINAL_DENDROGRAM_CC_H
+#ifndef ORIGINAL_DENDROGRAM_H
+#define ORIGINAL_DENDROGRAM_H
 
-#include <Eigen/Dense>
+#include <pybind11/pybind11.h>
+#include <pybind11/eigen.h>
+#include <pybind11/stl.h>
 #include <Eigen/Sparse>
+#include <Eigen/Dense>
 #include <vector>
+#include <set>
 #include <queue>
-#include <unordered_map>
 #include <tuple>
-#include <algorithm>
-#include <stdexcept>
 
-// Function to create the original dendrogram
-std::tuple<
-    std::vector<std::vector<int>>,        // CC: Connected Components
-    Eigen::SparseMatrix<double, Eigen::RowMajor>,          // E: Connectivity Matrix between CCs
-    Eigen::MatrixXd,                      // duration: Birth and Death of CCs
-    std::vector<std::vector<int>>         // history: History of CCs
->
-make_original_dendrogram_cc(
-    const Eigen::VectorXd& U,
-    const Eigen::SparseMatrix<double, Eigen::RowMajor>& A,
-    const std::vector<double>& threshold
-);
+// Function to extract connected nodes using breadth-first search (BFS)
+std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx);
 
-#endif // MAKE_ORIGINAL_DENDROGRAM_CC_H
+// Function to generate connected components from a sparse adjacency matrix
+std::vector<std::set<int>> connected_components_generator(const Eigen::SparseMatrix<int>& A);
+
+// Function to create the original dendrogram with connected components
+std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<double>, Eigen::MatrixXd, std::vector<std::vector<int>>>
+make_original_dendrogram_cc(const Eigen::VectorXd& U, const Eigen::SparseMatrix<int>& A, const std::vector<double>& threshold);
+
+#endif // ORIGINAL_DENDROGRAM_H

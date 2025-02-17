@@ -202,7 +202,8 @@ def read_imageST(load_path=None, sp_adata_cell=None, sc_adata=None, min_counts=1
     else:
         if not annotate_sp_adata and sc_celltype_colname not in sp_adata_cell.obs.columns:
             raise ValueError(f"'{sc_celltype_colname}' not found in 'sp_adata.obs.columns'")
-        df_celltype = sp_adata_cell.obs[[sc_celltype_colname]]
+        if not annotate_sp_adata:
+          df_celltype = sp_adata_cell.obs[[sc_celltype_colname]]
 
     # Remove cells with total transcript count below min_counts and genes with number of expressed cells (>0) below min_cells
     sc.pp.filter_cells(sp_adata_cell, min_counts=min_counts)

@@ -1,27 +1,23 @@
-#ifndef MAKE_DENDROGRAM_BAR_H
-#define MAKE_DENDROGRAM_BAR_H
+#ifndef DENDROGRAM_BAR_H
+#define DENDROGRAM_BAR_H
 
+#include <pybind11/pybind11.h>
+#include <pybind11/eigen.h>
+#include <pybind11/stl.h>
+#include <Eigen/Dense>
 #include <vector>
 #include <tuple>
-#include <Eigen/Dense>
+#include <algorithm>
+#include <numeric>
+#include <set>
 
-// Function to create dendrogram bars
-std::tuple<
-    Eigen::MatrixXd,                       // nvertical_x
-    Eigen::MatrixXd,                       // nvertical_y
-    Eigen::MatrixXd,                       // nhorizontal_x
-    Eigen::MatrixXd,                       // nhorizontal_y
-    Eigen::MatrixXd,                       // ndots
-    std::vector<std::vector<int>>          // nlayer
->
-make_dendrogram_bar(
-    const std::vector<std::vector<int>>& history,
-    const Eigen::MatrixXd& duration,
-    const Eigen::MatrixXd& cvertical_x = Eigen::MatrixXd(),
-    const Eigen::MatrixXd& cvertical_y = Eigen::MatrixXd(),
-    const Eigen::MatrixXd& chorizontal_x = Eigen::MatrixXd(),
-    const Eigen::MatrixXd& chorizontal_y = Eigen::MatrixXd(),
-    const Eigen::MatrixXd& cdots = Eigen::MatrixXd()
-);
+std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<std::vector<int>>>
+make_dendrogram_bar(const std::vector<std::vector<int>>& history,
+                    const Eigen::MatrixXd& duration,
+                    Eigen::MatrixXd cvertical_x = Eigen::MatrixXd(),
+                    Eigen::MatrixXd cvertical_y = Eigen::MatrixXd(),
+                    Eigen::MatrixXd chorizontal_x = Eigen::MatrixXd(),
+                    Eigen::MatrixXd chorizontal_y = Eigen::MatrixXd(),
+                    Eigen::MatrixXd cdots = Eigen::MatrixXd());
 
-#endif // MAKE_DENDROGRAM_BAR_H
+#endif // DENDROGRAM_BAR_H
