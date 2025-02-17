@@ -24,51 +24,43 @@ namespace py = pybind11;
 // ---------------------------------------------------------------------
 class ThreadPool {
 public:
-    // Constructor: spawns a given number of worker threads.
-    ThreadPool(size_t threads);
-
-    // Destructor: joins all threads.
+    explicit ThreadPool(size_t threads);
     ~ThreadPool();
 
     // Enqueue a task into the thread pool; returns a future.
     template<class F, class... Args>
     auto enqueue(F&& f, Args&&... args)
-        -> std::future<typename std::result_of<F(Args...)>::type>;
+        -> std::future<typename std::invoke_result_t<F, Args...>>;
 
 private:
-    // Worker threads.
     std::vector<std::thread> workers;
-    // Task queue.
     std::queue<std::function<void()>> tasks;
-    // Synchronization.
     std::mutex queue_mutex;
     std::condition_variable condition;
-    bool stop;
+    std::atomic_bool stop;
 };
 
 // Inline implementation of the template enqueue method.
 template<class F, class... Args>
 auto ThreadPool::enqueue(F&& f, Args&&... args)
-    -> std::future<typename std::result_of<F(Args...)>::type>
+    -> std::future<typename std::invoke_result_t<F, Args...>>
 {
-    using return_type = typename std::result_of<F(Args...)>::type;
-    
+    using return_type = typename std::invoke_result_t<F, Args...>;
     auto task = std::make_shared<std::packaged_task<return_type()>>(
-        // Wrap the task in a lambda to catch exceptions.
+        // Wrap the task in a lambda that catches exceptions.
         [func = std::forward<F>(f), ... args = std::forward<Args>(args)]() -> return_type {
             try {
                 return func(args...);
-            } catch (const std::exception& e) {
-                // Optionally log or handle the exception.
-                throw;  // Rethrow the exception.
+            } catch (const std::exception &e) {
+                // You can log the exception message here if desired.
+                throw; // rethrow after catching
             }
         }
     );
-    
     std::future<return_type> res = task->get_future();
     {
-        std::unique_lock<std::mutex> lock(queue_mutex);
-        if (stop)
+        std::lock_guard<std::mutex> lock(queue_mutex);
+        if (stop.load())
             throw std::runtime_error("enqueue on stopped ThreadPool");
         tasks.emplace([task](){ (*task)(); });
     }
@@ -81,30 +73,31 @@ auto ThreadPool::enqueue(F&& f, Args&&... args)
 // ---------------------------------------------------------------------
 
 // Parallelized extract_adjacency_spatial function.
-// Accepts a vector of Python objects (each convertible to Eigen::MatrixXd),
-// the spatial type, fwhm value, number of worker threads, and an optional progress callback.
 std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> parallel_extract_adjacency(
-    const std::vector<py::object>& locs, 
-    const std::string& spatial_type, double fwhm, int num_workers,
+    const std::vector<py::object>& locs,
+    const std::string& spatial_type,
+    double fwhm,
+    int num_workers,
     py::function progress_callback);
 
 // Parallelized topological_comp_res function.
-// Accepts vectors of features (as py::array_t<double>), SciPy sparse matrices (as py::object),
-// masks (as py::array_t<double>), and other parameters.
 std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>> parallel_topological_comp(
-    const std::vector<py::array_t<double>>& feats,  
-    const std::vector<py::object>& A_matrices,      
+    const std::vector<py::array_t<double>>& feats,
+    const std::vector<py::object>& A_matrices,
     const std::vector<py::array_t<double>>& masks,
-    const std::string& spatial_type, int min_size, int thres_per, const std::string& return_mode, int num_workers,
+    const std::string& spatial_type,
+    int min_size,
+    int thres_per,
+    const std::string& return_mode,
+    int num_workers,
     py::function progress_callback);
 
 // Parallelized jaccard_composite function.
-// Accepts vectors of NumPy arrays for connected component locations and feature values.
 std::vector<double> parallel_jaccard_composite(
-    const std::vector<py::array_t<double>>& CCx_loc_sums, 
+    const std::vector<py::array_t<double>>& CCx_loc_sums,
     const std::vector<py::array_t<double>>& CCy_loc_sums,
-    const std::vector<py::array_t<double>>& feat_xs, 
-    const std::vector<py::array_t<double>>& feat_ys, 
+    const std::vector<py::array_t<double>>& feat_xs,
+    const std::vector<py::array_t<double>>& feat_ys,
     int num_workers,
     py::function progress_callback);
 
