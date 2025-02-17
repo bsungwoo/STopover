@@ -14,29 +14,12 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
                            fwhm=2.5, min_size=5, thres_per=30, jaccard_type='default',
                            num_workers=os.cpu_count()):
     """
-    Calculate Jaccard index between topological connected components of feature pairs
-    and return a dataframe. If a group is provided, the spatial data is divided by group
-    and the topological overlap is computed per group.
-
-    Parameters:
-      data: an AnnData object with log-normalized gene expression.
-      feat_pairs: list of feature pairs (e.g. [('A','B'), ('C','D')]) or equivalent DataFrame.
-      spatial_type: either 'visium', 'imageST', or 'visiumHD'.
-      group_list: list of groups to process (if None, try to infer from data.obs[group_name]).
-      group_name: name of the grouping variable in data.obs.
-      fwhm: full-width half-maximum for Gaussian smoothing.
-      min_size: minimum size for connected components.
-      thres_per: percentile threshold to filter connected components.
-      jaccard_type: either 'default' or 'weighted'.
-      num_workers: number of parallel workers.
-
-    Returns:
-      df_top_total: DataFrame with spatial overlap metrics.
-      data_mod: modified AnnData with additional connected component location info.
+    Calculate Jaccard index between topological connected components of feature pairs and
+    return a dataframe. If groups are provided, data is divided by group and computed per group.
     """
     start_time = time.time()
 
-    # Validate feat_pairs format
+    # Validate and format feat_pairs
     if isinstance(feat_pairs, pd.DataFrame):
         df_feat = feat_pairs.copy()
     elif isinstance(feat_pairs, list):
@@ -46,13 +29,12 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     if df_feat.shape[1] != 2:
         raise ValueError("'feat_pairs' should be a list of pairs, e.g. [('A','B'), ('C','D')]")
 
-    # Validate spatial_type and jaccard_type
     if spatial_type not in ['visium', 'imageST', 'visiumHD']:
-        raise ValueError("'spatial_type' should be either 'visium', 'imageST', or 'visiumHD'")
+        raise ValueError("'spatial_type' must be 'visium', 'imageST', or 'visiumHD'")
     if jaccard_type not in ['default', 'weighted']:
-        raise ValueError("'jaccard_type' should be either 'default' or 'weighted'")
+        raise ValueError("'jaccard_type' must be either 'default' or 'weighted'")
 
-    # Determine group_list
+    # Determine group_list from data.obs if not provided
     if group_list is None:
         try:
             group_list = data.obs[group_name].cat.categories
@@ -61,18 +43,18 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
             data.obs[group_name] = '0'
     else:
         if group_name not in data.obs.columns:
-            raise ValueError(f"'{group_name}' not found in data.obs columns")
+            raise ValueError(f"'{group_name}' not found in data.obs")
         if not (set(group_list) <= set(data.obs[group_name])):
             raise ValueError(f"Some elements in group_list not found in data.obs['{group_name}']")
         data = data[data.obs[group_name].isin(group_list)]
 
-    # Determine the type of data.X
+    # Check data.X type
     if isinstance(data.X, np.ndarray):
         data_type = 'array'
     elif sparse.isspmatrix(data.X):
         data_type = 'sparse'
     else:
-        raise ValueError("'data.X' should be either a numpy array or a scipy sparse matrix")
+        raise ValueError("'data.X' must be a numpy array or scipy sparse matrix")
 
     # Rename columns if any are NaN
     if any(pd.isnull(col) for col in data.obs.columns):
@@ -81,7 +63,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     df_top_total = pd.DataFrame()
     val_list, loc_list = [], []
 
-    # Determine if feature names are in .obs or .var
+    # Determine whether to use .obs or .var for feature extraction
     obs_data_x = df_feat.iloc[:, 0].isin(data.obs.columns)
     var_data_x = df_feat.iloc[:, 0].isin(data.var.index)
     obs_data_y = df_feat.iloc[:, 1].isin(data.obs.columns)
@@ -90,11 +72,11 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     obs_tf_y = obs_data_y.sum() > var_data_y.sum()
 
     if (not obs_tf_x) and (var_data_x.sum() == 0):
-        raise ValueError("None of the first features in the pairs are found")
+        raise ValueError("None of the first features are found")
     if (not obs_tf_y) and (var_data_y.sum() == 0):
-        raise ValueError("None of the second features in the pairs are found")
+        raise ValueError("None of the second features are found")
 
-    # Keep only pairs that exist in the data
+    # Filter df_feat to keep only existing features
     if obs_tf_x and obs_tf_y:
         df_feat = df_feat[obs_data_x & obs_data_y].reset_index(drop=True)
     elif (not obs_tf_x) and obs_tf_y:
@@ -104,13 +86,13 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     else:
         df_feat = df_feat[var_data_x & var_data_y].reset_index(drop=True)
 
-    # Process each group separately
+    # Process each group
     for num, grp in enumerate(group_list):
         data_sub = data[data.obs[group_name] == grp]
         df_tmp = df_feat.copy()
         df_tmp.insert(0, group_name, grp)
 
-        # Load feature values from .obs if available
+        # Get feature values from .obs or .X
         if obs_tf_x:
             data_x = data_sub.obs[df_tmp.iloc[:, 1].tolist()].to_numpy()
             df_tmp['Avg_1'] = np.mean(np.abs(data_x), axis=0)
@@ -133,14 +115,14 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
 
         df_tmp = df_tmp[(df_tmp['Avg_1'] != 0) & (df_tmp['Avg_2'] != 0)]
         if df_tmp.empty:
-            raise ValueError("In all feature pairs, at least one feature has all-zero values")
+            raise ValueError("After filtering, no valid feature pairs remain")
         if data_x is not None:
             df_tmp['Avg_1'] = np.mean(data_x, axis=0)[df_tmp.index]
         if data_y is not None:
             df_tmp['Avg_2'] = np.mean(data_y, axis=0)[df_tmp.index]
         df_tmp = df_tmp.reset_index(drop=True)
 
-        # Build a combined feature list and assign indices
+        # Build combined feature list and assign indices
         comb_feat_list = pd.concat([df_tmp.iloc[:, 1], df_tmp.iloc[:, 2]], axis=0).drop_duplicates().to_frame().set_index(0)
         comb_feat_list['index'] = range(len(comb_feat_list))
         df_x = comb_feat_list.loc[df_tmp.iloc[:, 1].drop_duplicates()]
@@ -150,7 +132,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
         df_tmp['Index_1'] = df_xy.loc[df_tmp.iloc[:, 1]].reset_index()['index_x'].astype(int)
         df_tmp['Index_2'] = df_xy.loc[df_tmp.iloc[:, 2]].reset_index()['index_y'].astype(int)
 
-        # Extract feature values (combine values from obs and X) based on type
+        # Extract feature values (from .obs or .X) as val_element
         if obs_tf_x != obs_tf_y:
             if obs_tf_x:
                 val_x = data_sub.obs[comb_feat_list.index].to_numpy()
@@ -174,7 +156,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
                     val_element = data_sub[:, comb_feat_list.index].X.toarray()
         df_top_total = pd.concat([df_top_total, df_tmp], axis=0)
 
-        # Get location info and adjust if needed
+        # Get location info; ensure data_sub.obs has required columns
         try:
             df_loc = data_sub.obs.loc[:, ['array_col', 'array_row']]
         except Exception:
@@ -202,19 +184,26 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
             smooth_subset = smooth[row_indices, col_indices, :].reshape(-1, val_element.shape[1])
             val_list.append(smooth_subset)
 
-    # Set final column names for df_top_total
     column_names = [group_name, 'Feat_1', 'Feat_2', 'Avg_1', 'Avg_2', 'Index_1', 'Index_2']
     df_top_total.columns = column_names
     df_top_total.index = range(df_top_total.shape[0])
     
     print('End of data preparation')
     print("Elapsed time: %.2f seconds" % (time.time() - start_time))
-    
-    # Calculate adjacency matrix and mask using parallel processing
+
+    # --- Parallel processing section ---
     print("Calculation of adjacency matrix and mask")
-    adjacency_mask = parallel_with_progress_extract_adjacency(
-        loc_list, spatial_type=spatial_type, fwhm=fwhm, num_workers=max(1, int(num_workers // 1.5))
-    )
+    # For debugging, try running without a progress callback:
+    try:
+        adjacency_mask = parallel_with_progress_extract_adjacency(
+            loc_list, spatial_type=spatial_type, fwhm=fwhm,
+            num_workers=max(1, int(num_workers // 1.5))
+            # , progress_callback=lambda: None
+        )
+    except Exception as e:
+        print("Error during parallel_extract_adjacency:", e)
+        raise
+
     if spatial_type == 'visium':
         feat_A_mask_pair = [
             (feat[:, feat_idx].reshape((-1, 1)), adjacency_mask[grp_idx][0], adjacency_mask[grp_idx][1])
@@ -228,7 +217,6 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
             for feat_idx in range(feat.shape[1])
         ]
     
-    # Calculate connected components in parallel
     print("Calculation of connected components for each feature")
     output_cc = parallel_with_progress_topological_comp(
         feats=[feat[0] for feat in feat_A_mask_pair],
@@ -237,8 +225,9 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
         spatial_type=spatial_type,
         min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
         num_workers=max(1, int(num_workers // 1.5))
+        #, progress_callback=lambda: None
     )
-    
+
     print('Calculation of composite jaccard indexes between feature pairs')
     CCxy_loc_mat_list = []
     output_cc_loc = []
@@ -268,26 +257,30 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
             else:
                 CCxy_loc_mat_list.append((CCx_loc_mat, CCy_loc_mat, feat_x_val, feat_y_val))
     
-    # Join connected component location information to data.obs
     data_mod = data
     output_cc_loc = pd.concat(output_cc_loc, axis=0).fillna(0).astype(int).astype('category')
     import re
     pattern = re.compile("^.*_prev[0-9]+$")
     data_count = [int(i.split("_prev")[1]) for i in data_mod.obs.columns if pattern.match(i)]
-    if len(data_count) > 0:
+    if data_count:
         data_count = sorted(data_count)[-1] + 1
     else:
         data_count = 1
     data_mod.obs = data_mod.obs.join(output_cc_loc, lsuffix='_prev' + str(data_count))
     
-    # Calculate composite jaccard index in parallel
-    output_j = parallel_with_progress_jaccard_composite(
-        CCx_loc_sums=[feat[0] for feat in CCxy_loc_mat_list],
-        CCy_loc_sums=[feat[1] for feat in CCxy_loc_mat_list],
-        feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
-        feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
-        num_workers=max(1, int(num_workers // 1.5))
-    )
+    try:
+        output_j = parallel_with_progress_jaccard_composite(
+            CCx_loc_sums=[feat[0] for feat in CCxy_loc_mat_list],
+            CCy_loc_sums=[feat[1] for feat in CCxy_loc_mat_list],
+            feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
+            feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
+            num_workers=max(1, int(num_workers // 1.5))
+            #, progress_callback=lambda: None
+        )
+    except Exception as e:
+        print("Error during parallel_jaccard_composite:", e)
+        raise
+
     output_j = pd.DataFrame(output_j, columns=['J_comp'])
     df_top_total = pd.concat([df_top_total.iloc[:, :-2], output_j], axis=1)
     
