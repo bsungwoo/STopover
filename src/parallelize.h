@@ -30,30 +30,28 @@ public:
     // Enqueue a task into the thread pool; returns a future.
     template<class F, class... Args>
     auto enqueue(F&& f, Args&&... args)
-        -> std::future<typename std::invoke_result_t<F, Args...>>;
+        -> std::future<typename std::result_of<F(Args...)>::type>;
 
 private:
     std::vector<std::thread> workers;
     std::queue<std::function<void()>> tasks;
     std::mutex queue_mutex;
     std::condition_variable condition;
-    std::atomic_bool stop;
+    std::atomic<bool> stop;
 };
 
-// Inline implementation of the template enqueue method.
 template<class F, class... Args>
 auto ThreadPool::enqueue(F&& f, Args&&... args)
-    -> std::future<typename std::invoke_result_t<F, Args...>>
+    -> std::future<typename std::result_of<F(Args...)>::type>
 {
-    using return_type = typename std::invoke_result_t<F, Args...>;
+    using return_type = typename std::result_of<F(Args...)>::type;
     auto task = std::make_shared<std::packaged_task<return_type()>>(
-        // Wrap the task in a lambda that catches exceptions.
         [func = std::forward<F>(f), ... args = std::forward<Args>(args)]() -> return_type {
             try {
                 return func(args...);
             } catch (const std::exception &e) {
-                // You can log the exception message here if desired.
-                throw; // rethrow after catching
+                // Optionally log the error message: e.what()
+                throw; // rethrow the exception
             }
         }
     );

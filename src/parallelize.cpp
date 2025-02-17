@@ -53,7 +53,8 @@ ThreadPool::~ThreadPool() {
     }
     condition.notify_all();
     for (std::thread &worker : workers)
-        worker.join();
+        if(worker.joinable())
+            worker.join();
 }
 
 // ---------------------------------------------------------------------
@@ -77,7 +78,6 @@ std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> parallel_e
             Eigen::MatrixXd loc = loc_py.cast<Eigen::MatrixXd>();
             results.emplace_back(pool.enqueue(extract_adjacency_spatial, loc, spatial_type, fwhm));
         }
-        // Throttle progress updates (every 10 tasks).
         if (progress_callback && (++count % 10 == 0)) {
             py::gil_scoped_acquire acquire;
             progress_callback();
@@ -86,7 +86,11 @@ std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> parallel_e
     std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> output;
     output.reserve(results.size());
     for (auto& result : results) {
-        output.emplace_back(result.get());
+        try {
+            output.emplace_back(result.get());
+        } catch (...) {
+            // Optionally log error or skip this task.
+        }
     }
     return output;
 }
@@ -113,7 +117,7 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
         {
             py::gil_scoped_release release;
             Eigen::VectorXd feat = feats[i].cast<Eigen::VectorXd>();
-            // Convert SciPy sparse matrix to Eigen format.
+            // Convert SciPy sparse matrix (py::object) to Eigen::SparseMatrix<double>
             Eigen::SparseMatrix<double> A_matrix_double = scipy_sparse_to_eigen_sparse(A_matrices[i]);
             Eigen::MatrixXd mask = masks[i].cast<Eigen::MatrixXd>();
             results.emplace_back(pool.enqueue(topological_comp_res, feat, A_matrix_double, mask,
@@ -127,7 +131,11 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
     std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>> output;
     output.reserve(results.size());
     for (auto& result : results) {
-        output.push_back(result.get());
+        try {
+            output.push_back(result.get());
+        } catch (...) {
+            // Optionally log error or skip this task.
+        }
     }
     return output;
 }
@@ -164,7 +172,11 @@ std::vector<double> parallel_jaccard_composite(
     std::vector<double> output;
     output.reserve(results.size());
     for (auto& result : results) {
-        output.push_back(result.get());
+        try {
+            output.push_back(result.get());
+        } catch (...) {
+            // Optionally log error and skip.
+        }
     }
     return output;
 }
@@ -174,7 +186,7 @@ std::vector<double> parallel_jaccard_composite(
 // ---------------------------------------------------------------------
 PYBIND11_MODULE(parallelize, m) {
     m.doc() = "Parallelized functions for topological and Jaccard computations";
-    
+
     m.def("parallel_extract_adjacency", &parallel_extract_adjacency,
           "Parallelized extract_adjacency_spatial function",
           py::arg("locs"),
@@ -182,7 +194,7 @@ PYBIND11_MODULE(parallelize, m) {
           py::arg("fwhm") = 2.5,
           py::arg("num_workers") = 4,
           py::arg("progress_callback") = py::none());
-    
+
     m.def("parallel_topological_comp", &parallel_topological_comp,
           "Parallelized topological_comp_res function",
           py::arg("feats"),
@@ -194,7 +206,7 @@ PYBIND11_MODULE(parallelize, m) {
           py::arg("return_mode") = "all",
           py::arg("num_workers") = 4,
           py::arg("progress_callback") = py::none());
-    
+
     m.def("parallel_jaccard_composite", &parallel_jaccard_composite,
           "Parallelized jaccard_composite function",
           py::arg("CCx_loc_sums"),
