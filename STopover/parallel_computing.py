@@ -4,31 +4,27 @@ from .parallelize import parallel_extract_adjacency, parallel_topological_comp, 
 
 def parallel_with_progress_extract_adjacency(locs, spatial_type="visium", fwhm=2.5, num_workers=4):
     """
-    Parallel computation for extracting adjacency matrix and Gaussian smoothing mask.
+    Parallel computation for extracting the adjacency matrix and Gaussian smoothing mask.
     Progress is shown using a tqdm progress bar.
     
     Args:
-        locs (list): List of locations (NumPy arrays) to compute adjacency matrix for.
+        locs (list): List of locations (NumPy arrays) to compute adjacency for.
         spatial_type (str): Type of spatial data.
         fwhm (float): Full-width half-maximum for Gaussian smoothing.
         num_workers (int): Number of parallel workers.
         
     Returns:
-        list: A list of tuples containing the adjacency matrix and Gaussian mask for each location.
+        list: A list of tuples (adjacency matrix, Gaussian mask) for each location.
     """
-    # Create a progress bar
     with tqdm.tqdm(total=len(locs)) as pbar:
-        # Define a Python callback function to update progress
-        def update_progress():
-            pbar.update(1)
-        
-        # Call the C++ function in parallel, passing the progress callback
-        result = parallel_extract_adjacency(locs, spatial_type, fwhm, num_workers, update_progress)
-
+        # Using a lambda for the callback so that each task updates the progress bar.
+        progress_callback = lambda: pbar.update(1)
+        result = parallel_extract_adjacency(locs, spatial_type, fwhm, num_workers, progress_callback)
     return result
 
 
-def parallel_with_progress_topological_comp(feats, A_matrices, masks, spatial_type="visium", min_size=5, thres_per=30, return_mode="all", num_workers=4):
+def parallel_with_progress_topological_comp(feats, A_matrices, masks, spatial_type="visium",
+                                            min_size=5, thres_per=30, return_mode="all", num_workers=4):
     """
     Parallel computation for topological component extraction.
     Progress is shown using a tqdm progress bar.
@@ -44,17 +40,13 @@ def parallel_with_progress_topological_comp(feats, A_matrices, masks, spatial_ty
         num_workers (int): Number of parallel workers.
         
     Returns:
-        list: A list of topological components for each feature.
+        list: A list of topological component outputs for each feature.
     """
-    # Create a progress bar
     with tqdm.tqdm(total=len(feats)) as pbar:
-        # Define a Python callback function to update progress
-        def update_progress():
-            pbar.update(1)
-        
-        # Call the C++ function in parallel, passing the progress callback
-        result = parallel_topological_comp(feats, A_matrices, masks, spatial_type, min_size, thres_per, return_mode, num_workers, update_progress)
-
+        progress_callback = lambda: pbar.update(1)
+        result = parallel_topological_comp(
+            feats, A_matrices, masks, spatial_type, min_size, thres_per, return_mode, num_workers, progress_callback
+        )
     return result
 
 
@@ -64,29 +56,23 @@ def parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums, feat_xs
     Progress is shown using a tqdm progress bar.
     
     Args:
-        CCx_loc_sums (list): List of connected component locations (NumPy arrays) for feature x.
-        CCy_loc_sums (list): List of connected component locations (NumPy arrays) for feature y.
-        feat_xs (list): List of feature values (NumPy arrays) for feature x.
-        feat_ys (list): List of feature values (NumPy arrays) for feature y.
+        CCx_loc_sums (list): List of connected component location arrays (NumPy arrays) for feature x.
+        CCy_loc_sums (list): List of connected component location arrays (NumPy arrays) for feature y.
+        feat_xs (list): List of feature value arrays (NumPy arrays) for feature x. If None, empty arrays are used.
+        feat_ys (list): List of feature value arrays (NumPy arrays) for feature y. If None, empty arrays are used.
         num_workers (int): Number of parallel workers.
         
     Returns:
         list: A list of Jaccard composite indices.
     """
+    # Use empty matrices if features are not provided.
     feat_xs = feat_xs if feat_xs is not None else [np.empty((0, 0)) for _ in CCx_loc_sums]
     feat_ys = feat_ys if feat_ys is not None else [np.empty((0, 0)) for _ in CCy_loc_sums]
 
-    # Create a progress bar
     with tqdm.tqdm(total=len(CCx_loc_sums)) as pbar:
-        # Define a Python callback function to update progress
-        def update_progress():
-            pbar.update(1)
-        
-        # Call the C++ function in parallel, passing the progress callback
-        result = parallel_jaccard_composite(CCx_loc_sums, CCy_loc_sums, feat_xs, feat_ys, num_workers, update_progress)
-
+        progress_callback = lambda: pbar.update(1)
+        result = parallel_jaccard_composite(CCx_loc_sums, CCy_loc_sums, feat_xs, feat_ys, num_workers, progress_callback)
     return result
-
 
 # Example Usage:
 # Assuming you have the locs, feats, adjacency matrices, masks, and other inputs properly formatted.

@@ -44,7 +44,7 @@ def calculate_p_value(group):
 
 def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'visium',
                          fwhm=2.5, min_size=5, thres_per=30, jaccard_type='default',
-                         num_workers=os.cpu_count(), progress_bar=True):
+                         num_workers=os.cpu_count()):
     '''
     ## Calculate Jaccard index for given feature pairs and return dataframe
         -> if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
@@ -71,7 +71,6 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
     thres_per: lower percentile value threshold to remove the connected components
     jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
     num_workers: number of workers to use for multiprocessing
-    progress_bar: whether to show the progress bar during multiprocessing
 
     ### Output
     df_top_total: dataframe that contains spatial overlap measures represented by (Jmax, Jmean, Jmmx, Jmmy) for the feature pairs
@@ -230,7 +229,7 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
     # Start the multiprocessing for extracting adjacency matrix and mask
     print(f"Calculation of adjacency matrix for {spatial_type}")
     adjacency_mask = parallel_with_progress_extract_adjacency(loc_list, spatial_type=spatial_type, 
-                                                              fwhm=fwhm, num_workers=num_workers//1.5)
+                                                              fwhm=fwhm, num_workers=max(1, int(num_workers//1.5)))
     if spatial_type=='visium':
         feat_A_mask_pair = [(feat[perm_idx][:,feat_idx].reshape((-1,1)),
                             adjacency_mask[grp_idx][0], adjacency_mask[grp_idx][1]) \
@@ -249,7 +248,7 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
                                                         masks = [feat[2] for feat in feat_A_mask_pair],
                                                         spatial_type=spatial_type,
                                                         min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
-                                                        num_workers=num_workers//1.5)
+                                                        num_workers=max(1, int(num_workers//1.5)))
 
     # Make dataframe for the similarity between feature 1 and 2 across the groups
     print('Calculation of composite jaccard indexes between feature pairs')
@@ -301,7 +300,7 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
                                                         CCy_loc_sums=[feat[1] for feat in CCxy_loc_mat_list],
                                                         feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
                                                         feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
-                                                        num_workers=num_workers//1.5)
+                                                        num_workers=max(1, int(num_workers//1.5)))
 
     # Create a dataframe for J metrics and calculate p-values
     df_perm_fin = df_perm.assign(J_comp_perm=output_j).groupby([group_name, 'Feat_1', 'Feat_2']).apply(calculate_p_value).reset_index()
