@@ -14,12 +14,12 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
                            fwhm=2.5, min_size=5, thres_per=30, jaccard_type='default',
                            num_workers=os.cpu_count()):
     """
-    Calculate Jaccard index between topological connected components of feature pairs and
-    return a dataframe. If groups are provided, data is divided by group and computed per group.
+    Calculate Jaccard index between topological connected components of feature pairs.
+    If groups are provided, data is processed per group.
     """
     start_time = time.time()
 
-    # Validate and format feat_pairs
+    # Validate and format feat_pairs.
     if isinstance(feat_pairs, pd.DataFrame):
         df_feat = feat_pairs.copy()
     elif isinstance(feat_pairs, list):
@@ -34,7 +34,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     if jaccard_type not in ['default', 'weighted']:
         raise ValueError("'jaccard_type' must be either 'default' or 'weighted'")
 
-    # Determine group_list from data.obs if not provided
+    # Determine group_list from data.obs if not provided.
     if group_list is None:
         try:
             group_list = data.obs[group_name].cat.categories
@@ -48,22 +48,22 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
             raise ValueError(f"Some elements in group_list not found in data.obs['{group_name}']")
         data = data[data.obs[group_name].isin(group_list)]
 
-    # Check data.X type
+    # Determine the type of data.X.
     if isinstance(data.X, np.ndarray):
         data_type = 'array'
     elif sparse.isspmatrix(data.X):
         data_type = 'sparse'
     else:
-        raise ValueError("'data.X' must be a numpy array or scipy sparse matrix")
+        raise ValueError("'data.X' must be a numpy array or a scipy sparse matrix")
 
-    # Rename columns if any are NaN
+    # Rename columns if any are NaN.
     if any(pd.isnull(col) for col in data.obs.columns):
         data.obs = data.obs.rename(columns=str)
 
     df_top_total = pd.DataFrame()
     val_list, loc_list = [], []
 
-    # Determine whether to use .obs or .var for feature extraction
+    # Determine whether to use .obs or .var for features.
     obs_data_x = df_feat.iloc[:, 0].isin(data.obs.columns)
     var_data_x = df_feat.iloc[:, 0].isin(data.var.index)
     obs_data_y = df_feat.iloc[:, 1].isin(data.obs.columns)
@@ -76,7 +76,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     if (not obs_tf_y) and (var_data_y.sum() == 0):
         raise ValueError("None of the second features are found")
 
-    # Filter df_feat to keep only existing features
+    # Keep only pairs that exist.
     if obs_tf_x and obs_tf_y:
         df_feat = df_feat[obs_data_x & obs_data_y].reset_index(drop=True)
     elif (not obs_tf_x) and obs_tf_y:
@@ -86,13 +86,12 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     else:
         df_feat = df_feat[var_data_x & var_data_y].reset_index(drop=True)
 
-    # Process each group
+    # Process each group.
     for num, grp in enumerate(group_list):
         data_sub = data[data.obs[group_name] == grp]
         df_tmp = df_feat.copy()
         df_tmp.insert(0, group_name, grp)
 
-        # Get feature values from .obs or .X
         if obs_tf_x:
             data_x = data_sub.obs[df_tmp.iloc[:, 1].tolist()].to_numpy()
             df_tmp['Avg_1'] = np.mean(np.abs(data_x), axis=0)
@@ -122,7 +121,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
             df_tmp['Avg_2'] = np.mean(data_y, axis=0)[df_tmp.index]
         df_tmp = df_tmp.reset_index(drop=True)
 
-        # Build combined feature list and assign indices
+        # Build combined feature list.
         comb_feat_list = pd.concat([df_tmp.iloc[:, 1], df_tmp.iloc[:, 2]], axis=0).drop_duplicates().to_frame().set_index(0)
         comb_feat_list['index'] = range(len(comb_feat_list))
         df_x = comb_feat_list.loc[df_tmp.iloc[:, 1].drop_duplicates()]
@@ -132,7 +131,6 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
         df_tmp['Index_1'] = df_xy.loc[df_tmp.iloc[:, 1]].reset_index()['index_x'].astype(int)
         df_tmp['Index_2'] = df_xy.loc[df_tmp.iloc[:, 2]].reset_index()['index_y'].astype(int)
 
-        # Extract feature values (from .obs or .X) as val_element
         if obs_tf_x != obs_tf_y:
             if obs_tf_x:
                 val_x = data_sub.obs[comb_feat_list.index].to_numpy()
@@ -156,7 +154,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
                     val_element = data_sub[:, comb_feat_list.index].X.toarray()
         df_top_total = pd.concat([df_top_total, df_tmp], axis=0)
 
-        # Get location info; ensure data_sub.obs has required columns
+        # Get location info.
         try:
             df_loc = data_sub.obs.loc[:, ['array_col', 'array_row']]
         except Exception:
@@ -164,7 +162,10 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
         if spatial_type == 'visium':
             df_loc['array_row'] = df_loc['array_row'] * np.sqrt(3) * 0.5
             df_loc['array_col'] = df_loc['array_col'] * 0.5
-        loc_list.append(df_loc.to_numpy())
+        loc_array = df_loc.to_numpy()
+        # Debug: print shape of location array.
+        print(f"Group {grp} loc shape: {loc_array.shape}")
+        loc_list.append(loc_array)
         if spatial_type == 'visium':
             val_list.append(val_element)
         elif spatial_type in ['imageST', 'visiumHD']:
@@ -183,7 +184,8 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
             smooth = smooth / smooth_sum * val_element_sum
             smooth_subset = smooth[row_indices, col_indices, :].reshape(-1, val_element.shape[1])
             val_list.append(smooth_subset)
-
+    
+    # Finalize dataframe columns.
     column_names = [group_name, 'Feat_1', 'Feat_2', 'Avg_1', 'Avg_2', 'Index_1', 'Index_2']
     df_top_total.columns = column_names
     df_top_total.index = range(df_top_total.shape[0])
@@ -191,14 +193,21 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     print('End of data preparation')
     print("Elapsed time: %.2f seconds" % (time.time() - start_time))
 
-    # --- Parallel processing section ---
+    # --- Parallel processing ---
     print("Calculation of adjacency matrix and mask")
-    # For debugging, try running without a progress callback:
+    # Before parallel call, check that each loc has shape (n,2)
+    for i, loc in enumerate(loc_list):
+        if loc.ndim != 2 or loc.shape[1] != 2:
+            raise ValueError(f"loc_list[{i}] has shape {loc.shape}; expected (n, 2)")
+        else:
+            print(f"loc_list[{i}] shape: {loc.shape}")
+    
     try:
+        # For debugging, you can temporarily pass progress_callback=lambda: None
         adjacency_mask = parallel_with_progress_extract_adjacency(
             loc_list, spatial_type=spatial_type, fwhm=fwhm,
             num_workers=max(1, int(num_workers // 1.5))
-            # , progress_callback=lambda: None
+            #, progress_callback=lambda: None
         )
     except Exception as e:
         print("Error during parallel_extract_adjacency:", e)
