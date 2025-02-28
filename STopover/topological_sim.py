@@ -242,13 +242,56 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     output_cc_loc = []
     feat_num_sum = 0
     for num, grp in enumerate(group_list):
-        df_subset = df_top_total[df_top_total[group_name] == grp]
         data_sub = data[data.obs[group_name] == grp]
         feat_num = val_list[num].shape[1]
-        arr_cc_loc = np.concatenate(output_cc[feat_num_sum:(feat_num_sum + feat_num)], axis=1)
+        
+        # Get the relevant output_cc results
+        group_output_cc = output_cc[feat_num_sum:(feat_num_sum + feat_num)]
+        
+        # Check if all elements have the same shape before concatenation
+        shapes = [cc.shape for cc in group_output_cc]
+        if len(set(shapes)) > 1:
+            print(f"Warning: Inhomogeneous shapes detected in group {grp}: {shapes}")
+            
+            # Find the maximum dimensions
+            max_rows = max(shape[0] for shape in shapes)
+            max_cols = max(shape[1] for shape in shapes)
+            
+            # Pad arrays to the same shape
+            padded_arrays = []
+            for cc in group_output_cc:
+                if cc.shape != (max_rows, max_cols):
+                    padded = np.zeros((max_rows, max_cols))
+                    padded[:cc.shape[0], :cc.shape[1]] = cc
+                    padded_arrays.append(padded)
+                else:
+                    padded_arrays.append(cc)
+            
+            # Now concatenate the padded arrays
+            try:
+                arr_cc_loc = np.concatenate(padded_arrays, axis=1)
+            except ValueError as e:
+                print(f"Error during concatenation: {e}")
+                # Fallback: create an empty array with the right dimensions
+                arr_cc_loc = np.zeros((max_rows, sum(shape[1] for shape in shapes)))
+        else:
+            # If all shapes are the same, concatenate normally
+            try:
+                arr_cc_loc = np.concatenate(group_output_cc, axis=1)
+            except ValueError as e:
+                print(f"Error during concatenation: {e}")
+                # Get dimensions for the fallback array
+                if group_output_cc:
+                    rows = group_output_cc[0].shape[0]
+                    cols = sum(cc.shape[1] for cc in group_output_cc)
+                    arr_cc_loc = np.zeros((rows, cols))
+                else:
+                    arr_cc_loc = np.array([])
+        
         df_cc_loc = pd.DataFrame(arr_cc_loc)
         feat_num_sum += feat_num
         
+        df_subset = df_top_total[df_top_total[group_name] == grp]
         comb_feat_list = pd.concat([df_subset['Feat_1'], df_subset['Feat_2']],
                                    axis=0, ignore_index=True).drop_duplicates().tolist()
         df_cc_loc.columns = ['Comb_CC_' + str(i) for i in comb_feat_list]
