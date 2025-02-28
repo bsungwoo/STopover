@@ -406,6 +406,16 @@ std::vector<double> parallel_jaccard_composite(
         return std::vector<double>();
     }
     
+    // Print information about the first few arrays to understand their structure
+    for (size_t i = 0; i < std::min(size_t(3), cc_1_list.size()); ++i) {
+        auto array = cc_1_list[i];
+        std::cout << "cc_1_list[" << i << "] ndim: " << array.ndim() << ", shape: ";
+        for (size_t d = 0; d < array.ndim(); ++d) {
+            std::cout << array.shape(d) << " ";
+        }
+        std::cout << std::endl;
+    }
+    
     // Create thread pool
     ThreadPool pool(num_workers);
     std::vector<std::future<double>> results;
@@ -421,32 +431,66 @@ std::vector<double> parallel_jaccard_composite(
                 auto cc_1_array = cc_1_list[i];
                 auto cc_2_array = cc_2_list[j];
                 
-                // Debug info
-                std::cout << "Processing component pair (" << i << "," << j << ")" << std::endl;
-                std::cout << "  cc_1 shape: " << cc_1_array.shape(0) << std::endl;
-                std::cout << "  cc_2 shape: " << cc_2_array.shape(0) << std::endl;
-                
-                // Convert to vector<vector<int>>
+                // Handle different array dimensions
                 std::vector<std::vector<int>> cc_1;
                 std::vector<std::vector<int>> cc_2;
                 
-                // Convert cc_1_array to vector
-                for (py::ssize_t k = 0; k < cc_1_array.shape(0); ++k) {
-                    std::vector<int> row;
-                    for (py::ssize_t l = 0; l < cc_1_array.shape(1); ++l) {
-                        row.push_back(*cc_1_array.data(k, l));
+                // Convert cc_1_array to vector based on its dimensions
+                if (cc_1_array.ndim() == 1) {
+                    // 1D array - treat as a single component
+                    std::vector<int> component;
+                    auto buf = cc_1_array.request();
+                    int* ptr = static_cast<int*>(buf.ptr);
+                    for (py::ssize_t k = 0; k < cc_1_array.shape(0); ++k) {
+                        component.push_back(ptr[k]);
                     }
-                    cc_1.push_back(row);
+                    cc_1.push_back(component);
+                } 
+                else if (cc_1_array.ndim() == 2) {
+                    // 2D array - each row is a component
+                    auto buf = cc_1_array.request();
+                    int* ptr = static_cast<int*>(buf.ptr);
+                    for (py::ssize_t k = 0; k < cc_1_array.shape(0); ++k) {
+                        std::vector<int> row;
+                        for (py::ssize_t l = 0; l < cc_1_array.shape(1); ++l) {
+                            row.push_back(ptr[k * cc_1_array.shape(1) + l]);
+                        }
+                        cc_1.push_back(row);
+                    }
+                }
+                else {
+                    throw std::runtime_error("Unsupported array dimension for cc_1: " + std::to_string(cc_1_array.ndim()));
                 }
                 
-                // Convert cc_2_array to vector
-                for (py::ssize_t k = 0; k < cc_2_array.shape(0); ++k) {
-                    std::vector<int> row;
-                    for (py::ssize_t l = 0; l < cc_2_array.shape(1); ++l) {
-                        row.push_back(*cc_2_array.data(k, l));
+                // Convert cc_2_array to vector based on its dimensions
+                if (cc_2_array.ndim() == 1) {
+                    // 1D array - treat as a single component
+                    std::vector<int> component;
+                    auto buf = cc_2_array.request();
+                    int* ptr = static_cast<int*>(buf.ptr);
+                    for (py::ssize_t k = 0; k < cc_2_array.shape(0); ++k) {
+                        component.push_back(ptr[k]);
                     }
-                    cc_2.push_back(row);
+                    cc_2.push_back(component);
+                } 
+                else if (cc_2_array.ndim() == 2) {
+                    // 2D array - each row is a component
+                    auto buf = cc_2_array.request();
+                    int* ptr = static_cast<int*>(buf.ptr);
+                    for (py::ssize_t k = 0; k < cc_2_array.shape(0); ++k) {
+                        std::vector<int> row;
+                        for (py::ssize_t l = 0; l < cc_2_array.shape(1); ++l) {
+                            row.push_back(ptr[k * cc_2_array.shape(1) + l]);
+                        }
+                        cc_2.push_back(row);
+                    }
                 }
+                else {
+                    throw std::runtime_error("Unsupported array dimension for cc_2: " + std::to_string(cc_2_array.ndim()));
+                }
+                
+                // Debug info
+                std::cout << "Successfully prepared components for pair (" << i << "," << j << ")" << std::endl;
                 
                 // Add task to thread pool
                 results.emplace_back(
@@ -464,8 +508,8 @@ std::vector<double> parallel_jaccard_composite(
                     })
                 );
             } catch (const std::exception& e) {
-                std::cerr << "Error processing component pair (" << i << "," << j << "): " 
-                          << e.what() << std::endl;
+                std::cerr << "Error preparing Jaccard data for row " << i << ": " << j 
+                          << " - " << e.what() << std::endl;
                 results.emplace_back(
                     pool.enqueue([]() { return 0.0; })
                 );
