@@ -19,7 +19,6 @@ def parallel_with_progress_extract_adjacency(locs, spatial_type="visium", fwhm=2
     """
     try:
         print(f"Starting parallel_extract_adjacency with {len(locs)} locations")
-        print(f"First location shape: {locs[0].shape if len(locs) > 0 else 'No locations'}")
         
         # Ensure locations are properly formatted
         for i, loc in enumerate(locs):

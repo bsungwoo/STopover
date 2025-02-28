@@ -248,61 +248,150 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
     int num_workers,
     py::function progress_callback)
 {
+    log_message("Starting parallel_topological_comp with " + std::to_string(feats.size()) + 
+                " features, spatial_type=" + spatial_type + 
+                ", min_size=" + std::to_string(min_size) + 
+                ", thres_per=" + std::to_string(thres_per) + 
+                ", return_mode=" + return_mode + 
+                ", num_workers=" + std::to_string(num_workers));
+    
+    // Limit number of workers to avoid resource issues
+    num_workers = std::max(1, std::min(num_workers, 4));
+    log_message("Using " + std::to_string(num_workers) + " workers");
+    
     ThreadPool pool(num_workers);
     std::vector<std::future<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>> results;
     std::atomic<int> count{0};
 
     for (size_t i = 0; i < feats.size(); ++i) {
-        {
-            py::gil_scoped_release release;
-            Eigen::VectorXd feat;
-            try {
-                feat = feats[i].cast<Eigen::VectorXd>();
-            } catch (const std::exception& e) {
-                throw std::runtime_error("Failed to cast feature at index " + std::to_string(i) + ": " + e.what());
-            }
+        log_message("Processing feature " + std::to_string(i));
+        
+        try {
+            // Make copies of the Python objects to avoid reference issues
+            py::array_t<double> feat_copy = feats[i];
+            py::object A_matrix_copy = A_matrices[i];
+            py::array_t<double> mask_copy = masks[i];
             
-            // Handle null masks properly
-            Eigen::MatrixXd mask;
-            if (masks[i].size() > 0) {
+            results.emplace_back(pool.enqueue([feat_copy, A_matrix_copy, mask_copy, 
+                                              spatial_type, min_size, thres_per, return_mode, i]() {
                 try {
-                    mask = masks[i].cast<Eigen::MatrixXd>();
+                    log_message("Thread: Converting feature " + std::to_string(i));
+                    
+                    // Release the GIL during heavy computation
+                    py::gil_scoped_release release;
+                    
+                    // Convert to Eigen types
+                    Eigen::VectorXd feat;
+                    Eigen::SparseMatrix<double> A_matrix;
+                    Eigen::MatrixXd mask;
+                    
+                    {
+                        // Reacquire GIL for the conversion
+                        py::gil_scoped_acquire acquire;
+                        
+                        // Convert feature
+                        feat = feat_copy.cast<Eigen::VectorXd>();
+                        log_message("Thread: Converted feature " + std::to_string(i) + 
+                                   " with size " + std::to_string(feat.size()));
+                        
+                        // Convert adjacency matrix
+                        try {
+                            A_matrix = scipy_sparse_to_eigen_sparse(A_matrix_copy);
+                            log_message("Thread: Converted adjacency matrix " + std::to_string(i) + 
+                                       " with size (" + std::to_string(A_matrix.rows()) + 
+                                       ", " + std::to_string(A_matrix.cols()) + ")");
+                        } catch (const std::exception& e) {
+                            log_message("Thread: ERROR converting adjacency matrix " + std::to_string(i) + 
+                                       ": " + std::string(e.what()));
+                            throw;
+                        }
+                        
+                        // Convert mask
+                        try {
+                            mask = mask_copy.cast<Eigen::MatrixXd>();
+                            log_message("Thread: Converted mask " + std::to_string(i) + 
+                                       " with shape (" + std::to_string(mask.rows()) + 
+                                       ", " + std::to_string(mask.cols()) + ")");
+                        } catch (const std::exception& e) {
+                            log_message("Thread: ERROR converting mask " + std::to_string(i) + 
+                                       ": " + std::string(e.what()));
+                            throw;
+                        }
+                    }
+                    
+                    // Validate inputs
+                    if (feat.size() == 0) {
+                        log_message("Thread: ERROR: Empty feature vector for index " + std::to_string(i));
+                        return std::make_tuple(std::vector<std::vector<int>>(), Eigen::SparseMatrix<int>());
+                    }
+                    
+                    if (A_matrix.rows() == 0 || A_matrix.cols() == 0) {
+                        log_message("Thread: ERROR: Empty adjacency matrix for index " + std::to_string(i));
+                        return std::make_tuple(std::vector<std::vector<int>>(), Eigen::SparseMatrix<int>());
+                    }
+                    
+                    // Call topological_comp_res with proper error handling
+                    log_message("Thread: Starting topological_comp_res for feature " + std::to_string(i));
+                    auto result = topological_comp_res(feat, A_matrix, mask, spatial_type, min_size, thres_per, return_mode);
+                    log_message("Thread: Completed topological_comp_res for feature " + std::to_string(i));
+                    return result;
                 } catch (const std::exception& e) {
-                    throw std::runtime_error("Failed to cast mask at index " + std::to_string(i) + ": " + e.what());
+                    log_message("Thread: ERROR in processing feature " + std::to_string(i) + 
+                               ": " + std::string(e.what()));
+                    return std::make_tuple(std::vector<std::vector<int>>(), Eigen::SparseMatrix<int>());
+                } catch (...) {
+                    log_message("Thread: UNKNOWN ERROR in processing feature " + std::to_string(i));
+                    return std::make_tuple(std::vector<std::vector<int>>(), Eigen::SparseMatrix<int>());
                 }
-            }
+            }));
             
-            // Convert SciPy sparse matrix (py::object) to Eigen::SparseMatrix<double> with error handling
-            Eigen::SparseMatrix<double> A_matrix_double;
-            try {
-                A_matrix_double = scipy_sparse_to_eigen_sparse(A_matrices[i]);
-            } catch (const std::exception& e) {
-                throw std::runtime_error("Failed to convert sparse matrix at index " + std::to_string(i) + ": " + e.what());
-            }
-            
-            results.emplace_back(pool.enqueue(topological_comp_res, feat, A_matrix_double, mask,
-                                               spatial_type, min_size, thres_per, return_mode));
+            log_message("Enqueued feature " + std::to_string(i));
+        } catch (const std::exception& e) {
+            log_message("ERROR: Exception during enqueue for feature " + std::to_string(i) + 
+                       ": " + std::string(e.what()));
+            results.emplace_back(std::async(std::launch::deferred, []() {
+                return std::make_tuple(std::vector<std::vector<int>>(), Eigen::SparseMatrix<int>());
+            }));
+        } catch (...) {
+            log_message("ERROR: Unknown exception during enqueue for feature " + std::to_string(i));
+            results.emplace_back(std::async(std::launch::deferred, []() {
+                return std::make_tuple(std::vector<std::vector<int>>(), Eigen::SparseMatrix<int>());
+            }));
         }
+        
         if (progress_callback && (++count % 10 == 0)) {
-            py::gil_scoped_acquire acquire;
             try {
+                py::gil_scoped_acquire acquire;
                 progress_callback();
+                log_message("Called progress_callback after " + std::to_string(count) + " features");
             } catch (const std::exception& e) {
-                // Log error but continue processing
+                log_message("ERROR in progress callback: " + std::string(e.what()));
+            } catch (...) {
+                log_message("UNKNOWN ERROR in progress callback");
             }
         }
     }
+    
+    log_message("All features enqueued, collecting results");
     std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>> output;
     output.reserve(results.size());
+    
     for (size_t i = 0; i < results.size(); ++i) {
         try {
-            output.push_back(results[i].get());
+            log_message("Getting result for feature " + std::to_string(i));
+            output.emplace_back(results[i].get());
+            log_message("Successfully got result for feature " + std::to_string(i));
         } catch (const std::exception& e) {
-            // Log the error and push an empty result instead of crashing
-            std::cerr << "Error processing result at index " << i << ": " << e.what() << std::endl;
-            output.push_back(std::make_tuple(std::vector<std::vector<int>>(), Eigen::SparseMatrix<int>()));
+            log_message("ERROR getting result for feature " + std::to_string(i) + 
+                       ": " + std::string(e.what()));
+            output.emplace_back(std::make_tuple(std::vector<std::vector<int>>(), Eigen::SparseMatrix<int>()));
+        } catch (...) {
+            log_message("UNKNOWN ERROR getting result for feature " + std::to_string(i));
+            output.emplace_back(std::make_tuple(std::vector<std::vector<int>>(), Eigen::SparseMatrix<int>()));
         }
     }
+    
+    log_message("Completed parallel_topological_comp with " + std::to_string(output.size()) + " results");
     return output;
 }
 
