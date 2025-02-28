@@ -15,15 +15,31 @@
 #include <condition_variable>
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
+#include <fstream>
+#include <chrono>
+#include <iomanip>
 
 namespace py = pybind11;
+
+// Create a thread-safe logging function
+std::mutex log_mutex;
+void log_message(const std::string& message) {
+    std::lock_guard<std::mutex> lock(log_mutex);
+    std::ofstream log_file("parallelize_debug.log", std::ios_base::app);
+    auto now = std::chrono::system_clock::now();
+    auto now_c = std::chrono::system_clock::to_time_t(now);
+    log_file << std::put_time(std::localtime(&now_c), "%Y-%m-%d %H:%M:%S") 
+             << " - " << message << std::endl;
+}
 
 // ---------------------------------------------------------------------
 // ThreadPool Implementation
 // ---------------------------------------------------------------------
 ThreadPool::ThreadPool(size_t threads) : stop(false) {
+    log_message("Creating ThreadPool with " + std::to_string(threads) + " threads");
     for (size_t i = 0; i < threads; ++i) {
-        workers.emplace_back([this] {
+        workers.emplace_back([this, i] {
+            log_message("Thread " + std::to_string(i) + " started");
             while (true) {
                 std::function<void()> task;
                 {
@@ -31,16 +47,24 @@ ThreadPool::ThreadPool(size_t threads) : stop(false) {
                     this->condition.wait(lock, [this]{
                         return this->stop.load() || !this->tasks.empty();
                     });
-                    if (this->stop.load() && this->tasks.empty())
+                    if (this->stop.load() && this->tasks.empty()) {
+                        log_message("Thread " + std::to_string(i) + " stopping");
                         return;
+                    }
                     task = std::move(this->tasks.front());
                     this->tasks.pop();
                 }
+                this->active_count++;
                 try {
+                    log_message("Thread " + std::to_string(i) + " executing task");
                     task();
+                    log_message("Thread " + std::to_string(i) + " completed task");
                 } catch (const std::exception &e) {
-                    // Optionally log error: e.what()
+                    log_message("ERROR in thread " + std::to_string(i) + ": " + e.what());
+                } catch (...) {
+                    log_message("ERROR in thread " + std::to_string(i) + ": Unknown exception");
                 }
+                this->active_count--;
             }
         });
     }
@@ -67,60 +91,94 @@ std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> parallel_e
     int num_workers,
     py::function progress_callback)
 {
+    log_message("Starting parallel_extract_adjacency with " + std::to_string(locs.size()) + 
+                " locations, spatial_type=" + spatial_type + 
+                ", fwhm=" + std::to_string(fwhm) + 
+                ", num_workers=" + std::to_string(num_workers));
+    
     ThreadPool pool(num_workers);
     std::vector<std::future<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>>> results;
     std::atomic<int> count{0};
 
-    for (const auto& loc_py : locs) {
-        {
+    for (size_t loc_idx = 0; loc_idx < locs.size(); ++loc_idx) {
+        const auto& loc_py = locs[loc_idx];
+        log_message("Processing location " + std::to_string(loc_idx));
+        
+        try {
             // Release the GIL during heavy computation.
             py::gil_scoped_release release;
             Eigen::MatrixXd loc;
             try {
                 loc = loc_py.cast<Eigen::MatrixXd>();
+                log_message("Successfully cast location " + std::to_string(loc_idx) + 
+                           " with shape (" + std::to_string(loc.rows()) + 
+                           ", " + std::to_string(loc.cols()) + ")");
             } catch (const std::exception& e) {
+                log_message("ERROR: Failed to cast location matrix " + std::to_string(loc_idx) + 
+                           ": " + std::string(e.what()));
                 throw std::runtime_error("Failed to cast location matrix: " + std::string(e.what()));
             }
             
             // Validate the location matrix
             if (loc.rows() == 0 || loc.cols() != 2) {
+                log_message("ERROR: Invalid location matrix shape: expected (n, 2), got (" + 
+                           std::to_string(loc.rows()) + ", " + 
+                           std::to_string(loc.cols()) + ")");
                 throw std::runtime_error("Invalid location matrix shape: expected (n, 2), got (" + 
                                          std::to_string(loc.rows()) + ", " + 
                                          std::to_string(loc.cols()) + ")");
             }
             
-            results.emplace_back(pool.enqueue([loc, spatial_type, fwhm]() {
+            results.emplace_back(pool.enqueue([loc, spatial_type, fwhm, loc_idx]() {
                 try {
-                    return extract_adjacency_spatial(loc, spatial_type, fwhm);
+                    log_message("Starting extract_adjacency_spatial for location " + 
+                               std::to_string(loc_idx));
+                    auto result = extract_adjacency_spatial(loc, spatial_type, fwhm);
+                    log_message("Completed extract_adjacency_spatial for location " + 
+                               std::to_string(loc_idx));
+                    return result;
                 } catch (const std::exception& e) {
-                    std::cerr << "Error in extract_adjacency_spatial: " << e.what() << std::endl;
+                    log_message("ERROR in extract_adjacency_spatial for location " + 
+                               std::to_string(loc_idx) + ": " + std::string(e.what()));
                     // Return empty matrices instead of crashing
                     return std::make_tuple(Eigen::SparseMatrix<double>(), Eigen::MatrixXd());
                 }
             }));
+        } catch (const std::exception& e) {
+            log_message("ERROR: Exception during enqueue for location " + 
+                       std::to_string(loc_idx) + ": " + std::string(e.what()));
+            // Continue to next location instead of crashing
+            continue;
         }
+        
         if (progress_callback && (++count % 10 == 0)) {
-            py::gil_scoped_acquire acquire;
             try {
+                py::gil_scoped_acquire acquire;
                 progress_callback();
+                log_message("Called progress_callback after " + std::to_string(count) + " locations");
             } catch (const std::exception& e) {
-                std::cerr << "Error in progress callback: " << e.what() << std::endl;
+                log_message("ERROR in progress callback: " + std::string(e.what()));
                 // Continue processing despite callback error
             }
         }
     }
     
+    log_message("All locations enqueued, collecting results");
     std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> output;
     output.reserve(results.size());
     for (size_t i = 0; i < results.size(); ++i) {
         try {
+            log_message("Getting result for index " + std::to_string(i));
             output.emplace_back(results[i].get());
+            log_message("Successfully got result for index " + std::to_string(i));
         } catch (const std::exception& e) {
-            std::cerr << "Error getting result at index " << i << ": " << e.what() << std::endl;
+            log_message("ERROR getting result at index " + std::to_string(i) + 
+                       ": " + std::string(e.what()));
             // Add empty result instead of crashing
             output.emplace_back(std::make_tuple(Eigen::SparseMatrix<double>(), Eigen::MatrixXd()));
         }
     }
+    log_message("Completed parallel_extract_adjacency with " + std::to_string(output.size()) + " results");
     return output;
 }
 

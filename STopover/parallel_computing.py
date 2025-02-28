@@ -1,6 +1,7 @@
 import numpy as np
 import tqdm
 from .parallelize import parallel_extract_adjacency, parallel_topological_comp, parallel_jaccard_composite
+import scipy.sparse as sparse
 
 def parallel_with_progress_extract_adjacency(locs, spatial_type="visium", fwhm=2.5, num_workers=4):
     """
@@ -16,11 +17,30 @@ def parallel_with_progress_extract_adjacency(locs, spatial_type="visium", fwhm=2
     Returns:
         list: A list of tuples (adjacency matrix, Gaussian mask) for each location.
     """
-    with tqdm.tqdm(total=len(locs)) as pbar:
-        # Using a lambda for the callback so that each task updates the progress bar.
-        progress_callback = lambda: pbar.update(1)
-        result = parallel_extract_adjacency(locs, spatial_type, fwhm, num_workers, progress_callback)
-    return result
+    try:
+        print(f"Starting parallel_extract_adjacency with {len(locs)} locations")
+        print(f"First location shape: {locs[0].shape if len(locs) > 0 else 'No locations'}")
+        
+        # Ensure locations are properly formatted
+        for i, loc in enumerate(locs):
+            if not isinstance(loc, np.ndarray):
+                print(f"Converting location {i} to numpy array")
+                locs[i] = np.array(loc, dtype=np.float64)
+            
+            # Ensure the array is contiguous in memory
+            if not locs[i].flags.c_contiguous:
+                print(f"Making location {i} contiguous")
+                locs[i] = np.ascontiguousarray(locs[i], dtype=np.float64)
+        
+        with tqdm.tqdm(total=len(locs)) as pbar:
+            # Using a lambda for the callback so that each task updates the progress bar.
+            progress_callback = lambda: pbar.update(1)
+            result = parallel_extract_adjacency(locs, spatial_type, fwhm, num_workers, progress_callback)
+        return result
+    except Exception as e:
+        print(f"ERROR in parallel_with_progress_extract_adjacency: {str(e)}")
+        # Return empty results instead of crashing
+        return [(sparse.csr_matrix((0, 0)), np.empty((0, 0))) for _ in range(len(locs))]
 
 
 def parallel_with_progress_topological_comp(feats, A_matrices, masks, spatial_type="visium",

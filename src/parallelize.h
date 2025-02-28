@@ -32,12 +32,19 @@ public:
     auto enqueue(F&& f, Args&&... args)
         -> std::future<typename std::result_of<F(Args...)>::type>;
 
+    // Add a method to get the number of active tasks
+    size_t active_tasks() const {
+        std::lock_guard<std::mutex> lock(queue_mutex);
+        return tasks.size();
+    }
+
 private:
     std::vector<std::thread> workers;
     std::queue<std::function<void()>> tasks;
-    std::mutex queue_mutex;
+    mutable std::mutex queue_mutex;
     std::condition_variable condition;
     std::atomic<bool> stop;
+    std::atomic<size_t> active_count{0}; // Track active tasks
 };
 
 template<class F, class... Args>
