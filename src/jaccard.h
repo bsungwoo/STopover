@@ -12,9 +12,11 @@
 #include <algorithm>
 #include <stdexcept>
 #include <set>
+#include <string>
 
 // Function to calculate the Jaccard composite index from connected component locations
-double jaccard_composite(const Eigen::MatrixXd& CCx_loc_sum, const Eigen::MatrixXd& CCy_loc_sum,
-                         const Eigen::MatrixXd& feat_x = Eigen::MatrixXd(), const Eigen::MatrixXd& feat_y = Eigen::MatrixXd());
+double jaccard_composite(const std::vector<std::vector<int>>& cc_1, 
+                         const std::vector<std::vector<int>>& cc_2,
+                         const std::string& jaccard_type);
 
 #endif // JACCARD_H

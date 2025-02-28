@@ -503,7 +503,7 @@ std::vector<double> parallel_jaccard_composite(
                         }
                     }
                     
-                    // Call jaccard_composite with proper error handling
+                    // Call jaccard_composite with the updated signature
                     log_message("Thread: Starting jaccard_composite for pair " + std::to_string(i));
                     double result = jaccard_composite(cc_1, cc_2, jaccard_type);
                     log_message("Thread: Completed jaccard_composite for pair " + std::to_string(i) + 
