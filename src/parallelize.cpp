@@ -75,7 +75,7 @@ ThreadPool::~ThreadPool() {
 // Parallel Function: extract_adjacency_spatial
 // ---------------------------------------------------------------------
 std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> parallel_extract_adjacency(
-    const std::vector<py::object>& locs,
+    const std::vector<py::array_t<double>>& locs,
     const std::string& spatial_type,
     double fwhm,
     int num_workers,
@@ -575,7 +575,7 @@ std::vector<double> parallel_jaccard_composite(
 PYBIND11_MODULE(parallelize, m) {
     m.doc() = "Parallel computation for STopover";
     
-    // Use lambda functions to resolve the overloaded function pointers
+    // Use lambda functions with the correct types
     m.def("parallel_extract_adjacency", 
           [](const std::vector<py::array_t<double>>& locs,
              const std::string& spatial_type,
