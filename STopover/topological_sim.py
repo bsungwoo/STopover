@@ -248,45 +248,53 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
         # Get the relevant output_cc results
         group_output_cc = output_cc[feat_num_sum:(feat_num_sum + feat_num)]
         
-        # Check if all elements have the same shape before concatenation
-        shapes = [cc.shape for cc in group_output_cc]
-        if len(set(shapes)) > 1:
-            print(f"Warning: Inhomogeneous shapes detected in group {grp}: {shapes}")
+        # Check if all elements have the same shape
+        if not group_output_cc:
+            print(f"Warning: No output_cc results for group {grp}")
+            feat_num_sum += feat_num
+            continue
             
-            # Find the maximum dimensions
-            max_rows = max(shape[0] for shape in shapes)
-            max_cols = max(shape[1] for shape in shapes)
-            
-            # Pad arrays to the same shape
-            padded_arrays = []
-            for cc in group_output_cc:
-                if cc.shape != (max_rows, max_cols):
-                    padded = np.zeros((max_rows, max_cols))
-                    padded[:cc.shape[0], :cc.shape[1]] = cc
-                    padded_arrays.append(padded)
-                else:
-                    padded_arrays.append(cc)
-            
-            # Now concatenate the padded arrays
-            try:
-                arr_cc_loc = np.concatenate(padded_arrays, axis=1)
-            except ValueError as e:
-                print(f"Error during concatenation: {e}")
-                # Fallback: create an empty array with the right dimensions
-                arr_cc_loc = np.zeros((max_rows, sum(shape[1] for shape in shapes)))
+        # Check if the results are tuples or arrays
+        if isinstance(group_output_cc[0], tuple):
+            # Extract the first element of each tuple (connected components)
+            cc_arrays = [cc[0] for cc in group_output_cc]
         else:
-            # If all shapes are the same, concatenate normally
+            cc_arrays = group_output_cc
+            
+        # Check if we have arrays or lists of arrays
+        if isinstance(cc_arrays[0], np.ndarray):
+            # Direct arrays - concatenate them
             try:
-                arr_cc_loc = np.concatenate(group_output_cc, axis=1)
+                arr_cc_loc = np.concatenate(cc_arrays, axis=1)
             except ValueError as e:
-                print(f"Error during concatenation: {e}")
-                # Get dimensions for the fallback array
-                if group_output_cc:
-                    rows = group_output_cc[0].shape[0]
-                    cols = sum(cc.shape[1] for cc in group_output_cc)
-                    arr_cc_loc = np.zeros((rows, cols))
+                print(f"Error concatenating arrays: {e}")
+                # Create an empty placeholder
+                arr_cc_loc = np.zeros((1, 1))
+        else:
+            # Lists of arrays - need to handle differently
+            try:
+                # Flatten the lists into a single list of arrays
+                flattened = []
+                for cc_list in cc_arrays:
+                    flattened.extend(cc_list)
+                    
+                # Convert to a 2D array if possible
+                if flattened:
+                    # Find max dimensions
+                    max_rows = max(arr.shape[0] for arr in flattened if hasattr(arr, 'shape'))
+                    
+                    # Create a 2D array
+                    arr_cc_loc = np.zeros((max_rows, len(flattened)))
+                    
+                    # Fill in the values
+                    for i, arr in enumerate(flattened):
+                        if hasattr(arr, 'shape') and arr.shape[0] > 0:
+                            arr_cc_loc[:arr.shape[0], i] = arr
                 else:
-                    arr_cc_loc = np.array([])
+                    arr_cc_loc = np.zeros((1, 1))
+            except Exception as e:
+                print(f"Error processing lists of arrays: {e}")
+                arr_cc_loc = np.zeros((1, 1))
         
         df_cc_loc = pd.DataFrame(arr_cc_loc)
         feat_num_sum += feat_num
