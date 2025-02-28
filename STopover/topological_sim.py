@@ -242,6 +242,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     output_cc_loc = []
     feat_num_sum = 0
     for num, grp in enumerate(group_list):
+        print(f"Processing group {num}: {grp}")
         data_sub = data[data.obs[group_name] == grp]
         feat_num = val_list[num].shape[1]
         
@@ -268,8 +269,8 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
                 arr_cc_loc = np.concatenate(cc_arrays, axis=1)
             except ValueError as e:
                 print(f"Error concatenating arrays: {e}")
-                # Create an empty placeholder
-                arr_cc_loc = np.zeros((1, 1))
+                # Create an empty placeholder with the right number of columns
+                arr_cc_loc = np.zeros((data_sub.shape[0], len(cc_arrays)))
         else:
             # Lists of arrays - need to handle differently
             try:
@@ -280,31 +281,50 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
                     
                 # Convert to a 2D array if possible
                 if flattened:
-                    # Find max dimensions
-                    max_rows = max(arr.shape[0] for arr in flattened if hasattr(arr, 'shape'))
-                    
-                    # Create a 2D array
-                    arr_cc_loc = np.zeros((max_rows, len(flattened)))
+                    # Create a 2D array with the right dimensions
+                    arr_cc_loc = np.zeros((data_sub.shape[0], len(flattened)))
                     
                     # Fill in the values
                     for i, arr in enumerate(flattened):
                         if hasattr(arr, 'shape') and arr.shape[0] > 0:
-                            arr_cc_loc[:arr.shape[0], i] = arr
+                            # Make sure we don't exceed the array dimensions
+                            rows_to_copy = min(arr.shape[0], arr_cc_loc.shape[0])
+                            arr_cc_loc[:rows_to_copy, i] = arr[:rows_to_copy]
                 else:
-                    arr_cc_loc = np.zeros((1, 1))
+                    # Empty placeholder with the right number of columns
+                    arr_cc_loc = np.zeros((data_sub.shape[0], feat_num))
             except Exception as e:
                 print(f"Error processing lists of arrays: {e}")
-                arr_cc_loc = np.zeros((1, 1))
+                # Empty placeholder with the right number of columns
+                arr_cc_loc = np.zeros((data_sub.shape[0], feat_num))
         
         df_cc_loc = pd.DataFrame(arr_cc_loc)
-        feat_num_sum += feat_num
         
+        # Get the subset of features for this group
         df_subset = df_top_total[df_top_total[group_name] == grp]
         comb_feat_list = pd.concat([df_subset['Feat_1'], df_subset['Feat_2']],
-                                   axis=0, ignore_index=True).drop_duplicates().tolist()
+                                  axis=0, ignore_index=True).drop_duplicates().tolist()
+        
+        # Make sure the number of columns matches the number of features
+        if len(comb_feat_list) != df_cc_loc.shape[1]:
+            print(f"Warning: Column count mismatch for group {grp}. " +
+                  f"Expected {len(comb_feat_list)}, got {df_cc_loc.shape[1]}")
+            
+            # Adjust the DataFrame to match the expected number of columns
+            if len(comb_feat_list) > df_cc_loc.shape[1]:
+                # Add empty columns if needed
+                for i in range(df_cc_loc.shape[1], len(comb_feat_list)):
+                    df_cc_loc[i] = 0
+            else:
+                # Truncate columns if there are too many
+                df_cc_loc = df_cc_loc.iloc[:, :len(comb_feat_list)]
+        
+        # Now set the column names
         df_cc_loc.columns = ['Comb_CC_' + str(i) for i in comb_feat_list]
         df_cc_loc.index = data[data.obs[group_name] == grp].obs.index
         output_cc_loc.append(df_cc_loc)
+        
+        feat_num_sum += feat_num
         
         for idx in range(len(df_subset)):
             CCx_loc_mat = arr_cc_loc[:, df_subset['Index_1'].iloc[idx]]
