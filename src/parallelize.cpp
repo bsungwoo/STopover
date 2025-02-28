@@ -19,6 +19,7 @@
 #include <fstream>
 #include <chrono>
 #include <iomanip>
+#include <iostream>
 
 namespace py = pybind11;
 
@@ -395,178 +396,90 @@ std::vector<double> parallel_jaccard_composite(
     int num_workers,
     py::function progress_callback)
 {
-    log_message("Starting parallel_jaccard_composite with " + std::to_string(cc_1_list.size()) + 
-                " cc_1 arrays, " + std::to_string(cc_2_list.size()) + 
-                " cc_2 arrays, jaccard_type=" + jaccard_type + 
-                ", num_workers=" + std::to_string(num_workers));
+    // Add debug output
+    std::cout << "Starting parallel_jaccard_composite with " << cc_1_list.size() 
+              << " and " << cc_2_list.size() << " components" << std::endl;
     
-    // Limit number of workers to avoid resource issues
-    num_workers = std::max(1, std::min(num_workers, 4));
-    log_message("Using " + std::to_string(num_workers) + " workers");
-    
-    // Validate input sizes
-    if (cc_1_list.size() != cc_2_list.size()) {
-        log_message("ERROR: cc_1_list size (" + std::to_string(cc_1_list.size()) + 
-                   ") does not match cc_2_list size (" + std::to_string(cc_2_list.size()) + ")");
-        throw std::invalid_argument("cc_1_list and cc_2_list must have the same size");
+    // Check if inputs are valid
+    if (cc_1_list.empty() || cc_2_list.empty()) {
+        std::cout << "Empty input lists for Jaccard calculation" << std::endl;
+        return std::vector<double>();
     }
     
+    // Create thread pool
     ThreadPool pool(num_workers);
     std::vector<std::future<double>> results;
-    std::atomic<int> count{0};
-
+    
+    // Prepare tasks
+    int total_tasks = cc_1_list.size() * cc_2_list.size();
+    std::atomic<int> completed_tasks(0);
+    
     for (size_t i = 0; i < cc_1_list.size(); ++i) {
-        log_message("Processing pair " + std::to_string(i));
-        
-        try {
-            // Make copies of the Python objects to avoid reference issues
-            py::array_t<int> cc_1_copy = cc_1_list[i];
-            py::array_t<int> cc_2_copy = cc_2_list[i];
-            
-            results.emplace_back(pool.enqueue([cc_1_copy, cc_2_copy, jaccard_type, i]() {
-                try {
-                    log_message("Thread: Converting pair " + std::to_string(i));
-                    
-                    // Release the GIL during heavy computation
-                    py::gil_scoped_release release;
-                    
-                    // Convert to Eigen types
-                    std::vector<std::vector<int>> cc_1;
-                    std::vector<std::vector<int>> cc_2;
-                    
-                    {
-                        // Reacquire GIL for the conversion
-                        py::gil_scoped_acquire acquire;
-                        
-                        // Check if arrays are empty
-                        if (cc_1_copy.size() == 0 || cc_2_copy.size() == 0) {
-                            log_message("Thread: Empty array for pair " + std::to_string(i));
-                            return 0.0;
-                        }
-                        
-                        // Convert cc_1
-                        try {
-                            py::buffer_info buf1 = cc_1_copy.request();
-                            if (buf1.ndim != 2) {
-                                log_message("Thread: cc_1 is not a 2D array for pair " + std::to_string(i));
-                                return 0.0;
-                            }
-                            
-                            int* ptr1 = static_cast<int*>(buf1.ptr);
-                            int rows1 = buf1.shape[0];
-                            int cols1 = buf1.shape[1];
-                            
-                            cc_1.resize(rows1);
-                            for (int r = 0; r < rows1; ++r) {
-                                cc_1[r].resize(cols1);
-                                for (int c = 0; c < cols1; ++c) {
-                                    cc_1[r][c] = ptr1[r * cols1 + c];
-                                }
-                            }
-                            
-                            log_message("Thread: Converted cc_1 for pair " + std::to_string(i) + 
-                                       " with shape (" + std::to_string(rows1) + "," + 
-                                       std::to_string(cols1) + ")");
-                        } catch (const std::exception& e) {
-                            log_message("Thread: ERROR converting cc_1 for pair " + std::to_string(i) + 
-                                       ": " + std::string(e.what()));
-                            return 0.0;
-                        }
-                        
-                        // Convert cc_2
-                        try {
-                            py::buffer_info buf2 = cc_2_copy.request();
-                            if (buf2.ndim != 2) {
-                                log_message("Thread: cc_2 is not a 2D array for pair " + std::to_string(i));
-                                return 0.0;
-                            }
-                            
-                            int* ptr2 = static_cast<int*>(buf2.ptr);
-                            int rows2 = buf2.shape[0];
-                            int cols2 = buf2.shape[1];
-                            
-                            cc_2.resize(rows2);
-                            for (int r = 0; r < rows2; ++r) {
-                                cc_2[r].resize(cols2);
-                                for (int c = 0; c < cols2; ++c) {
-                                    cc_2[r][c] = ptr2[r * cols2 + c];
-                                }
-                            }
-                            
-                            log_message("Thread: Converted cc_2 for pair " + std::to_string(i) + 
-                                       " with shape (" + std::to_string(rows2) + "," + 
-                                       std::to_string(cols2) + ")");
-                        } catch (const std::exception& e) {
-                            log_message("Thread: ERROR converting cc_2 for pair " + std::to_string(i) + 
-                                       ": " + std::string(e.what()));
-                            return 0.0;
-                        }
-                    }
-                    
-                    // Call jaccard_composite with the updated signature
-                    log_message("Thread: Starting jaccard_composite for pair " + std::to_string(i));
-                    double result = jaccard_composite(cc_1, cc_2, jaccard_type);
-                    log_message("Thread: Completed jaccard_composite for pair " + std::to_string(i) + 
-                               " with result " + std::to_string(result));
-                    return result;
-                } catch (const std::exception& e) {
-                    log_message("Thread: ERROR in processing pair " + std::to_string(i) + 
-                               ": " + std::string(e.what()));
-                    return 0.0;
-                } catch (...) {
-                    log_message("Thread: UNKNOWN ERROR in processing pair " + std::to_string(i));
-                    return 0.0;
-                }
-            }));
-            
-            log_message("Enqueued pair " + std::to_string(i));
-        } catch (const std::exception& e) {
-            log_message("ERROR: Exception during enqueue for pair " + std::to_string(i) + 
-                       ": " + std::string(e.what()));
-            results.emplace_back(std::async(std::launch::deferred, []() {
-                return 0.0;
-            }));
-        } catch (...) {
-            log_message("ERROR: Unknown exception during enqueue for pair " + std::to_string(i));
-            results.emplace_back(std::async(std::launch::deferred, []() {
-                return 0.0;
-            }));
-        }
-        
-        if (progress_callback && (++count % 10 == 0)) {
+        for (size_t j = 0; j < cc_2_list.size(); ++j) {
+            // Convert numpy arrays to C++ vectors
             try {
-                py::gil_scoped_acquire acquire;
-                progress_callback();
-                log_message("Called progress_callback after " + std::to_string(count) + " pairs");
+                auto cc_1_array = cc_1_list[i];
+                auto cc_2_array = cc_2_list[j];
+                
+                // Debug info
+                std::cout << "Processing component pair (" << i << "," << j << ")" << std::endl;
+                std::cout << "  cc_1 shape: " << cc_1_array.shape(0) << std::endl;
+                std::cout << "  cc_2 shape: " << cc_2_array.shape(0) << std::endl;
+                
+                // Convert to vector<vector<int>>
+                std::vector<std::vector<int>> cc_1;
+                std::vector<std::vector<int>> cc_2;
+                
+                // Convert cc_1_array to vector
+                for (py::ssize_t k = 0; k < cc_1_array.shape(0); ++k) {
+                    std::vector<int> row;
+                    for (py::ssize_t l = 0; l < cc_1_array.shape(1); ++l) {
+                        row.push_back(*cc_1_array.data(k, l));
+                    }
+                    cc_1.push_back(row);
+                }
+                
+                // Convert cc_2_array to vector
+                for (py::ssize_t k = 0; k < cc_2_array.shape(0); ++k) {
+                    std::vector<int> row;
+                    for (py::ssize_t l = 0; l < cc_2_array.shape(1); ++l) {
+                        row.push_back(*cc_2_array.data(k, l));
+                    }
+                    cc_2.push_back(row);
+                }
+                
+                // Add task to thread pool
+                results.emplace_back(
+                    pool.enqueue([cc_1, cc_2, jaccard_type, &completed_tasks, total_tasks, &progress_callback]() {
+                        double result = jaccard_composite(cc_1, cc_2, jaccard_type);
+                        
+                        // Update progress
+                        ++completed_tasks;
+                        if (!progress_callback.is_none()) {
+                            py::gil_scoped_acquire acquire;
+                            progress_callback(completed_tasks, total_tasks);
+                        }
+                        
+                        return result;
+                    })
+                );
             } catch (const std::exception& e) {
-                log_message("ERROR in progress callback: " + std::string(e.what()));
-            } catch (...) {
-                log_message("UNKNOWN ERROR in progress callback");
+                std::cerr << "Error processing component pair (" << i << "," << j << "): " 
+                          << e.what() << std::endl;
+                results.emplace_back(
+                    pool.enqueue([]() { return 0.0; })
+                );
             }
         }
     }
     
-    log_message("All pairs enqueued, collecting results");
-    std::vector<double> output;
-    output.reserve(results.size());
-    
-    for (size_t i = 0; i < results.size(); ++i) {
-        try {
-            log_message("Getting result for pair " + std::to_string(i));
-            output.push_back(results[i].get());
-            log_message("Successfully got result for pair " + std::to_string(i));
-        } catch (const std::exception& e) {
-            log_message("ERROR getting result for pair " + std::to_string(i) + 
-                       ": " + std::string(e.what()));
-            output.push_back(0.0);
-        } catch (...) {
-            log_message("UNKNOWN ERROR getting result for pair " + std::to_string(i));
-            output.push_back(0.0);
-        }
+    // Collect results
+    std::vector<double> jaccard_indices;
+    for (auto& result : results) {
+        jaccard_indices.push_back(result.get());
     }
     
-    log_message("Completed parallel_jaccard_composite with " + std::to_string(output.size()) + " results");
-    return output;
+    return jaccard_indices;
 }
 
 // ---------------------------------------------------------------------
