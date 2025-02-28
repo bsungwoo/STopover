@@ -23,12 +23,10 @@ def parallel_with_progress_extract_adjacency(locs, spatial_type="visium", fwhm=2
         # Ensure locations are properly formatted
         for i, loc in enumerate(locs):
             if not isinstance(loc, np.ndarray):
-                print(f"Converting location {i} to numpy array")
                 locs[i] = np.array(loc, dtype=np.float64)
             
             # Ensure the array is contiguous in memory
             if not locs[i].flags.c_contiguous:
-                print(f"Making location {i} contiguous")
                 locs[i] = np.ascontiguousarray(locs[i], dtype=np.float64)
         
         with tqdm.tqdm(total=len(locs)) as pbar:
