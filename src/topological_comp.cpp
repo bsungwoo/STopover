@@ -1,4 +1,5 @@
 #include "topological_comp.h"
+#include "logging.h"  // For log_message
 #include <limits>    // for std::numeric_limits
 #include <algorithm> // for std::sort, std::find
 #include <cmath>     // for M_PI
@@ -7,9 +8,6 @@
 #include <vector>
 #include <Eigen/Sparse>
 #include <Eigen/Dense>
-
-// Add at the top of the file
-extern void log_message(const std::string& message);
 
 // Function to compute adjacency matrix and Gaussian smoothing mask based on spatial locations
 std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spatial(

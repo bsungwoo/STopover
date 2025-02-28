@@ -2,6 +2,7 @@
 #include "type_conversion.h"       // For scipy_sparse_to_eigen_sparse
 #include "topological_comp.h"      // For extract_adjacency_spatial and topological_comp_res
 #include "jaccard.h"               // For jaccard_composite
+#include "logging.h"               // For log_message
 
 #include <stdexcept>
 #include <atomic>
@@ -20,17 +21,6 @@
 #include <iomanip>
 
 namespace py = pybind11;
-
-// Create a thread-safe logging function
-std::mutex log_mutex;
-void log_message(const std::string& message) {
-    std::lock_guard<std::mutex> lock(log_mutex);
-    std::ofstream log_file("parallelize_debug.log", std::ios_base::app);
-    auto now = std::chrono::system_clock::now();
-    auto now_c = std::chrono::system_clock::to_time_t(now);
-    log_file << std::put_time(std::localtime(&now_c), "%Y-%m-%d %H:%M:%S") 
-             << " - " << message << std::endl;
-}
 
 // ---------------------------------------------------------------------
 // ThreadPool Implementation

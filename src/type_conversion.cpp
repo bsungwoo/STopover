@@ -1,4 +1,5 @@
 #include "type_conversion.h"
+#include "logging.h"  // For log_message
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/eigen.h>
@@ -10,9 +11,6 @@
 #include <iomanip>
 
 namespace py = pybind11;
-
-// Declare the log_message function as extern
-extern void log_message(const std::string& message);
 
 Eigen::SparseMatrix<double> scipy_sparse_to_eigen_sparse(const py::object& scipy_sparse_matrix) {
     try {
