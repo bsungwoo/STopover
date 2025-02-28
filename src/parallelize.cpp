@@ -573,33 +573,51 @@ std::vector<double> parallel_jaccard_composite(
 // Pybind11 Module Definition
 // ---------------------------------------------------------------------
 PYBIND11_MODULE(parallelize, m) {
-    m.doc() = "Parallelized functions for topological and Jaccard computations";
-
-    m.def("parallel_extract_adjacency", &parallel_extract_adjacency,
-          "Parallelized extract_adjacency_spatial function",
-          py::arg("locs"),
-          py::arg("spatial_type") = "visium",
-          py::arg("fwhm") = 2.5,
-          py::arg("num_workers") = 4,
+    m.doc() = "Parallel computation for STopover";
+    
+    // Use lambda functions to resolve the overloaded function pointers
+    m.def("parallel_extract_adjacency", 
+          [](const std::vector<py::array_t<double>>& locs,
+             const std::string& spatial_type,
+             double fwhm,
+             int num_workers,
+             py::function progress_callback) {
+              return parallel_extract_adjacency(locs, spatial_type, fwhm, num_workers, progress_callback);
+          },
+          "Parallel computation of adjacency matrices",
+          py::arg("locs"), py::arg("spatial_type"), py::arg("fwhm"),
+          py::arg("num_workers") = 1, py::arg("progress_callback") = py::none());
+    
+    m.def("parallel_topological_comp",
+          [](const std::vector<py::array_t<double>>& feats,
+             const std::vector<py::object>& A_matrices,
+             const std::vector<py::array_t<double>>& masks,
+             const std::string& spatial_type,
+             int min_size,
+             int thres_per,
+             const std::string& return_mode,
+             int num_workers,
+             py::function progress_callback) {
+              return parallel_topological_comp(feats, A_matrices, masks, spatial_type, 
+                                              min_size, thres_per, return_mode, 
+                                              num_workers, progress_callback);
+          },
+          "Parallel computation of topological components",
+          py::arg("feats"), py::arg("A_matrices"), py::arg("masks"),
+          py::arg("spatial_type"), py::arg("min_size"), py::arg("thres_per"),
+          py::arg("return_mode"), py::arg("num_workers") = 1,
           py::arg("progress_callback") = py::none());
-
-    m.def("parallel_topological_comp", &parallel_topological_comp,
-          "Parallelized topological_comp_res function",
-          py::arg("feats"),
-          py::arg("A_matrices"),
-          py::arg("masks"),
-          py::arg("spatial_type") = "visium",
-          py::arg("min_size") = 5,
-          py::arg("thres_per") = 30,
-          py::arg("return_mode") = "all",
-          py::arg("num_workers") = 4,
-          py::arg("progress_callback") = py::none());
-
-    m.def("parallel_jaccard_composite", &parallel_jaccard_composite,
-          "Parallelized jaccard_composite function",
-          py::arg("cc_1_list"),
-          py::arg("cc_2_list"),
-          py::arg("jaccard_type"),
-          py::arg("num_workers") = 4,
-          py::arg("progress_callback") = py::none());
+    
+    m.def("parallel_jaccard_composite",
+          [](const std::vector<py::array_t<int>>& cc_1_list,
+             const std::vector<py::array_t<int>>& cc_2_list,
+             const std::string& jaccard_type,
+             int num_workers,
+             py::function progress_callback) {
+              return parallel_jaccard_composite(cc_1_list, cc_2_list, jaccard_type, 
+                                               num_workers, progress_callback);
+          },
+          "Parallel computation of Jaccard indices",
+          py::arg("cc_1_list"), py::arg("cc_2_list"), py::arg("jaccard_type"),
+          py::arg("num_workers") = 1, py::arg("progress_callback") = py::none());
 }
