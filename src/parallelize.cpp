@@ -116,25 +116,52 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
     for (size_t i = 0; i < feats.size(); ++i) {
         {
             py::gil_scoped_release release;
-            Eigen::VectorXd feat = feats[i].cast<Eigen::VectorXd>();
-            // Convert SciPy sparse matrix (py::object) to Eigen::SparseMatrix<double>
-            Eigen::SparseMatrix<double> A_matrix_double = scipy_sparse_to_eigen_sparse(A_matrices[i]);
-            Eigen::MatrixXd mask = masks[i].cast<Eigen::MatrixXd>();
+            Eigen::VectorXd feat;
+            try {
+                feat = feats[i].cast<Eigen::VectorXd>();
+            } catch (const std::exception& e) {
+                throw std::runtime_error("Failed to cast feature at index " + std::to_string(i) + ": " + e.what());
+            }
+            
+            // Handle null masks properly
+            Eigen::MatrixXd mask;
+            if (masks[i].size() > 0) {
+                try {
+                    mask = masks[i].cast<Eigen::MatrixXd>();
+                } catch (const std::exception& e) {
+                    throw std::runtime_error("Failed to cast mask at index " + std::to_string(i) + ": " + e.what());
+                }
+            }
+            
+            // Convert SciPy sparse matrix (py::object) to Eigen::SparseMatrix<double> with error handling
+            Eigen::SparseMatrix<double> A_matrix_double;
+            try {
+                A_matrix_double = scipy_sparse_to_eigen_sparse(A_matrices[i]);
+            } catch (const std::exception& e) {
+                throw std::runtime_error("Failed to convert sparse matrix at index " + std::to_string(i) + ": " + e.what());
+            }
+            
             results.emplace_back(pool.enqueue(topological_comp_res, feat, A_matrix_double, mask,
                                                spatial_type, min_size, thres_per, return_mode));
         }
         if (progress_callback && (++count % 10 == 0)) {
             py::gil_scoped_acquire acquire;
-            progress_callback();
+            try {
+                progress_callback();
+            } catch (const std::exception& e) {
+                // Log error but continue processing
+            }
         }
     }
     std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>> output;
     output.reserve(results.size());
-    for (auto& result : results) {
+    for (size_t i = 0; i < results.size(); ++i) {
         try {
-            output.push_back(result.get());
-        } catch (...) {
-            // Optionally log error or skip this task.
+            output.push_back(results[i].get());
+        } catch (const std::exception& e) {
+            // Log the error and push an empty result instead of crashing
+            std::cerr << "Error processing result at index " << i << ": " << e.what() << std::endl;
+            output.push_back(std::make_tuple(std::vector<std::vector<int>>(), Eigen::SparseMatrix<int>()));
         }
     }
     return output;
