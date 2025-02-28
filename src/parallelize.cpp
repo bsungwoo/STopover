@@ -397,87 +397,23 @@ std::vector<double> parallel_jaccard_composite(
     py::function progress_callback)
 {
     // Print detailed diagnostic information
-    std::cout << "Starting Jaccard calculation with " << cc_1_list.size() 
+    std::cout << "C++: Starting Jaccard calculation with " << cc_1_list.size() 
               << " and " << cc_2_list.size() << " components" << std::endl;
     
     // Check if inputs are valid
     if (cc_1_list.empty() || cc_2_list.empty()) {
-        std::cout << "Empty input lists for Jaccard calculation" << std::endl;
+        std::cout << "C++: Empty input lists for Jaccard calculation" << std::endl;
         return std::vector<double>();
     }
     
-    // Print information about the first array
-    if (!cc_1_list.empty()) {
-        auto array = cc_1_list[0];
-        std::cout << "First cc_1 array: ndim=" << array.ndim();
-        for (size_t d = 0; d < array.ndim(); ++d) {
-            std::cout << ", shape[" << d << "]=" << array.shape(d);
-        }
-        std::cout << std::endl;
-        
-        // Print first few values
-        py::buffer_info buf = array.request();
-        if (buf.ndim > 0 && buf.size > 0) {
-            int* ptr = static_cast<int*>(buf.ptr);
-            std::cout << "First few values: ";
-            for (int i = 0; i < std::min(10, static_cast<int>(buf.size)); ++i) {
-                std::cout << ptr[i] << " ";
-            }
-            std::cout << std::endl;
-        }
-    }
-    
-    // Create a simple sequential implementation for debugging
-    std::vector<double> jaccard_indices;
+    // Create a simple result vector with dummy values
     int total_pairs = cc_1_list.size() * cc_2_list.size();
-    int completed = 0;
+    std::vector<double> jaccard_indices(total_pairs, 0.5);  // Fill with dummy value 0.5
     
-    for (size_t i = 0; i < cc_1_list.size(); ++i) {
-        for (size_t j = 0; j < cc_2_list.size(); ++j) {
-            try {
-                std::cout << "Processing pair (" << i << "," << j << ")" << std::endl;
-                
-                // Get the arrays
-                py::array_t<int> cc_1 = cc_1_list[i];
-                py::array_t<int> cc_2 = cc_2_list[j];
-                
-                // Request buffer access
-                py::buffer_info buf1 = cc_1.request();
-                py::buffer_info buf2 = cc_2.request();
-                
-                // Check if arrays are empty
-                if (buf1.size == 0 || buf2.size == 0) {
-                    std::cout << "Empty array detected for pair (" << i << "," << j << ")" << std::endl;
-                    jaccard_indices.push_back(0.0);
-                    continue;
-                }
-                
-                // Print array information
-                std::cout << "cc_1: ndim=" << buf1.ndim << ", size=" << buf1.size << std::endl;
-                std::cout << "cc_2: ndim=" << buf2.ndim << ", size=" << buf2.size << std::endl;
-                
-                // For simplicity, just use a placeholder value for now
-                // This will help us determine if the function is being called correctly
-                double jaccard = 0.5;  // Placeholder value
-                
-                std::cout << "Calculated Jaccard for pair (" << i << "," << j << "): " << jaccard << std::endl;
-                jaccard_indices.push_back(jaccard);
-            }
-            catch (const std::exception& e) {
-                std::cerr << "Error processing pair (" << i << "," << j << "): " << e.what() << std::endl;
-                jaccard_indices.push_back(0.0);
-            }
-            
-            // Update progress
-            completed++;
-            if (!progress_callback.is_none()) {
-                py::gil_scoped_acquire acquire;
-                progress_callback(completed, total_pairs);
-            }
-        }
-    }
+    std::cout << "C++: Created result vector with " << jaccard_indices.size() << " elements" << std::endl;
+    std::cout << "C++: Returning dummy values (0.5) for all Jaccard indices" << std::endl;
     
-    std::cout << "Completed Jaccard calculation with " << jaccard_indices.size() << " results" << std::endl;
+    // Skip actual calculation for now, just return dummy values
     return jaccard_indices;
 }
 
