@@ -96,59 +96,106 @@ std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> parallel_e
                 ", fwhm=" + std::to_string(fwhm) + 
                 ", num_workers=" + std::to_string(num_workers));
     
+    // Reduce number of workers to avoid potential resource issues
+    num_workers = std::max(1, std::min(num_workers, 4));
+    log_message("Using " + std::to_string(num_workers) + " workers");
+    
     ThreadPool pool(num_workers);
     std::vector<std::future<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>>> results;
     std::atomic<int> count{0};
 
     for (size_t loc_idx = 0; loc_idx < locs.size(); ++loc_idx) {
-        const auto& loc_py = locs[loc_idx];
         log_message("Processing location " + std::to_string(loc_idx));
         
+        // First check if the Python object is valid
+        if (locs[loc_idx].is_none()) {
+            log_message("ERROR: Location " + std::to_string(loc_idx) + " is None");
+            results.emplace_back(std::async(std::launch::deferred, []() {
+                return std::make_tuple(Eigen::SparseMatrix<double>(), Eigen::MatrixXd());
+            }));
+            continue;
+        }
+        
         try {
-            // Release the GIL during heavy computation.
-            py::gil_scoped_release release;
-            Eigen::MatrixXd loc;
-            try {
-                loc = loc_py.cast<Eigen::MatrixXd>();
-                log_message("Successfully cast location " + std::to_string(loc_idx) + 
-                           " with shape (" + std::to_string(loc.rows()) + 
-                           ", " + std::to_string(loc.cols()) + ")");
-            } catch (const std::exception& e) {
-                log_message("ERROR: Failed to cast location matrix " + std::to_string(loc_idx) + 
-                           ": " + std::string(e.what()));
-                throw std::runtime_error("Failed to cast location matrix: " + std::string(e.what()));
+            // Try to extract numpy array info before casting
+            log_message("Checking location " + std::to_string(loc_idx) + " type");
+            
+            // Check if it's a numpy array
+            bool is_array = py::isinstance<py::array>(locs[loc_idx]);
+            log_message("Location " + std::to_string(loc_idx) + " is " + 
+                       (is_array ? "a numpy array" : "not a numpy array"));
+            
+            if (is_array) {
+                py::array arr = locs[loc_idx].cast<py::array>();
+                log_message("Array info: shape=(" + 
+                           std::to_string(arr.shape(0)) + "," + 
+                           (arr.ndim() > 1 ? std::to_string(arr.shape(1)) : "1") + 
+                           "), dtype=" + std::string(py::str(arr.dtype())));
             }
             
-            // Validate the location matrix
-            if (loc.rows() == 0 || loc.cols() != 2) {
-                log_message("ERROR: Invalid location matrix shape: expected (n, 2), got (" + 
-                           std::to_string(loc.rows()) + ", " + 
-                           std::to_string(loc.cols()) + ")");
-                throw std::runtime_error("Invalid location matrix shape: expected (n, 2), got (" + 
-                                         std::to_string(loc.rows()) + ", " + 
-                                         std::to_string(loc.cols()) + ")");
-            }
+            // Make a copy of the location to avoid potential reference issues
+            py::object loc_copy = locs[loc_idx];
             
-            results.emplace_back(pool.enqueue([loc, spatial_type, fwhm, loc_idx]() {
+            // Process in a separate thread with proper error handling
+            results.emplace_back(pool.enqueue([loc_copy, spatial_type, fwhm, loc_idx]() {
                 try {
-                    log_message("Starting extract_adjacency_spatial for location " + 
+                    log_message("Thread: Converting location " + std::to_string(loc_idx));
+                    
+                    // Release the GIL during heavy computation
+                    py::gil_scoped_release release;
+                    
+                    // Convert to Eigen matrix
+                    Eigen::MatrixXd loc;
+                    {
+                        // Reacquire GIL for the conversion
+                        py::gil_scoped_acquire acquire;
+                        loc = loc_copy.cast<Eigen::MatrixXd>();
+                    }
+                    
+                    log_message("Thread: Successfully converted location " + std::to_string(loc_idx) + 
+                               " with shape (" + std::to_string(loc.rows()) + 
+                               ", " + std::to_string(loc.cols()) + ")");
+                    
+                    // Validate the location matrix
+                    if (loc.rows() == 0 || loc.cols() != 2) {
+                        log_message("Thread: ERROR: Invalid location matrix shape: expected (n, 2), got (" + 
+                                   std::to_string(loc.rows()) + ", " + 
+                                   std::to_string(loc.cols()) + ")");
+                        return std::make_tuple(Eigen::SparseMatrix<double>(), Eigen::MatrixXd());
+                    }
+                    
+                    log_message("Thread: Starting extract_adjacency_spatial for location " + 
                                std::to_string(loc_idx));
                     auto result = extract_adjacency_spatial(loc, spatial_type, fwhm);
-                    log_message("Completed extract_adjacency_spatial for location " + 
+                    log_message("Thread: Completed extract_adjacency_spatial for location " + 
                                std::to_string(loc_idx));
                     return result;
                 } catch (const std::exception& e) {
-                    log_message("ERROR in extract_adjacency_spatial for location " + 
+                    log_message("Thread: ERROR in processing location " + 
                                std::to_string(loc_idx) + ": " + std::string(e.what()));
                     // Return empty matrices instead of crashing
                     return std::make_tuple(Eigen::SparseMatrix<double>(), Eigen::MatrixXd());
+                } catch (...) {
+                    log_message("Thread: UNKNOWN ERROR in processing location " + 
+                               std::to_string(loc_idx));
+                    return std::make_tuple(Eigen::SparseMatrix<double>(), Eigen::MatrixXd());
                 }
             }));
+            
+            log_message("Enqueued location " + std::to_string(loc_idx));
         } catch (const std::exception& e) {
             log_message("ERROR: Exception during enqueue for location " + 
                        std::to_string(loc_idx) + ": " + std::string(e.what()));
-            // Continue to next location instead of crashing
-            continue;
+            // Add a placeholder future with empty result
+            results.emplace_back(std::async(std::launch::deferred, []() {
+                return std::make_tuple(Eigen::SparseMatrix<double>(), Eigen::MatrixXd());
+            }));
+        } catch (...) {
+            log_message("ERROR: Unknown exception during enqueue for location " + 
+                       std::to_string(loc_idx));
+            results.emplace_back(std::async(std::launch::deferred, []() {
+                return std::make_tuple(Eigen::SparseMatrix<double>(), Eigen::MatrixXd());
+            }));
         }
         
         if (progress_callback && (++count % 10 == 0)) {
@@ -158,7 +205,8 @@ std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> parallel_e
                 log_message("Called progress_callback after " + std::to_string(count) + " locations");
             } catch (const std::exception& e) {
                 log_message("ERROR in progress callback: " + std::string(e.what()));
-                // Continue processing despite callback error
+            } catch (...) {
+                log_message("UNKNOWN ERROR in progress callback");
             }
         }
     }
@@ -166,6 +214,7 @@ std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> parallel_e
     log_message("All locations enqueued, collecting results");
     std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> output;
     output.reserve(results.size());
+    
     for (size_t i = 0; i < results.size(); ++i) {
         try {
             log_message("Getting result for index " + std::to_string(i));
@@ -174,10 +223,13 @@ std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> parallel_e
         } catch (const std::exception& e) {
             log_message("ERROR getting result at index " + std::to_string(i) + 
                        ": " + std::string(e.what()));
-            // Add empty result instead of crashing
+            output.emplace_back(std::make_tuple(Eigen::SparseMatrix<double>(), Eigen::MatrixXd()));
+        } catch (...) {
+            log_message("UNKNOWN ERROR getting result at index " + std::to_string(i));
             output.emplace_back(std::make_tuple(Eigen::SparseMatrix<double>(), Eigen::MatrixXd()));
         }
     }
+    
     log_message("Completed parallel_extract_adjacency with " + std::to_string(output.size()) + " results");
     return output;
 }
