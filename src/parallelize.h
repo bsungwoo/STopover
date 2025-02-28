@@ -86,7 +86,7 @@ std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> parallel_e
     py::function progress_callback);
 
 // Parallelized topological_comp_res function.
-std::vector<py::object> parallel_topological_comp(
+std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>> parallel_topological_comp(
     const std::vector<py::array_t<double>>& feats,
     const std::vector<py::object>& A_matrices,
     const std::vector<py::array_t<double>>& masks,

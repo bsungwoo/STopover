@@ -598,9 +598,26 @@ PYBIND11_MODULE(parallelize, m) {
              const std::string& return_mode,
              int num_workers,
              py::function progress_callback) {
-              return parallel_topological_comp(feats, A_matrices, masks, spatial_type, 
-                                              min_size, thres_per, return_mode, 
-                                              num_workers, progress_callback);
+              // Convert the tuple result to py::object for Python
+              auto result = parallel_topological_comp(feats, A_matrices, masks, spatial_type, 
+                                                     min_size, thres_per, return_mode, 
+                                                     num_workers, progress_callback);
+              
+              // Convert to Python objects
+              std::vector<py::object> py_result;
+              for (const auto& tuple_item : result) {
+                  py::list cc_list;
+                  for (const auto& cc : std::get<0>(tuple_item)) {
+                      py::array_t<int> cc_array = py::cast(cc);
+                      cc_list.append(cc_array);
+                  }
+                  
+                  py::object sparse_matrix = py::cast(std::get<1>(tuple_item));
+                  py::tuple tuple_result = py::make_tuple(cc_list, sparse_matrix);
+                  py_result.push_back(tuple_result);
+              }
+              
+              return py_result;
           },
           "Parallel computation of topological components",
           py::arg("feats"), py::arg("A_matrices"), py::arg("masks"),
