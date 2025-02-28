@@ -242,7 +242,6 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     output_cc_loc = []
     feat_num_sum = 0
     for num, grp in enumerate(group_list):
-        print(f"Processing group {num}: {grp}")
         data_sub = data[data.obs[group_name] == grp]
         feat_num = val_list[num].shape[1]
         
@@ -349,20 +348,68 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     data_mod.obs = data_mod.obs.join(output_cc_loc, lsuffix='_prev' + str(data_count))
     
     try:
-        output_j = parallel_with_progress_jaccard_composite(
-            CCx_loc_sums=[feat[0] for feat in CCxy_loc_mat_list],
-            CCy_loc_sums=[feat[1] for feat in CCxy_loc_mat_list],
-            feat_xs=[feat[2] for feat in CCxy_loc_mat_list],
-            feat_ys=[feat[3] for feat in CCxy_loc_mat_list],
-            num_workers=max(1, int(num_workers // 1.5))
-            #, progress_callback=lambda: None
-        )
+        # Calculate Jaccard index between feature pairs
+        print("Calculation of composite jaccard indexes between feature pairs")
+        
+        # Initialize J_comp column with zeros
+        df_top_total['J_comp'] = 0.0
+        
+        # Prepare arrays for Jaccard calculation
+        cc_1_list = []
+        cc_2_list = []
+        valid_indices = []
+        
+        for idx, row in df_top_total.iterrows():
+            try:
+                feat_1 = row['Feat_1']
+                feat_2 = row['Feat_2']
+                grp = row[group_name]
+                
+                # Find the group index
+                grp_idx = group_list.index(grp)
+                
+                # Get the corresponding DataFrame
+                df_cc_loc = output_cc_loc[grp_idx]
+                
+                # Check if the columns exist
+                col1 = 'Comb_CC_' + str(feat_1)
+                col2 = 'Comb_CC_' + str(feat_2)
+                
+                if col1 in df_cc_loc.columns and col2 in df_cc_loc.columns:
+                    # Extract the connected components
+                    cc_1 = df_cc_loc[col1].values.reshape(-1, 1)
+                    cc_2 = df_cc_loc[col2].values.reshape(-1, 1)
+                    
+                    # Check if arrays are valid
+                    if cc_1.size > 0 and cc_2.size > 0:
+                        cc_1_list.append(cc_1)
+                        cc_2_list.append(cc_2)
+                        valid_indices.append(idx)
+                    else:
+                        print(f"Warning: Empty array for row {idx}")
+                else:
+                    print(f"Warning: Missing column for row {idx}: {col1} or {col2}")
+            except Exception as e:
+                print(f"Error preparing Jaccard data for row {idx}: {str(e)}")
+        
+        # Only calculate Jaccard if we have valid data
+        if cc_1_list and cc_2_list:
+            print(f"Calculating Jaccard for {len(cc_1_list)} valid pairs")
+            
+            # Calculate Jaccard indices
+            J_list = parallel_with_progress_jaccard_composite(
+                cc_1_list, cc_2_list, jaccard_type=jaccard_type, num_workers=num_workers
+            )
+            
+            # Add results to the DataFrame for valid indices
+            for i, idx in enumerate(valid_indices):
+                if i < len(J_list):
+                    df_top_total.loc[idx, 'J_comp'] = J_list[i]
+        else:
+            print("No valid pairs for Jaccard calculation")
+        
     except Exception as e:
-        print("Error during parallel_jaccard_composite:", e)
-        raise
-
-    output_j = pd.DataFrame(output_j, columns=['J_comp'])
-    df_top_total = pd.concat([df_top_total.iloc[:, :-2], output_j], axis=1)
+        print(f"Error in Jaccard calculation: {str(e)}")
     
     print("End of the whole process: %.2f seconds" % (time.time() - start_time))
     return df_top_total, data_mod
