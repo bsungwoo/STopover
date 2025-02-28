@@ -1,7 +1,12 @@
 #include "logging.h"
+#include <fstream>
+#include <chrono>
+#include <iomanip>
 
+// Define the mutex
 std::mutex log_mutex;
 
+// Define the log_message function
 void log_message(const std::string& message) {
     std::lock_guard<std::mutex> lock(log_mutex);
     std::ofstream log_file("parallelize_debug.log", std::ios_base::app);
