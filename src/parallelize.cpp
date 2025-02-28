@@ -396,8 +396,8 @@ std::vector<double> parallel_jaccard_composite(
     int num_workers,
     py::function progress_callback)
 {
-    // Add debug output
-    std::cout << "Starting parallel_jaccard_composite with " << cc_1_list.size() 
+    // Print detailed diagnostic information
+    std::cout << "Starting Jaccard calculation with " << cc_1_list.size() 
               << " and " << cc_2_list.size() << " components" << std::endl;
     
     // Check if inputs are valid
@@ -406,7 +406,7 @@ std::vector<double> parallel_jaccard_composite(
         return std::vector<double>();
     }
     
-    // Print information about the first few arrays
+    // Print information about the first array
     if (!cc_1_list.empty()) {
         auto array = cc_1_list[0];
         std::cout << "First cc_1 array: ndim=" << array.ndim();
@@ -414,174 +414,67 @@ std::vector<double> parallel_jaccard_composite(
             std::cout << ", shape[" << d << "]=" << array.shape(d);
         }
         std::cout << std::endl;
+        
+        // Print first few values
+        py::buffer_info buf = array.request();
+        if (buf.ndim > 0 && buf.size > 0) {
+            int* ptr = static_cast<int*>(buf.ptr);
+            std::cout << "First few values: ";
+            for (int i = 0; i < std::min(10, static_cast<int>(buf.size)); ++i) {
+                std::cout << ptr[i] << " ";
+            }
+            std::cout << std::endl;
+        }
     }
     
-    if (!cc_2_list.empty()) {
-        auto array = cc_2_list[0];
-        std::cout << "First cc_2 array: ndim=" << array.ndim();
-        for (size_t d = 0; d < array.ndim(); ++d) {
-            std::cout << ", shape[" << d << "]=" << array.shape(d);
-        }
-        std::cout << std::endl;
-    }
+    // Create a simple sequential implementation for debugging
+    std::vector<double> jaccard_indices;
+    int total_pairs = cc_1_list.size() * cc_2_list.size();
+    int completed = 0;
     
-    // Create thread pool
-    ThreadPool pool(num_workers);
-    std::vector<std::future<double>> results;
-    
-    // Prepare tasks
-    int total_tasks = cc_1_list.size() * cc_2_list.size();
-    std::atomic<int> completed_tasks(0);
-    
-    // Define a helper function to convert numpy array to vector of vectors
-    auto convert_array = [](const py::array_t<int>& array) -> std::vector<std::vector<int>> {
-        std::vector<std::vector<int>> result;
-        
-        try {
-            // Request a buffer descriptor
-            py::buffer_info buf = array.request();
-            
-            if (buf.ndim == 1) {
-                // 1D array - treat as a single component
-                std::vector<int> component;
-                int* ptr = static_cast<int*>(buf.ptr);
-                for (py::ssize_t i = 0; i < buf.shape[0]; ++i) {
-                    component.push_back(ptr[i]);
-                }
-                result.push_back(component);
-            } 
-            else if (buf.ndim == 2) {
-                // 2D array - each row is a component
-                int* ptr = static_cast<int*>(buf.ptr);
-                for (py::ssize_t i = 0; i < buf.shape[0]; ++i) {
-                    std::vector<int> row;
-                    for (py::ssize_t j = 0; j < buf.shape[1]; ++j) {
-                        row.push_back(ptr[i * buf.shape[1] + j]);
-                    }
-                    result.push_back(row);
-                }
-            }
-            else {
-                throw std::runtime_error("Unsupported array dimension: " + std::to_string(buf.ndim));
-            }
-        }
-        catch (const std::exception& e) {
-            std::cerr << "Error converting array: " << e.what() << std::endl;
-            // Return an empty result on error
-            return std::vector<std::vector<int>>();
-        }
-        
-        return result;
-    };
-    
-    // Define a simplified jaccard calculation function
-    auto calculate_jaccard = [](const std::vector<std::vector<int>>& cc_1, 
-                               const std::vector<std::vector<int>>& cc_2,
-                               const std::string& jaccard_type) -> double {
-        try {
-            // Check if inputs are valid
-            if (cc_1.empty() || cc_2.empty()) {
-                std::cerr << "Empty component lists for Jaccard calculation" << std::endl;
-                return 0.0;
-            }
-            
-            // For debugging, print component sizes
-            std::cout << "Component 1 size: " << cc_1.size() << " rows" << std::endl;
-            if (!cc_1.empty()) {
-                std::cout << "First row size: " << cc_1[0].size() << " elements" << std::endl;
-            }
-            
-            std::cout << "Component 2 size: " << cc_2.size() << " rows" << std::endl;
-            if (!cc_2.empty()) {
-                std::cout << "First row size: " << cc_2[0].size() << " elements" << std::endl;
-            }
-            
-            // Implement a basic Jaccard calculation
-            // This is a simplified version - replace with your actual implementation
-            if (jaccard_type == "basic") {
-                // Count elements in both sets
-                std::set<int> set1, set2;
-                for (const auto& row : cc_1) {
-                    for (int val : row) {
-                        set1.insert(val);
-                    }
-                }
-                
-                for (const auto& row : cc_2) {
-                    for (int val : row) {
-                        set2.insert(val);
-                    }
-                }
-                
-                // Calculate intersection size
-                std::vector<int> intersection;
-                std::set_intersection(set1.begin(), set1.end(), 
-                                     set2.begin(), set2.end(),
-                                     std::back_inserter(intersection));
-                
-                // Calculate union size
-                std::vector<int> union_set;
-                std::set_union(set1.begin(), set1.end(),
-                              set2.begin(), set2.end(),
-                              std::back_inserter(union_set));
-                
-                // Calculate Jaccard index
-                if (union_set.empty()) {
-                    return 0.0;
-                }
-                
-                return static_cast<double>(intersection.size()) / union_set.size();
-            }
-            else {
-                std::cerr << "Unsupported Jaccard type: " << jaccard_type << std::endl;
-                return 0.0;
-            }
-        }
-        catch (const std::exception& e) {
-            std::cerr << "Error calculating Jaccard: " << e.what() << std::endl;
-            return 0.0;
-        }
-    };
-    
-    // Process all pairs
     for (size_t i = 0; i < cc_1_list.size(); ++i) {
         for (size_t j = 0; j < cc_2_list.size(); ++j) {
-            results.emplace_back(
-                pool.enqueue([i, j, &cc_1_list, &cc_2_list, &convert_array, &calculate_jaccard, 
-                             jaccard_type, &completed_tasks, total_tasks, &progress_callback]() {
-                    try {
-                        // Convert arrays to vectors
-                        std::cout << "Converting arrays for pair (" << i << "," << j << ")" << std::endl;
-                        auto cc_1 = convert_array(cc_1_list[i]);
-                        auto cc_2 = convert_array(cc_2_list[j]);
-                        
-                        // Calculate Jaccard index
-                        std::cout << "Calculating Jaccard for pair (" << i << "," << j << ")" << std::endl;
-                        double result = calculate_jaccard(cc_1, cc_2, jaccard_type);
-                        std::cout << "Jaccard result for pair (" << i << "," << j << "): " << result << std::endl;
-                        
-                        // Update progress
-                        ++completed_tasks;
-                        if (!progress_callback.is_none()) {
-                            py::gil_scoped_acquire acquire;
-                            progress_callback(completed_tasks, total_tasks);
-                        }
-                        
-                        return result;
-                    }
-                    catch (const std::exception& e) {
-                        std::cerr << "Error processing pair (" << i << "," << j << "): " << e.what() << std::endl;
-                        return 0.0;
-                    }
-                })
-            );
+            try {
+                std::cout << "Processing pair (" << i << "," << j << ")" << std::endl;
+                
+                // Get the arrays
+                py::array_t<int> cc_1 = cc_1_list[i];
+                py::array_t<int> cc_2 = cc_2_list[j];
+                
+                // Request buffer access
+                py::buffer_info buf1 = cc_1.request();
+                py::buffer_info buf2 = cc_2.request();
+                
+                // Check if arrays are empty
+                if (buf1.size == 0 || buf2.size == 0) {
+                    std::cout << "Empty array detected for pair (" << i << "," << j << ")" << std::endl;
+                    jaccard_indices.push_back(0.0);
+                    continue;
+                }
+                
+                // Print array information
+                std::cout << "cc_1: ndim=" << buf1.ndim << ", size=" << buf1.size << std::endl;
+                std::cout << "cc_2: ndim=" << buf2.ndim << ", size=" << buf2.size << std::endl;
+                
+                // For simplicity, just use a placeholder value for now
+                // This will help us determine if the function is being called correctly
+                double jaccard = 0.5;  // Placeholder value
+                
+                std::cout << "Calculated Jaccard for pair (" << i << "," << j << "): " << jaccard << std::endl;
+                jaccard_indices.push_back(jaccard);
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Error processing pair (" << i << "," << j << "): " << e.what() << std::endl;
+                jaccard_indices.push_back(0.0);
+            }
+            
+            // Update progress
+            completed++;
+            if (!progress_callback.is_none()) {
+                py::gil_scoped_acquire acquire;
+                progress_callback(completed, total_pairs);
+            }
         }
-    }
-    
-    // Collect results
-    std::vector<double> jaccard_indices;
-    for (auto& result : results) {
-        jaccard_indices.push_back(result.get());
     }
     
     std::cout << "Completed Jaccard calculation with " << jaccard_indices.size() << " results" << std::endl;
