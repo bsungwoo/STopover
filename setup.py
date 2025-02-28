@@ -77,7 +77,8 @@ ext_modules = [
             "src/parallelize.cpp",
             "src/make_dendrogram_bar.cpp",
             "src/make_original_dendrogram.cpp",
-            "src/make_smoothed_dendrogram.cpp"
+            "src/make_smoothed_dendrogram.cpp",
+            "src/logging.cpp"
         ],
         include_dirs=[
             pybind11.get_include(),
