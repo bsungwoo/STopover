@@ -75,21 +75,50 @@ std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> parallel_e
         {
             // Release the GIL during heavy computation.
             py::gil_scoped_release release;
-            Eigen::MatrixXd loc = loc_py.cast<Eigen::MatrixXd>();
-            results.emplace_back(pool.enqueue(extract_adjacency_spatial, loc, spatial_type, fwhm));
+            Eigen::MatrixXd loc;
+            try {
+                loc = loc_py.cast<Eigen::MatrixXd>();
+            } catch (const std::exception& e) {
+                throw std::runtime_error("Failed to cast location matrix: " + std::string(e.what()));
+            }
+            
+            // Validate the location matrix
+            if (loc.rows() == 0 || loc.cols() != 2) {
+                throw std::runtime_error("Invalid location matrix shape: expected (n, 2), got (" + 
+                                         std::to_string(loc.rows()) + ", " + 
+                                         std::to_string(loc.cols()) + ")");
+            }
+            
+            results.emplace_back(pool.enqueue([loc, spatial_type, fwhm]() {
+                try {
+                    return extract_adjacency_spatial(loc, spatial_type, fwhm);
+                } catch (const std::exception& e) {
+                    std::cerr << "Error in extract_adjacency_spatial: " << e.what() << std::endl;
+                    // Return empty matrices instead of crashing
+                    return std::make_tuple(Eigen::SparseMatrix<double>(), Eigen::MatrixXd());
+                }
+            }));
         }
         if (progress_callback && (++count % 10 == 0)) {
             py::gil_scoped_acquire acquire;
-            progress_callback();
+            try {
+                progress_callback();
+            } catch (const std::exception& e) {
+                std::cerr << "Error in progress callback: " << e.what() << std::endl;
+                // Continue processing despite callback error
+            }
         }
     }
+    
     std::vector<std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd>> output;
     output.reserve(results.size());
-    for (auto& result : results) {
+    for (size_t i = 0; i < results.size(); ++i) {
         try {
-            output.emplace_back(result.get());
-        } catch (...) {
-            // Optionally log error or skip this task.
+            output.emplace_back(results[i].get());
+        } catch (const std::exception& e) {
+            std::cerr << "Error getting result at index " << i << ": " << e.what() << std::endl;
+            // Add empty result instead of crashing
+            output.emplace_back(std::make_tuple(Eigen::SparseMatrix<double>(), Eigen::MatrixXd()));
         }
     }
     return output;
