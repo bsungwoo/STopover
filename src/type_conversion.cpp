@@ -9,48 +9,59 @@ namespace py = pybind11;
 
 Eigen::SparseMatrix<double> scipy_sparse_to_eigen_sparse(const py::object& scipy_sparse_matrix) {
     try {
-        // Ensure the matrix is in COO format
-        // Extract row, col, data arrays
-        py::array_t<int> row = scipy_sparse_matrix.attr("row").cast<py::array_t<int>>();
-        py::array_t<int> col = scipy_sparse_matrix.attr("col").cast<py::array_t<int>>();
-        py::array_t<double> data = scipy_sparse_matrix.attr("data").cast<py::array_t<double>>();
-
-        // Get shape of the matrix
-        py::tuple shape = scipy_sparse_matrix.attr("shape").cast<py::tuple>();
-        if (shape.size() != 2) {
-            throw std::invalid_argument("Sparse matrix must be two-dimensional.");
+        // Check if the matrix is in COO format, if not convert it
+        py::object coo_matrix;
+        if (py::hasattr(scipy_sparse_matrix, "format") && 
+            scipy_sparse_matrix.attr("format").cast<std::string>() != "coo") {
+            
+            log_message("Converting sparse matrix from " + 
+                       scipy_sparse_matrix.attr("format").cast<std::string>() + 
+                       " to COO format");
+            
+            // Convert to COO format
+            coo_matrix = scipy_sparse_matrix.attr("tocoo")();
+        } else {
+            coo_matrix = scipy_sparse_matrix;
         }
-        int nrows = shape[0].cast<int>();
-        int ncols = shape[1].cast<int>();
-        int nnz = data.size();
-
-        // Validate that row, col, and data have the same length
-        if (row.size() != nnz || col.size() != nnz) {
-            throw std::invalid_argument("Row, column, and data arrays must have the same length.");
-        }
-
-        // Convert to Eigen::SparseMatrix<double>
+        
+        // Extract row, col, data arrays from COO format
+        py::array_t<int> row = coo_matrix.attr("row").cast<py::array_t<int>>();
+        py::array_t<int> col = coo_matrix.attr("col").cast<py::array_t<int>>();
+        py::array_t<double> data = coo_matrix.attr("data").cast<py::array_t<double>>();
+        
+        // Get matrix dimensions
+        int nrows = coo_matrix.attr("shape").attr("__getitem__")(0).cast<int>();
+        int ncols = coo_matrix.attr("shape").attr("__getitem__")(1).cast<int>();
+        
+        // Create triplet list for Eigen sparse matrix
         std::vector<Eigen::Triplet<double>> tripletList;
-        tripletList.reserve(nnz);
-
-        auto row_ptr = row.unchecked<1>();
-        auto col_ptr = col.unchecked<1>();
-        auto data_ptr = data.unchecked<1>();
-
-        for (int i = 0; i < nnz; ++i) {
-            tripletList.emplace_back(row_ptr(i), col_ptr(i), data_ptr(i));
+        tripletList.reserve(data.size());
+        
+        auto row_unchecked = row.unchecked<1>();
+        auto col_unchecked = col.unchecked<1>();
+        auto data_unchecked = data.unchecked<1>();
+        
+        for (py::ssize_t i = 0; i < data.size(); ++i) {
+            tripletList.push_back(Eigen::Triplet<double>(
+                row_unchecked[i], col_unchecked[i], data_unchecked[i]));
         }
-
+        
         Eigen::SparseMatrix<double> mat(nrows, ncols);
         mat.setFromTriplets(tripletList.begin(), tripletList.end());
         mat.makeCompressed(); // Optimize the storage
-
+        
         return mat;
     }
+    catch (const py::error_already_set& e) {
+        log_message("Python error in scipy_sparse_to_eigen_sparse: " + std::string(e.what()));
+        throw std::runtime_error("Python error in scipy_sparse_to_eigen_sparse: " + std::string(e.what()));
+    }
     catch (const py::cast_error& e) {
+        log_message("Cast error in scipy_sparse_to_eigen_sparse: " + std::string(e.what()));
         throw std::runtime_error("Failed to cast attributes from SciPy sparse matrix: " + std::string(e.what()));
     }
     catch (const std::exception& e) {
+        log_message("Error in scipy_sparse_to_eigen_sparse: " + std::string(e.what()));
         throw std::runtime_error("Error converting SciPy sparse matrix to Eigen::SparseMatrix<double>: " + std::string(e.what()));
     }
 }
