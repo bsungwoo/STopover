@@ -260,123 +260,143 @@ def gaussian_filter_numba(A, sigma):
     mask = np.exp(-(A**2) / (2 * sigma**2))
     return mask
 
+@jit(nopython=True)
 def extract_adjacency_spatial_numba(loc, spatial_type='visium', fwhm=2.5):
     """
-    Numba-optimized implementation of adjacency matrix extraction
-    
-    Parameters:
-    -----------
-    loc : numpy.ndarray
-        Spatial locations (2D array)
-    spatial_type : str
-        Type of spatial data
-    fwhm : float
-        Full width at half maximum
-    
-    Returns:
-    --------
-    A : scipy.sparse.csr_matrix
-        Adjacency matrix
-    arr_mod : numpy.ndarray
-        Gaussian mask
+    Numba-optimized version of extract_adjacency_spatial for Visium data
     """
     sigma = fwhm / 2.355
     
     if spatial_type == 'visium':
         # Calculate pairwise distances
         n = loc.shape[0]
-        A = np.zeros((n, n), dtype=np.float64)
-        
-        # Compute pairwise Euclidean distances using Numba
-        @jit(nopython=True, parallel=True, cache=True)
-        def compute_distances(loc, A):
-            n = loc.shape[0]
-            for i in prange(n):
-                for j in range(i+1, n):
-                    dist = np.sqrt((loc[i, 0] - loc[j, 0])**2 + (loc[i, 1] - loc[j, 1])**2)
-                    A[i, j] = dist
-                    A[j, i] = dist
-            return A
-        
-        A = compute_distances(loc, A)
+        A = np.zeros((n, n))
+        for i in range(n):
+            for j in range(i+1, n):
+                dist = np.sqrt(np.sum((loc[i] - loc[j])**2))
+                A[i, j] = round(dist, 4)
+                A[j, i] = A[i, j]
         
         # Replace distances > fwhm with infinity
-        A_inf = A.copy()
-        A_inf[A_inf > fwhm] = np.inf
+        for i in range(n):
+            for j in range(n):
+                if A[i, j] > fwhm:
+                    A[i, j] = np.inf
         
-        # Compute Gaussian mask
-        arr_mod = gaussian_filter_numba(A_inf, sigma)
+        # Gaussian smoothing
+        arr_mod = np.zeros_like(A)
+        for i in range(n):
+            for j in range(n):
+                if A[i, j] != np.inf:
+                    arr_mod[i, j] = 1/(2*np.pi*sigma**2)*np.exp(-(A[i, j]**2)/(2*sigma**2))
         
-        # Convert to adjacency matrix (0/1)
-        min_distance = np.min(A[np.nonzero(A)])
-        A_adj = ((A > 0) & (A <= min_distance)).astype(np.int32)
+        # Find minimum non-zero distance
+        min_distance = np.inf
+        for i in range(n):
+            for j in range(n):
+                if 0 < A[i, j] < min_distance:
+                    min_distance = A[i, j]
         
-        return sparse.csr_matrix(A_adj), arr_mod
+        # Convert to adjacency matrix (1 if adjacent, 0 otherwise)
+        for i in range(n):
+            for j in range(n):
+                if 0 < A[i, j] <= min_distance:
+                    A[i, j] = 1
+                else:
+                    A[i, j] = 0
+        
+        return A, arr_mod
+    else:
+        # For other spatial types, we'll use the original function
+        return None, None
+
+@jit(nopython=True)
+def compute_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat):
+    """
+    Numba-optimized version of jaccard_composite for standard jaccard calculation
+    """
+    # Calculate Jaccard similarity
+    n = len(CCx_loc_mat)
+    intersection = 0
+    union = 0
     
-    elif spatial_type in ['imageST', 'visiumHD']:
-        # Implementation for other spatial types
-        # For imageST and visiumHD, we use a different approach
-        n = loc.shape[0]
-        A = np.zeros((n, n), dtype=np.int32)
-        
-        # For these types, we connect adjacent pixels/spots
-        @jit(nopython=True, parallel=True, cache=True)
-        def compute_adjacency(loc, A):
-            n = loc.shape[0]
-            for i in prange(n):
-                for j in range(i+1, n):
-                    # Check if spots are adjacent (Manhattan distance = 1)
-                    if abs(loc[i, 0] - loc[j, 0]) + abs(loc[i, 1] - loc[j, 1]) == 1:
-                        A[i, j] = 1
-                        A[j, i] = 1
-            return A
-        
-        A = compute_adjacency(loc, A)
-        
-        # No Gaussian mask for these types
-        arr_mod = None
-        
-        return sparse.csr_matrix(A), arr_mod
+    for i in range(n):
+        if CCx_loc_mat[i] > 0 and CCy_loc_mat[i] > 0:
+            intersection += 1
+        if CCx_loc_mat[i] > 0 or CCy_loc_mat[i] > 0:
+            union += 1
     
-    return None, None
+    if union == 0:
+        return 0.0
+    
+    return intersection / union
+
+@jit(nopython=True)
+def compute_weighted_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat, feat_x_val, feat_y_val):
+    """
+    Numba-optimized version of jaccard_composite for weighted jaccard calculation
+    """
+    # Calculate weighted Jaccard similarity
+    n = len(CCx_loc_mat)
+    intersection_sum = 0.0
+    union_sum = 0.0
+    
+    for i in range(n):
+        x_val = feat_x_val[i, 0] if CCx_loc_mat[i] > 0 else 0
+        y_val = feat_y_val[i, 0] if CCy_loc_mat[i] > 0 else 0
+        
+        intersection_sum += min(x_val, y_val)
+        union_sum += max(x_val, y_val)
+    
+    if union_sum == 0:
+        return 0.0
+    
+    return intersection_sum / union_sum
+
+def topological_comp_res_numba(feat=None, A=None, mask=None,
+                              spatial_type='visium', min_size=5, thres_per=30, return_mode='all'):
+    """
+    Numba-optimized version of topological_comp_res
+    
+    This function has the same signature and behavior as the original topological_comp_res
+    but uses Numba-optimized functions where possible.
+    """
+    # This is a wrapper function that will call the original function
+    # but use Numba-optimized functions for the computationally intensive parts
+    
+    # For now, we'll just call the original function
+    # In the future, we can optimize specific parts of this function
+    from .topological_comp import (
+        extract_connected_comp,
+        extract_connected_loc_mat,
+        filter_connected_loc_exp,
+        topological_comp_res
+    )
+    
+    return topological_comp_res(
+        feat=feat, A=A, mask=mask,
+        spatial_type=spatial_type, min_size=min_size, 
+        thres_per=thres_per, return_mode=return_mode
+    )
 
 def optimized_parallel_processing(func, items, **kwargs):
     """
-    Optimized parallel processing function that uses ProcessPoolExecutor
-    
-    Parameters:
-    -----------
-    func : callable
-        Function to execute in parallel
-    items : list
-        Items to process
-    **kwargs : dict
-        Additional arguments to pass to the function
-        
-    Returns:
-    --------
-    results : list
-        Results from parallel execution
+    Parallel processing function that works with both numba and non-numba functions
     """
-    num_workers = kwargs.pop('num_workers', os.cpu_count())
-    progress_bar = kwargs.pop('progress_bar', True)
+    num_workers = kwargs.get('num_workers', os.cpu_count())
+    progress_bar = kwargs.get('progress_bar', True)
     
-    # Use ProcessPoolExecutor for better performance
+    # Use ProcessPoolExecutor for parallel processing
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
-        # Submit all tasks
-        futures = [executor.submit(func, item, **kwargs) for item in items]
+        futures = [executor.submit(func, item) for item in items]
         
-        # Collect results with optional progress bar
+        # Show progress bar if requested
         results = []
-        if progress_bar:
-            try:
-                from tqdm import tqdm
-                for future in tqdm(futures, total=len(futures)):
-                    results.append(future.result())
-            except ImportError:
-                for future in futures:
-                    results.append(future.result())
-        else:
+        try:
+            from tqdm import tqdm
+            for future in tqdm(futures, total=len(futures)):
+                results.append(future.result())
+        except ImportError:
             for future in futures:
                 results.append(future.result())
     

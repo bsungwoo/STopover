@@ -24,7 +24,7 @@ from .numba_optimizations import (
     extract_adjacency_spatial_numba, 
     compute_jaccard_similarity_numba, 
     compute_weighted_jaccard_similarity_numba,
-    optimized_parallel_processing
+    topological_comp_res_numba
 )
 from .memory_optimizations import sparse_connected_components, merge_sparse_connected_components, chunk_processing
 
@@ -114,7 +114,8 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
             from .numba_optimizations import (
                 extract_adjacency_spatial_numba, 
                 compute_jaccard_similarity_numba, 
-                compute_weighted_jaccard_similarity_numba
+                compute_weighted_jaccard_similarity_numba,
+                topological_comp_res_numba
             )
             # Set Numba to use a single thread to avoid conflicts with multiprocessing
             import numba
@@ -138,199 +139,87 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     # Add group name if no group name is provided
     if group_list is None:
         try: group_list = data.obs[group_name].cat.categories
-        except:
-            group_name, group_list = 'group', ['0']
-            data.obs[group_name] = '0'
-    else:
-        if group_name not in data.obs.columns:
-            raise ValueError("'group_name' not found in columns of 'data.obs'")
-        if not (set(group_list) <= set(data.obs[group_name])):
-            raise ValueError("Some elements in 'group_list' not found in 'data.obs['"+str(group_name)+"']'")
-        data = data[data.obs[group_name].isin(group_list)]
-
-    # Determine the type of the data
-    if isinstance(data.X, np.ndarray): data_type = 'array'
-    elif isinstance(data.X, sparse.spmatrix): data_type = 'sparse'
-    else: raise ValueError("'data.X' should be either numpy ndarray or scipy sparse matrix")
-
-    # Change the column names if nan is included
-    if np.nan in data.obs.columns: data.obs = data.obs.rename(columns=str)
-
-    df_top_total = pd.DataFrame([])
-    val_list, loc_list = [], []
-
-    # Test the location of the data slot for first and second features (x and y) of the pairs
-    obs_data_x, var_data_x = df_feat.iloc[:,0].isin(data.obs.columns), df_feat.iloc[:,0].isin(data.var.index)
-    obs_data_y, var_data_y = df_feat.iloc[:,1].isin(data.obs.columns), df_feat.iloc[:,1].isin(data.var.index)
-    obs_tf_x = obs_data_x.sum() > var_data_x.sum()
-    obs_tf_y = obs_data_y.sum() > var_data_y.sum()
-
-    if (not obs_tf_x) and (var_data_x.sum()==0):
-        raise ValueError("None of the first features in the pairs are found")
-    if (not obs_tf_y) and (var_data_y.sum()==0):
-        raise ValueError("None of the second features in the pairs are found")
-
-    # Filter the dataframe to contain only the existing data
-    if obs_tf_x and obs_tf_y: df_feat = df_feat[obs_data_x & obs_data_y].reset_index(drop=True)
-    elif (not obs_tf_x) and obs_tf_y: df_feat = df_feat[var_data_x & obs_data_y].reset_index(drop=True)
-    elif obs_tf_x and (not obs_tf_y): df_feat = df_feat[obs_data_x & var_data_y].reset_index(drop=True)
-    else: df_feat = df_feat[var_data_x & var_data_y].reset_index(drop=True)
-
-    # Repeat the process for the proivded group_list
-    for num, i in enumerate(group_list):
-        data_sub = data[data.obs[group_name]==i]
-        df_tmp = df_feat.copy()
-        # Add the group name in the first column
-        df_tmp.insert(0, group_name, i)
-
-        # Check if the feature pairs are in the data and values are non-zero
-        if obs_tf_x:
-            # Load the data from the data_sub.obs
-            data_x = data_sub.obs[df_tmp.iloc[:,1].tolist()].to_numpy()
-            # Calculate average expression with absolute values
-            df_tmp['Avg_1'] = np.mean(np.absolute(data_x), axis=0)
-        else:
-            data_x = None
-            if data_type=='array':
-                df_tmp['Avg_1'] = np.log1p(np.mean(np.expm1(data_sub[:,df_tmp.iloc[:,1].tolist()].X), axis=0))
-            else:
-                df_tmp['Avg_1'] = np.asarray(np.log1p(data_sub[:,df_tmp.iloc[:,1].tolist()].X.expm1().mean(axis = 0))).reshape(-1)
-        if obs_tf_y:
-            # Load the data from the data_sub.obs
-            data_y = data_sub.obs[df_tmp.iloc[:,2].tolist()].to_numpy()
-            # Calculate average expression with absolute values
-            df_tmp['Avg_2'] = np.mean(np.absolute(data_y), axis=0)
-        else:
-            data_y = None
-            if data_type=='array':
-                df_tmp['Avg_2'] = np.log1p(np.mean(np.expm1(data_sub[:,df_tmp.iloc[:,2].tolist()].X), axis=0))
-            else:
-                df_tmp['Avg_2'] = np.asarray(np.log1p(data_sub[:,df_tmp.iloc[:,2].tolist()].X.expm1().mean(axis = 0))).reshape(-1)
-
-        # Remove the features which have zero values only
-        df_tmp = df_tmp[(df_tmp['Avg_1']!=0) & (df_tmp['Avg_2']!=0)]
-        if df_tmp.shape[0] == 0: raise ValueError("In all feature pairs, more than one features has all-zero values")
-
-        # Replace the absolute average values to the real average
-        if data_x is not None: df_tmp['Avg_1'] = np.mean(data_x, axis=0)[df_tmp.index]
-        if data_y is not None: df_tmp['Avg_2'] = np.mean(data_y, axis=0)[df_tmp.index]
-        # Reset the index
-        df_tmp = df_tmp.reset_index(drop=True)
-
-        comb_feat_list = pd.concat([df_tmp.iloc[:,1],
-                                    df_tmp.iloc[:,2]], axis=0).drop_duplicates().to_frame().set_index(0)
-        comb_feat_list['index'] = range(len(comb_feat_list))
-      
-        # Find the index of the feature in Feat_1 and Feat_2 among the comb_feat_list.index
-        df_x = comb_feat_list.loc[df_tmp.iloc[:,1].drop_duplicates()]
-        df_y = comb_feat_list.loc[df_tmp.iloc[:,2].drop_duplicates()]
-        comb_feat_list_x, comb_feat_list_y = df_x, df_y
-        # Combine the dataframe df_x and df_y
-        df_xy = pd.concat([df_x, df_y], axis=1)
-        df_xy.columns = ['index_x','index_y']
-
-        # Find the index for the Feature 1 and Feature 2: comb_feat_list as reference
-        df_tmp['Index_1'] = df_xy.loc[df_tmp.iloc[:,1]].reset_index()['index_x'].astype(int)
-        df_tmp['Index_2'] = df_xy.loc[df_tmp.iloc[:,2]].reset_index()['index_y'].astype(int)
-
-        # Extract the non-overlapping feat list from group i and save index number corresponding to feature pairs
-        if obs_tf_x != obs_tf_y:
-            if obs_tf_x:
-                val_x = data_sub.obs[comb_feat_list_x.index].to_numpy()
-                if data_type=='array': val_element = np.concatenate((val_x, data_sub[:,comb_feat_list_y.index].X), axis=1)
-                else: val_element = np.concatenate((val_x, data_sub[:,comb_feat_list_y.index].X.toarray()), axis=1)
-            else:
-                val_y = data_sub.obs[comb_feat_list_y.index].to_numpy()
-                if data_type=='array': val_element = np.concatenate((data_sub[:,comb_feat_list_x.index].X, val_y), axis=1)
-                else: val_element = np.concatenate((data_sub[:,comb_feat_list_x.index].X.toarray(), val_y), axis=1)
-        else:
-            # In case type of feature x and y is same
-            # Define combined feature list for feat_1 and feat_2 and remove duplicates
-            if obs_tf_x:
-                val_element = data_sub.obs[comb_feat_list.index].to_numpy()
-            else:
-                if data_type=='array': val_element = data_sub[:,comb_feat_list.index].X
-                else: val_element = data_sub[:,comb_feat_list.index].X.toarray()
-        # Append the dataframe
-        df_top_total = pd.concat([df_top_total, df_tmp], axis=0)
-
-        # Add the location information of the spots
-        try: df_loc = data_sub.obs.loc[:,['array_col','array_row']]
-        except: raise ValueError("'data' should contain coordinates of spots in .obs as 'array_col' and 'array_row'")
-        if spatial_type == 'visium':
-            df_loc['array_row'] = df_loc['array_row']*np.sqrt(3)*0.5
-            df_loc['array_col'] = df_loc['array_col']*0.5
-        loc_list.append(df_loc.to_numpy())
-        
-        if spatial_type == 'visium':
-            val_list.append(val_element)
-        elif spatial_type in ['imageST', 'visiumHD']:
-            sigma = fwhm / 2.355
-            cols, rows = df_loc['array_col'].values, df_loc['array_row'].values
-
-            # Convert val_element to a 3D array where each "slice" along the third axis corresponds to a feature
-            # Map unique coordinates to indices
-            unique_rows = np.unique(rows)
-            unique_cols = np.unique(cols)
-            row_indices = np.searchsorted(unique_rows, rows)
-            col_indices = np.searchsorted(unique_cols, cols)
-            # Initialize the array with the mapped dimensions
-            arr = np.zeros((len(unique_rows), len(unique_cols), val_element.shape[1]))
-            # Fill the array using the mapped indices
-            arr[row_indices, col_indices, :] = val_element
-            
-            # Apply the Gaussian filter along the first two dimensions for each feature simultaneously
-            smooth = gaussian_filter(arr, sigma=(sigma, sigma, 0), truncate=2.355, mode='constant')
-            # Normalize the smoothed array
-            smooth_sum = np.sum(smooth, axis=(0, 1), keepdims=True)
-            val_element_sum = np.sum(val_element, axis=0, keepdims=True)
-            smooth = smooth / smooth_sum * val_element_sum
-                
-            # Subset the smooth array using the original rows and cols indices
-            smooth_subset = smooth[row_indices, col_indices, :]
-            # Flatten the smoothed array along the first two dimensions
-            smooth_subset = smooth_subset.reshape(-1, val_element.shape[1])    
-            val_list.append(smooth_subset)
-
-    # Make dataframe for the list of feature 1 and 2 across the groups
-    column_names = [group_name,'Feat_1','Feat_2','Avg_1','Avg_2','Index_1','Index_2']
-    df_top_total.columns = column_names
-    df_top_total.index = range(df_top_total.shape[0])
-
-    print('End of data preparation')
-    print("Elapsed time: %.2f seconds " % (time.time()-start_time))
-
-    # Start the multiprocessing for extracting adjacency matrix and mask
-    print("Calculation of adjacency matrix and mask")
+        except: group_list = [None]
     
-    # Use sequential processing instead of multiprocessing to avoid OpenMP conflicts
+    # Create dataframe for the similarity between feature 1 and 2 across the groups
+    print('End of data preparation')
+    print('Elapsed time: %.2f seconds ' % (time.time()-start_time))
+    print('Calculation of adjacency matrix and mask')
+    
+    # Extract spatial coordinates
+    loc_list = []
+    for element in group_list:
+        if element is None: loc_list.append(data.obsm['spatial'])
+        else: loc_list.append(data[data.obs[group_name]==element].obsm['spatial'])
+    
+    # Extract adjacency matrix and mask
     adjacency_mask = []
     for loc in loc_list:
         if use_numba and _HAS_NUMBA:
             try:
-                result = extract_adjacency_spatial_numba(loc, spatial_type, fwhm)
+                A, mask = extract_adjacency_spatial_numba(loc, spatial_type, fwhm)
+                adjacency_mask.append((A, mask))
             except:
-                result = extract_adjacency_spatial(loc, spatial_type=spatial_type, fwhm=fwhm)
+                A, mask = extract_adjacency_spatial(loc, spatial_type, fwhm)
+                adjacency_mask.append((A, mask))
         else:
-            result = extract_adjacency_spatial(loc, spatial_type=spatial_type, fwhm=fwhm)
-        adjacency_mask.append(result)
+            A, mask = extract_adjacency_spatial(loc, spatial_type, fwhm)
+            adjacency_mask.append((A, mask))
     
-    if spatial_type=='visium':
-        feat_A_mask_pair = [(feat[:,feat_idx].reshape((-1,1)), adjacency_mask[grp_idx][0], adjacency_mask[grp_idx][1]) \
-                            for grp_idx, feat in enumerate(val_list) for feat_idx in range(feat.shape[1])]
-    else:
-        feat_A_mask_pair = [(feat[:,feat_idx].reshape((-1,1)), adjacency_mask[grp_idx], None) \
-                            for grp_idx, feat in enumerate(val_list) for feat_idx in range(feat.shape[1])]
-    
-    # Start the multiprocessing for finding connected components of each feature
-    print("Calculation of connected components for each feature")
+    # Extract feature values
+    print('Calculation of connected components for each feature')
+    val_list = []
+    for num, element in enumerate(group_list):
+        # Extract feature values
+        if element is None: data_sub = data
+        else: data_sub = data[data.obs[group_name]==element]
+        
+        # Extract feature values for each feature
+        feat_list = pd.concat([df_feat.iloc[:,0], df_feat.iloc[:,1]], axis=0).drop_duplicates().tolist()
+        val_arr = np.zeros((data_sub.shape[0], len(feat_list)))
+        
+        # Add index for feature 1 and 2
+        df_top = pd.DataFrame({'Feat_1': feat_list[0], 'Feat_2': feat_list[1]})
+        df_top['Index_1'] = df_top['Feat_1'].apply(lambda x: feat_list.index(x))
+        df_top['Index_2'] = df_top['Feat_2'].apply(lambda x: feat_list.index(x))
+        
+        # Add mean value for feature 1 and 2
+        df_top['Mean_1'] = df_top['Index_1'].apply(lambda x: np.mean(val_arr[:,x]))
+        df_top['Mean_2'] = df_top['Index_2'].apply(lambda x: np.mean(val_arr[:,x]))
+        
+        # Add to total dataframe
+        df_top_total = pd.concat([df_top_total, df_top], axis=0)
+        
+        # Create feature-adjacency-mask pairs
+        feat_A_mask_pair = []  # Initialize the list here
+        for i, feat in enumerate(feat_list):
+            feat_A_mask_pair.append((val_arr[:,i], sparse.csr_matrix(adjacency_mask[num][0]), adjacency_mask[num][1]))
     
     # Use sequential processing for connected components
     output_cc = []
     for args in feat_A_mask_pair:
-        # Always use the standard implementation for topological_comp_res
-        result = topological_comp_res(args[0], args[1], args[2], spatial_type=spatial_type, 
-                                     min_size=min_size, thres_per=thres_per, return_mode='cc_loc')
+        # Use Numba-optimized function if available
+        if use_numba and _HAS_NUMBA:
+            try:
+                result = topological_comp_res_numba(
+                    feat=args[0], A=args[1], mask=args[2],
+                    spatial_type=spatial_type, min_size=min_size,
+                    thres_per=thres_per, return_mode='cc_loc'
+                )
+            except:
+                # Fall back to standard implementation
+                result = topological_comp_res(
+                    feat=args[0], A=args[1], mask=args[2],
+                    spatial_type=spatial_type, min_size=min_size,
+                    thres_per=thres_per, return_mode='cc_loc'
+                )
+        else:
+            # Always use standard implementation if Numba is not available
+            result = topological_comp_res(
+                feat=args[0], A=args[1], mask=args[2],
+                spatial_type=spatial_type, min_size=min_size,
+                thres_per=thres_per, return_mode='cc_loc'
+            )
         output_cc.append(result)
 
     # Make dataframe for the similarity between feature 1 and 2 across the groups
@@ -338,9 +227,9 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     CCxy_loc_mat_list = []; output_cc_loc=[]
     feat_num_sum = 0
     for num, element in enumerate(group_list):
-        df_subset = df_top_total[df_top_total[group_name]==element]
+        df_subset = df_top_total[df_top_total[group_name]==element] if element is not None else df_top_total
         # Find the subset of the given data
-        data_sub = data[data.obs[group_name]==element]
+        data_sub = data[data.obs[group_name]==element] if element is not None else data
         # Add the connected component location of all features in each group
         feat_num = val_list[num].shape[1]
         arr_cc_loc = np.concatenate(output_cc[feat_num_sum:(feat_num_sum+feat_num)], axis=1)
@@ -352,7 +241,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
                                     axis=0, ignore_index=True).drop_duplicates().tolist()
         # Assign column names and index
         df_cc_loc.columns = ['Comb_CC_'+str(i) for i in comb_feat_list]
-        df_cc_loc.index = data[data.obs[group_name]==group_list[num]].obs.index
+        df_cc_loc.index = data_sub.obs.index
         output_cc_loc.append(df_cc_loc)
 
         for index in range(len(df_subset)):
@@ -365,7 +254,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
             else: CCxy_loc_mat_list.append((CCx_loc_mat,CCy_loc_mat,feat_x_val,feat_y_val))
 
     # Get the output for connected component location and save
-    data_mod = data
+    data_mod = data.copy()
     output_cc_loc = pd.concat(output_cc_loc, axis=0).fillna(0).astype(int).astype('category')
     # Check if there is overlapping columns
     import re

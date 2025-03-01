@@ -233,16 +233,19 @@ def split_connected_loc(CC_loc_mat, use_numba=True):
     
     return loc_mat, feat_val
 
-def topological_comp_res(feat_val, A, threshold=None, min_size=5, use_numba=True):
+def topological_comp_res(feat=None, A=None, mask=None,
+                         spatial_type='visium', min_size=5, thres_per=30, return_mode='all'):
     '''
     ## Compute topological components from feature values and adjacency matrix
     
     ### Input
-    feat_val: feature values (n_spots)
+    feat: feature values (n_spots)
     A: adjacency matrix (sparse matrix)
-    threshold: threshold values for filtration (default: percentile values from 0 to 100 with step 5)
+    mask: mask for filtration (default: None)
+    spatial_type: type of spatial data ('visium', 'ST', 'imageST', 'visiumHD')
     min_size: minimum size of connected components to be considered (default: 5)
-    use_numba: whether to use numba optimization (default: True)
+    thres_per: lower percentile value threshold to remove the connected components (default: 30)
+    return_mode: mode of return ('all', 'cc_loc', 'cc_exp')
     
     ### Output
     CC: list of connected components
@@ -251,17 +254,17 @@ def topological_comp_res(feat_val, A, threshold=None, min_size=5, use_numba=True
     history: history of CCs
     '''
     # Convert to numpy array if not already
-    if isinstance(feat_val, pd.Series):
-        feat_val = feat_val.values
+    if isinstance(feat, pd.Series):
+        feat = feat.values
     
     # Make original dendrogram
     CC, E, duration, history = make_original_dendrogram_cc(
-        feat_val, A, threshold, min_size, use_numba=use_numba
+        feat, A, mask, min_size, use_numba=True
     )
     
     # Make smoothed dendrogram
     CC, E, duration, history = make_smoothed_dendrogram(
-        CC, E, duration, history, min_size, use_numba=use_numba
+        CC, E, duration, history, min_size, use_numba=True
     )
     
     return CC, E, duration, history
