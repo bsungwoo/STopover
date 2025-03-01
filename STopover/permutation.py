@@ -17,6 +17,7 @@ import time
 import parmap
 
 from .topological_comp import extract_adjacency_spatial, topological_comp_res
+from .jaccard import jaccard_composite
 
 # Check if numba is available
 try:
@@ -461,7 +462,7 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type='vis
             thres_per=thres_per, 
             return_mode='cc_loc',
             pm_pbar=progress_bar, 
-            pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5)))
+            pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))))
 
     # Make dataframe for the similarity between feature 1 and 2 across the groups
     print('Calculation of composite jaccard indexes between feature pairs')

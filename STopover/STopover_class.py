@@ -247,14 +247,15 @@ class STopover_visium(AnnData):
         self.reinitalize(sp_adata=adata, lognorm=False, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=0)
     
 
-    def jaccard_similarity_arr(self, feat_name_x="", feat_name_y="", jaccard_type='default', J_comp=False):
+    def jaccard_similarity_arr(self, feat_name_x="", feat_name_y="", jaccard_type='default', J_comp=False, use_numba=True):
         '''
         ## Calculate jaccard index for connected components of feature x and y
         ### Input
         * feat_name_x, feat_name_y: name of the feature x and y
         * J_comp: whether to calculate Jaccard index Jcomp between CCx and CCy pair 
         * jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
-
+        * use_numba: whether to use numba optimization (default: True)
+    
         ### Output
         * if J_comp is True, then jaccard simliarity metrics calculated from jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
         * if J_comp is False, then return pairwise jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
