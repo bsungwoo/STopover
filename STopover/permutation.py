@@ -27,8 +27,7 @@ try:
         extract_adjacency_spatial_numba, 
         compute_jaccard_similarity_numba, 
         compute_weighted_jaccard_similarity_numba,
-        optimized_parallel_processing,
-        shuffle_array_numba
+        optimized_parallel_processing
     )
     _HAS_NUMBA = True
 except ImportError:
