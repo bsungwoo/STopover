@@ -110,16 +110,19 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     # Check if we should use Numba
     if use_numba and _HAS_NUMBA:
         # Import Numba-related functions
-        from .numba_optimizations import (
-            extract_adjacency_spatial_numba, 
-            compute_jaccard_similarity_numba, 
-            compute_weighted_jaccard_similarity_numba, 
-            topological_comp_res_numba
-        )
-        # Set Numba to use a single thread to avoid conflicts with multiprocessing
-        import numba
-        old_threading_layer = numba.get_num_threads()
-        numba.set_num_threads(1)
+        try:
+            from .numba_optimizations import (
+                extract_adjacency_spatial_numba, 
+                compute_jaccard_similarity_numba, 
+                compute_weighted_jaccard_similarity_numba
+            )
+            # Set Numba to use a single thread to avoid conflicts with multiprocessing
+            import numba
+            old_threading_layer = numba.get_num_threads()
+            numba.set_num_threads(1)
+        except ImportError:
+            # If any function is missing, disable Numba
+            use_numba = False
     
     # Check the format of the feature pairs
     if isinstance(feat_pairs, pd.DataFrame): df_feat = feat_pairs
@@ -325,15 +328,9 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     # Use sequential processing for connected components
     output_cc = []
     for args in feat_A_mask_pair:
-        if use_numba and _HAS_NUMBA:
-            try:
-                result = topological_comp_res_numba(args[0], args[1], args[2], spatial_type, min_size, thres_per, 'cc_loc')
-            except:
-                result = topological_comp_res(args[0], args[1], args[2], spatial_type=spatial_type, 
-                                             min_size=min_size, thres_per=thres_per, return_mode='cc_loc')
-        else:
-            result = topological_comp_res(args[0], args[1], args[2], spatial_type=spatial_type, 
-                                         min_size=min_size, thres_per=thres_per, return_mode='cc_loc')
+        # Always use the standard implementation for topological_comp_res
+        result = topological_comp_res(args[0], args[1], args[2], spatial_type=spatial_type, 
+                                     min_size=min_size, thres_per=thres_per, return_mode='cc_loc')
         output_cc.append(result)
 
     # Make dataframe for the similarity between feature 1 and 2 across the groups
