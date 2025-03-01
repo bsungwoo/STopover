@@ -17,6 +17,8 @@ import pkg_resources
 try:
     import numba
     _HAS_NUMBA = True
+    # Optionally print a success message
+    print("Numba found. Using optimized implementation.")
 except ImportError:
     _HAS_NUMBA = False
     print("Numba not found. Using standard Python implementation.")

@@ -38,9 +38,8 @@ except ImportError:
     print("Numba not found. Using standard Python implementation.")
 
 def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=None, group_name='batch',
-                          use_lr_db=False, lr_db_species='human', db_name='CellTalk',
-                          fwhm=2.5, min_size=5, thres_per=30, jaccard_type='default', J_result_name='result',
-                          num_workers=os.cpu_count(), progress_bar=True, use_numba=True):
+                           fwhm=2.5, min_size=5, thres_per=30, jaccard_type='default', J_result_name='result',
+                           num_workers=os.cpu_count(), progress_bar=True, use_numba=True):
     '''
     ## Calculate Jaccard index between topological connected components of feature pairs and return dataframe
         : if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
@@ -217,37 +216,32 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
         if spatial_type == 'visium':
             val_list.append(val_element)
         elif spatial_type in ['imageST', 'visiumHD']:
-            # Use Numba-optimized Gaussian filter if available
-            if use_numba and _HAS_NUMBA:
-                from .numba_optimizations import apply_gaussian_filter_numba
-                val_list.append(apply_gaussian_filter_numba(val_element, df_loc, fwhm))
-            else:
-                sigma = fwhm / 2.355
-                cols, rows = df_loc['array_col'].values, df_loc['array_row'].values
+            sigma = fwhm / 2.355
+            cols, rows = df_loc['array_col'].values, df_loc['array_row'].values
 
-                # Convert val_element to a 3D array where each "slice" along the third axis corresponds to a feature
-                # Map unique coordinates to indices
-                unique_rows = np.unique(rows)
-                unique_cols = np.unique(cols)
-                row_indices = np.searchsorted(unique_rows, rows)
-                col_indices = np.searchsorted(unique_cols, cols)
-                # Initialize the array with the mapped dimensions
-                arr = np.zeros((len(unique_rows), len(unique_cols), val_element.shape[1]))
-                # Fill the array using the mapped indices
-                arr[row_indices, col_indices, :] = val_element
+            # Convert val_element to a 3D array where each "slice" along the third axis corresponds to a feature
+            # Map unique coordinates to indices
+            unique_rows = np.unique(rows)
+            unique_cols = np.unique(cols)
+            row_indices = np.searchsorted(unique_rows, rows)
+            col_indices = np.searchsorted(unique_cols, cols)
+            # Initialize the array with the mapped dimensions
+            arr = np.zeros((len(unique_rows), len(unique_cols), val_element.shape[1]))
+            # Fill the array using the mapped indices
+            arr[row_indices, col_indices, :] = val_element
+            
+            # Apply the Gaussian filter along the first two dimensions for each feature simultaneously
+            smooth = gaussian_filter(arr, sigma=(sigma, sigma, 0), truncate=2.355, mode='constant')
+            # Normalize the smoothed array
+            smooth_sum = np.sum(smooth, axis=(0, 1), keepdims=True)
+            val_element_sum = np.sum(val_element, axis=0, keepdims=True)
+            smooth = smooth / smooth_sum * val_element_sum
                 
-                # Apply the Gaussian filter along the first two dimensions for each feature simultaneously
-                smooth = gaussian_filter(arr, sigma=(sigma, sigma, 0), truncate=2.355, mode='constant')
-                # Normalize the smoothed array
-                smooth_sum = np.sum(smooth, axis=(0, 1), keepdims=True)
-                val_element_sum = np.sum(val_element, axis=0, keepdims=True)
-                smooth = smooth / smooth_sum * val_element_sum
-                    
-                # Subset the smooth array using the original rows and cols indices
-                smooth_subset = smooth[row_indices, col_indices, :]
-                # Flatten the smoothed array along the first two dimensions
-                smooth_subset = smooth_subset.reshape(-1, val_element.shape[1])    
-                val_list.append(smooth_subset)
+            # Subset the smooth array using the original rows and cols indices
+            smooth_subset = smooth[row_indices, col_indices, :]
+            # Flatten the smoothed array along the first two dimensions
+            smooth_subset = smooth_subset.reshape(-1, val_element.shape[1])    
+            val_list.append(smooth_subset)
 
     # Make dataframe for the list of feature 1 and 2 across the groups
     column_names = [group_name,'Feat_1','Feat_2','Avg_1','Avg_2','Index_1','Index_2']
@@ -260,21 +254,29 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     # Start the multiprocessing for extracting adjacency matrix and mask
     print("Calculation of adjacency matrix and mask")
     
-    # Use Numba-optimized adjacency matrix extraction if available
+    # Use Numba-optimized functions if available
     if use_numba and _HAS_NUMBA:
         from .numba_optimizations import extract_adjacency_spatial_numba, optimized_parallel_processing
+        
+        # Create a wrapper function that handles the arguments correctly
+        def extract_adjacency_wrapper(loc):
+            if use_numba:
+                return extract_adjacency_spatial_numba(loc, spatial_type, fwhm)
+            else:
+                return extract_adjacency_spatial(loc, spatial_type=spatial_type, fwhm=fwhm)
+        
+        # Use the wrapper function with optimized_parallel_processing
         adjacency_mask = optimized_parallel_processing(
-            extract_adjacency_spatial_numba if use_numba else extract_adjacency_spatial,
+            extract_adjacency_wrapper,
             loc_list,
             num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))),
-            progress_bar=progress_bar,
-            kwargs={'spatial_type': spatial_type, 'fwhm': fwhm}
+            progress_bar=progress_bar
         )
     else:
         adjacency_mask = parmap.map(
             extract_adjacency_spatial, 
             loc_list, 
-            spatial_type=spatial_type, 
+            spatial_type=spatial_type,
             fwhm=fwhm,
             pm_pbar=progress_bar, 
             pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))), 
@@ -294,13 +296,25 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     # Use Numba-optimized parallel processing if available
     if use_numba and _HAS_NUMBA:
         from .numba_optimizations import optimized_parallel_processing
+        
+        # Create a wrapper function that handles the arguments correctly
+        def topological_comp_wrapper(args):
+            feat_val, A, mask = args
+            return topological_comp_res(
+                feat_val, A, mask, 
+                spatial_type=spatial_type, 
+                min_size=min_size, 
+                thres_per=thres_per, 
+                return_mode='cc_loc',
+                use_numba=use_numba
+            )
+        
+        # Use the wrapper function with optimized_parallel_processing
         output_cc = optimized_parallel_processing(
-            topological_comp_res,
+            topological_comp_wrapper,
             feat_A_mask_pair,
             num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))),
-            progress_bar=progress_bar,
-            kwargs={'spatial_type': spatial_type, 'min_size': min_size, 
-                   'thres_per': thres_per, 'return_mode': 'cc_loc', 'use_numba': use_numba}
+            progress_bar=progress_bar
         )
     else:
         output_cc = parmap.starmap(
@@ -361,9 +375,28 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     # Use Numba-optimized parallel processing if available
     if use_numba and _HAS_NUMBA:
         from .numba_optimizations import compute_jaccard_similarity_numba, compute_weighted_jaccard_similarity_numba, optimized_parallel_processing
-        jaccard_func = compute_weighted_jaccard_similarity_numba if jaccard_type == "weighted" else compute_jaccard_similarity_numba
+        
+        # Choose the appropriate jaccard function
+        if jaccard_type == "weighted":
+            def jaccard_wrapper(args):
+                if len(args) == 4:  # Weighted jaccard with values
+                    CCx_loc_mat, CCy_loc_mat, feat_x_val, feat_y_val = args
+                    return compute_weighted_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat, feat_x_val, feat_y_val)
+                else:  # Default case
+                    CCx_loc_mat, CCy_loc_mat = args
+                    return compute_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat)
+        else:
+            def jaccard_wrapper(args):
+                if len(args) == 2:  # Default jaccard
+                    CCx_loc_mat, CCy_loc_mat = args
+                    return compute_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat)
+                else:  # Should not happen, but handle it anyway
+                    CCx_loc_mat, CCy_loc_mat = args[0], args[1]
+                    return compute_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat)
+        
+        # Use the wrapper function with optimized_parallel_processing
         output_j = optimized_parallel_processing(
-            jaccard_func if use_numba else jaccard_composite,
+            jaccard_wrapper,
             CCxy_loc_mat_list,
             num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))),
             progress_bar=progress_bar
