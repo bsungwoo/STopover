@@ -37,6 +37,31 @@ except ImportError:
     _HAS_NUMBA = False
     print("Numba not found. Using standard Python implementation.")
 
+def extract_adjacency_wrapper(loc, spatial_type='visium', fwhm=2.5):
+    """Wrapper function for extract_adjacency_spatial that works with both numba and non-numba versions"""
+    if _HAS_NUMBA:
+        try:
+            return extract_adjacency_spatial_numba(loc, spatial_type, fwhm)
+        except:
+            return extract_adjacency_spatial(loc, spatial_type=spatial_type, fwhm=fwhm)
+    else:
+        return extract_adjacency_spatial(loc, spatial_type=spatial_type, fwhm=fwhm)
+
+def jaccard_wrapper(args, jaccard_type='default'):
+    """Wrapper function for jaccard similarity calculation that works with both numba and non-numba versions"""
+    if _HAS_NUMBA:
+        try:
+            if jaccard_type == 'weighted' and len(args) == 4:
+                CCx_loc_mat, CCy_loc_mat, feat_x_val, feat_y_val = args
+                return compute_weighted_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat, feat_x_val, feat_y_val)
+            else:
+                CCx_loc_mat, CCy_loc_mat = args[0], args[1]
+                return compute_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat)
+        except:
+            return jaccard_composite(*args)
+    else:
+        return jaccard_composite(*args)
+
 def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=None, group_name='batch',
                            fwhm=2.5, min_size=5, thres_per=30, jaccard_type='default', J_result_name='result',
                            num_workers=os.cpu_count(), progress_bar=True, use_numba=True):
@@ -258,16 +283,13 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     if use_numba and _HAS_NUMBA:
         from .numba_optimizations import extract_adjacency_spatial_numba, optimized_parallel_processing
         
-        # Create a wrapper function that handles the arguments correctly
-        def extract_adjacency_wrapper(loc):
-            if use_numba:
-                return extract_adjacency_spatial_numba(loc, spatial_type, fwhm)
-            else:
-                return extract_adjacency_spatial(loc, spatial_type=spatial_type, fwhm=fwhm)
+        # Create a partial function with fixed parameters
+        import functools
+        extract_func = functools.partial(extract_adjacency_wrapper, spatial_type=spatial_type, fwhm=fwhm)
         
-        # Use the wrapper function with optimized_parallel_processing
+        # Use optimized_parallel_processing with the partial function
         adjacency_mask = optimized_parallel_processing(
-            extract_adjacency_wrapper,
+            extract_func,
             loc_list,
             num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))),
             progress_bar=progress_bar
@@ -276,7 +298,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
         adjacency_mask = parmap.map(
             extract_adjacency_spatial, 
             loc_list, 
-            spatial_type=spatial_type,
+            spatial_type=spatial_type, 
             fwhm=fwhm,
             pm_pbar=progress_bar, 
             pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))), 
@@ -293,25 +315,12 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     # Start the multiprocessing for finding connected components of each feature
     print("Calculation of connected components for each feature")
     
-    # Use Numba-optimized parallel processing if available
+    # Use Numba-optimized functions if available
     if use_numba and _HAS_NUMBA:
-        from .numba_optimizations import optimized_parallel_processing
+        from .numba_optimizations import topological_comp_res_numba, optimized_parallel_processing
         
-        # Create a wrapper function that handles the arguments correctly
-        def topological_comp_wrapper(args):
-            feat_val, A, mask = args
-            return topological_comp_res(
-                feat_val, A, mask, 
-                spatial_type=spatial_type, 
-                min_size=min_size, 
-                thres_per=thres_per, 
-                return_mode='cc_loc',
-                use_numba=use_numba
-            )
-        
-        # Use the wrapper function with optimized_parallel_processing
         output_cc = optimized_parallel_processing(
-            topological_comp_wrapper,
+            lambda x: topological_comp_res(x[0], x[1], x[2], spatial_type=spatial_type, min_size=min_size, thres_per=thres_per, return_mode='cc_loc'),
             feat_A_mask_pair,
             num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))),
             progress_bar=progress_bar
@@ -376,27 +385,13 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     if use_numba and _HAS_NUMBA:
         from .numba_optimizations import compute_jaccard_similarity_numba, compute_weighted_jaccard_similarity_numba, optimized_parallel_processing
         
-        # Choose the appropriate jaccard function
-        if jaccard_type == "weighted":
-            def jaccard_wrapper(args):
-                if len(args) == 4:  # Weighted jaccard with values
-                    CCx_loc_mat, CCy_loc_mat, feat_x_val, feat_y_val = args
-                    return compute_weighted_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat, feat_x_val, feat_y_val)
-                else:  # Default case
-                    CCx_loc_mat, CCy_loc_mat = args
-                    return compute_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat)
-        else:
-            def jaccard_wrapper(args):
-                if len(args) == 2:  # Default jaccard
-                    CCx_loc_mat, CCy_loc_mat = args
-                    return compute_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat)
-                else:  # Should not happen, but handle it anyway
-                    CCx_loc_mat, CCy_loc_mat = args[0], args[1]
-                    return compute_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat)
+        # Create a partial function with fixed parameters
+        import functools
+        jaccard_func = functools.partial(jaccard_wrapper, jaccard_type=jaccard_type)
         
-        # Use the wrapper function with optimized_parallel_processing
+        # Use optimized_parallel_processing with the partial function
         output_j = optimized_parallel_processing(
-            jaccard_wrapper,
+            jaccard_func,
             CCxy_loc_mat_list,
             num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))),
             progress_bar=progress_bar
