@@ -9,7 +9,7 @@ Tool to capture spatial colocalization and interaction in the TME using topologi
 ```Plain Text  
   conda create -n STopover python=3.8
   conda activate STopover
-  pip install jupyter git+https://github.com/bsungwoo/STopover.git
+  pip install jupyter git+https://github.com/bsungwoo/STopover.git@dev
   # Install additional packages for VisiumHD analysis
   pip install bin2cell tacco tensorflow
   python -m ipykernel install --user --name STopover --display-name STopover
