@@ -22,7 +22,8 @@ from .numba_optimizations import (
     extract_adjacency_spatial_numba, 
     compute_jaccard_similarity_numba, 
     compute_weighted_jaccard_similarity_numba,
-    topological_comp_res_numba
+    topological_comp_res_numba,
+    make_original_dendrogram_cc_numba
 )
 from .memory_optimizations import sparse_connected_components, merge_sparse_connected_components, chunk_processing
 
@@ -113,7 +114,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
                 extract_adjacency_spatial_numba, 
                 compute_jaccard_similarity_numba, 
                 compute_weighted_jaccard_similarity_numba,
-                topological_comp_res_numba
+                topological_comp_res_numba,
             )
             # Set Numba to use a single thread to avoid conflicts with multiprocessing
             import numba
@@ -214,7 +215,8 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
                     spatial_type=spatial_type, min_size=min_size,
                     thres_per=thres_per, return_mode='cc_loc'
                 )
-            except:
+            except Exception as e:
+                print(f"Numba optimization failed: {e}. Falling back to standard implementation.")
                 # Fall back to standard implementation
                 result = topological_comp_res(
                     feat=args[0], A=args[1], mask=args[2],

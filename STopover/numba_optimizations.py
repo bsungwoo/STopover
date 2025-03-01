@@ -3,12 +3,14 @@ Numba optimizations for STopover package
 This module provides JIT-compiled implementations of computationally intensive functions
 """
 import numpy as np
+import pandas as pd
 from scipy import sparse
 import numba
 from numba import jit, prange, int32, float64, boolean
 from numba.typed import List
 from concurrent.futures import ProcessPoolExecutor
 import os
+from numpy.matlib import repmat
 
 # Check if numba is available
 try:
@@ -263,13 +265,13 @@ def gaussian_filter_numba(A, sigma):
 @jit(nopython=True)
 def extract_adjacency_spatial_numba(loc, spatial_type='visium', fwhm=2.5):
     """
-    Numba-optimized version of extract_adjacency_spatial for Visium data
+    Numba-optimized version of extract_adjacency_spatial for different spatial data types
     """
     sigma = fwhm / 2.355
+    n = loc.shape[0]
     
     if spatial_type == 'visium':
         # Calculate pairwise distances
-        n = loc.shape[0]
         A = np.zeros((n, n))
         for i in range(n):
             for j in range(i+1, n):
@@ -306,21 +308,89 @@ def extract_adjacency_spatial_numba(loc, spatial_type='visium', fwhm=2.5):
                     A[i, j] = 0
         
         return A, arr_mod
+    
+    elif spatial_type == 'imageST':
+        # For imageST, we use a different approach based on grid neighbors
+        # Assuming loc contains grid coordinates
+        A = np.zeros((n, n))
+        
+        # Create adjacency matrix based on 4-connectivity (von Neumann neighborhood)
+        for i in range(n):
+            for j in range(n):
+                if i != j:
+                    # Check if points are adjacent in the grid (Manhattan distance = 1)
+                    if abs(loc[i, 0] - loc[j, 0]) + abs(loc[i, 1] - loc[j, 1]) == 1:
+                        A[i, j] = 1
+        
+        # Create mask for Gaussian smoothing
+        arr_mod = np.zeros_like(A)
+        for i in range(n):
+            for j in range(n):
+                # Calculate Euclidean distance
+                dist = np.sqrt(np.sum((loc[i] - loc[j])**2))
+                if dist <= fwhm:
+                    arr_mod[i, j] = 1/(2*np.pi*sigma**2)*np.exp(-(dist**2)/(2*sigma**2))
+        
+        return A, arr_mod
+    
+    elif spatial_type == 'visiumHD':
+        # For visiumHD, similar to visium but with potentially higher density
+        # Calculate pairwise distances
+        A = np.zeros((n, n))
+        for i in range(n):
+            for j in range(i+1, n):
+                dist = np.sqrt(np.sum((loc[i] - loc[j])**2))
+                A[i, j] = round(dist, 4)
+                A[j, i] = A[i, j]
+        
+        # Replace distances > fwhm with infinity
+        for i in range(n):
+            for j in range(n):
+                if A[i, j] > fwhm:
+                    A[i, j] = np.inf
+        
+        # Gaussian smoothing
+        arr_mod = np.zeros_like(A)
+        for i in range(n):
+            for j in range(n):
+                if A[i, j] != np.inf:
+                    arr_mod[i, j] = 1/(2*np.pi*sigma**2)*np.exp(-(A[i, j]**2)/(2*sigma**2))
+        
+        # Find minimum non-zero distance
+        min_distance = np.inf
+        for i in range(n):
+            for j in range(n):
+                if 0 < A[i, j] < min_distance:
+                    min_distance = A[i, j]
+        
+        # Convert to adjacency matrix (1 if adjacent, 0 otherwise)
+        # For visiumHD, we might want to use a slightly different threshold
+        # to account for the higher density
+        threshold = min_distance * 1.1  # Slightly more permissive
+        for i in range(n):
+            for j in range(n):
+                if 0 < A[i, j] <= threshold:
+                    A[i, j] = 1
+                else:
+                    A[i, j] = 0
+        
+        return A, arr_mod
+    
     else:
-        # For other spatial types, we'll use the original function
-        return None, None
+        # For unknown spatial types, return empty matrices
+        # This will cause the code to fall back to the non-Numba version
+        return np.zeros((n, n)), np.zeros((n, n))
 
 @jit(nopython=True)
 def compute_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat):
     """
-    Numba-optimized version of jaccard_composite for standard jaccard calculation
+    Numba-optimized version of jaccard_composite for default jaccard calculation
     """
     # Calculate Jaccard similarity
-    n = len(CCx_loc_mat)
     intersection = 0
     union = 0
     
-    for i in range(n):
+    for i in range(len(CCx_loc_mat)):
         if CCx_loc_mat[i] > 0 and CCy_loc_mat[i] > 0:
             intersection += 1
         if CCx_loc_mat[i] > 0 or CCy_loc_mat[i] > 0:
@@ -353,6 +423,104 @@ def compute_weighted_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat, feat_x_v
     
     return intersection_sum / union_sum
 
+@jit(nopython=True)
+def find_connected_components_numba(A, t, min_size):
+    """
+    Numba-optimized version of finding connected components
+    """
+    n = A.shape[0]
+    visited = np.zeros(n, dtype=np.int32)
+    components = []
+    
+    for i in range(n):
+        if visited[i] == 0 and A[i, i] >= t:
+            # Start a new component
+            component = []
+            stack = [i]
+            visited[i] = 1
+            
+            while stack:
+                node = stack.pop()
+                component.append(node)
+                
+                # Find neighbors
+                for j in range(n):
+                    if A[node, j] >= t and visited[j] == 0:
+                        stack.append(j)
+                        visited[j] = 1
+            
+            if len(component) >= min_size:
+                components.append(component)
+    
+    return components
+
+def make_original_dendrogram_cc_numba(U, A, threshold, min_size):
+    """
+    Numba-optimized version of make_original_dendrogram_cc
+    """
+    # Convert inputs to numpy arrays if they're not already
+    if isinstance(U, list):
+        U = np.array(U)
+    if isinstance(A, sparse.spmatrix):
+        A = A.toarray()
+    if isinstance(threshold, list):
+        threshold = np.array(threshold)
+    
+    # Initialize variables
+    n = len(U)
+    max_cc = n * 2  # Maximum possible number of connected components
+    
+    # Initialize arrays with proper types
+    CC = np.zeros((max_cc, n), dtype=np.float64)
+    E = np.zeros((max_cc, max_cc), dtype=np.float64)
+    duration = np.zeros((max_cc, 2), dtype=np.float64)
+    history = np.zeros((max_cc, 3), dtype=np.float64)
+    
+    # Track connected components
+    ncc = 0  # Number of connected components
+    ck_cc = {}  # Dictionary to track component IDs
+    
+    # Process each threshold
+    for t_idx, t in enumerate(threshold):
+        # Find connected components at this threshold
+        components = find_connected_components_numba(A, t, min_size)
+        
+        for component in components:
+            # Create a key for this component
+            cc_key = tuple(sorted(component))
+            
+            # Check if this component already exists
+            if cc_key in ck_cc:
+                continue
+            
+            # Add new component
+            for idx in component:
+                CC[ncc, idx] = U[idx]
+            
+            # Track this component
+            ck_cc[cc_key] = ncc
+            
+            # Set birth time
+            duration[ncc, 0] = float(t)
+            
+            # Update connectivity matrix
+            E[ncc, ncc] = float(t)
+            
+            # Update history
+            history[ncc, 0] = float(t)  # Birth time
+            history[ncc, 1] = float(ncc)  # Component ID
+            history[ncc, 2] = float(len(component))  # Component size
+            
+            ncc += 1
+    
+    # Trim arrays to actual size
+    CC = CC[:ncc]
+    E = E[:ncc, :ncc]
+    duration = duration[:ncc]
+    history = history[:ncc]
+    
+    return CC, E, duration, history
+
 def topological_comp_res_numba(feat=None, A=None, mask=None,
                               spatial_type='visium', min_size=5, thres_per=30, return_mode='all'):
     """
@@ -361,23 +529,61 @@ def topological_comp_res_numba(feat=None, A=None, mask=None,
     This function has the same signature and behavior as the original topological_comp_res
     but uses Numba-optimized functions where possible.
     """
-    # This is a wrapper function that will call the original function
-    # but use Numba-optimized functions for the computationally intensive parts
+    # Check feasibility of the dataset
+    if not (return_mode in ['all','cc_loc','jaccard_cc_list']):
+        raise ValueError("'return_mode' should be among 'all', 'cc_loc', or 'jaccard_cc_list'")
+
+    # If no dataset is given, then feature x and feature y should be provided as numpy arrays
+    if (spatial_type=='visium') and (A is None or mask is None):
+        raise ValueError("'A' and 'mask' should be provided")
+    if isinstance(feat, sparse.spmatrix): feat = feat.toarray()
+    elif isinstance(feat, np.ndarray): pass
+    else: raise ValueError("Values for 'feat' should be provided as numpy ndarray or scipy sparse matrix")
+
+    # Calculate adjacency matrix and mask if data is provided
+    # Gaussian smoothing with zero padding
+    p = len(feat)
+    if spatial_type == 'visium':
+        smooth = np.sum(mask*repmat(feat,1,p), axis=0)
+        smooth = smooth/np.sum(smooth)*np.sum(feat)
+    else:
+        # Already smoothed features as input
+        smooth = feat.flatten()
+
+    ## Estimate dendrogram for feat_x
+    t = smooth*(smooth>0)
+    # Find nonzero unique value and sort in descending order
+    threshold = np.flip(np.sort(np.setdiff1d(t, 0), axis=None))
     
-    # For now, we'll just call the original function
-    # In the future, we can optimize specific parts of this function
-    from .topological_comp import (
-        extract_connected_comp,
-        extract_connected_loc_mat,
-        filter_connected_loc_exp,
-        topological_comp_res
-    )
-    
-    return topological_comp_res(
-        feat=feat, A=A, mask=mask,
-        spatial_type=spatial_type, min_size=min_size, 
-        thres_per=thres_per, return_mode=return_mode
-    )
+    try:
+        # Try using the Numba-optimized version
+        CC, E, duration, history = make_original_dendrogram_cc_numba(
+            smooth, A.toarray() if isinstance(A, sparse.spmatrix) else A, threshold, min_size
+        )
+        
+        # Import necessary functions for the rest of the processing
+        from .topological_comp import (
+            extract_connected_loc_mat,
+            filter_connected_loc_exp
+        )
+        
+        # Extract location of connected components as arrays
+        CC_loc_mat = extract_connected_loc_mat(CC, num_spots=len(feat))
+        CC_loc_mat = filter_connected_loc_exp(CC_loc_mat, feat=feat, thres_per=thres_per)
+        
+        if return_mode=='all': return CC, CC_loc_mat
+        elif return_mode=='cc_loc': return CC_loc_mat
+        else: return CC
+        
+    except Exception as e:
+        # If there's an error, fall back to the original implementation
+        print(f"Numba optimization failed: {e}. Falling back to standard implementation.")
+        from .topological_comp import topological_comp_res
+        return topological_comp_res(
+            feat=feat, A=A, mask=mask,
+            spatial_type=spatial_type, min_size=min_size, 
+            thres_per=thres_per, return_mode=return_mode
+        )
 
 def optimized_parallel_processing(func, items, **kwargs):
     """
