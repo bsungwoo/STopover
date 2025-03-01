@@ -41,7 +41,12 @@ def extract_adjacency_wrapper(loc, spatial_type='visium', fwhm=2.5):
     """Wrapper function for extract_adjacency_spatial that works with both numba and non-numba versions"""
     if _HAS_NUMBA:
         try:
-            return extract_adjacency_spatial_numba(loc, spatial_type, fwhm)
+            # Disable Numba threading when using multiprocessing
+            old_threading_layer = numba.get_num_threads()
+            numba.set_num_threads(1)
+            result = extract_adjacency_spatial_numba(loc, spatial_type, fwhm)
+            numba.set_num_threads(old_threading_layer)
+            return result
         except:
             return extract_adjacency_spatial(loc, spatial_type=spatial_type, fwhm=fwhm)
     else:
@@ -51,20 +56,27 @@ def jaccard_wrapper(args, jaccard_type='default'):
     """Wrapper function for jaccard similarity calculation that works with both numba and non-numba versions"""
     if _HAS_NUMBA:
         try:
+            # Disable Numba threading when using multiprocessing
+            old_threading_layer = numba.get_num_threads()
+            numba.set_num_threads(1)
+            
             if jaccard_type == 'weighted' and len(args) == 4:
                 CCx_loc_mat, CCy_loc_mat, feat_x_val, feat_y_val = args
-                return compute_weighted_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat, feat_x_val, feat_y_val)
+                result = compute_weighted_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat, feat_x_val, feat_y_val)
             else:
                 CCx_loc_mat, CCy_loc_mat = args[0], args[1]
-                return compute_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat)
+                result = compute_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat)
+                
+            numba.set_num_threads(old_threading_layer)
+            return result
         except:
             return jaccard_composite(*args)
     else:
         return jaccard_composite(*args)
 
 def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=None, group_name='batch',
-                           fwhm=2.5, min_size=5, thres_per=30, jaccard_type='default', J_result_name='result',
-                           num_workers=os.cpu_count(), progress_bar=True, use_numba=True):
+                          fwhm=2.5, min_size=5, thres_per=30, jaccard_type='default', J_result_name='result',
+                          num_workers=os.cpu_count(), progress_bar=True, use_numba=True):
     '''
     ## Calculate Jaccard index between topological connected components of feature pairs and return dataframe
         : if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
@@ -78,16 +90,11 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
         -> If the data format is not same the majority of the data format will be automatically searched
         -> and the rest of the features with different format will be removed from the pairs
     * spatial_type: type of the spatial data (should be either 'visium', 'imageST', or 'visiumHD')
-    * use_lr_db: whether to use list of features in L-R database (default = False)
-    * lr_db_species: select species to utilize in L-R database (default = 'human')
-    * db_name: name of the ligand-receptor database to use: either 'CellTalk', 'CellChat', or 'Omnipath' (default = 'CellTalk')
-
     * group_name:
         the column name for the groups saved in metadata(.obs)
         spatial data is divided according to the group and calculate topological overlap separately in each group
     * group_list: list of the elements in the group 
     * jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
-
     * J_result_name: the name of the jaccard index data file name
     * num_workers: number of workers to use for multiprocessing
     * progress_bar: whether to show the progress bar during multiprocessing
@@ -100,6 +107,20 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     '''
     start_time = time.time()
 
+    # Check if we should use Numba
+    if use_numba and _HAS_NUMBA:
+        # Import Numba-related functions
+        from .numba_optimizations import (
+            extract_adjacency_spatial_numba, 
+            compute_jaccard_similarity_numba, 
+            compute_weighted_jaccard_similarity_numba, 
+            topological_comp_res_numba
+        )
+        # Set Numba to use a single thread to avoid conflicts with multiprocessing
+        import numba
+        old_threading_layer = numba.get_num_threads()
+        numba.set_num_threads(1)
+    
     # Check the format of the feature pairs
     if isinstance(feat_pairs, pd.DataFrame): df_feat = feat_pairs
     elif isinstance(feat_pairs, list): df_feat = pd.DataFrame(feat_pairs)
@@ -279,31 +300,17 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     # Start the multiprocessing for extracting adjacency matrix and mask
     print("Calculation of adjacency matrix and mask")
     
-    # Use Numba-optimized functions if available
-    if use_numba and _HAS_NUMBA:
-        from .numba_optimizations import extract_adjacency_spatial_numba, optimized_parallel_processing
-        
-        # Create a partial function with fixed parameters
-        import functools
-        extract_func = functools.partial(extract_adjacency_wrapper, spatial_type=spatial_type, fwhm=fwhm)
-        
-        # Use optimized_parallel_processing with the partial function
-        adjacency_mask = optimized_parallel_processing(
-            extract_func,
-            loc_list,
-            num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))),
-            progress_bar=progress_bar
-        )
-    else:
-        adjacency_mask = parmap.map(
-            extract_adjacency_spatial, 
-            loc_list, 
-            spatial_type=spatial_type, 
-            fwhm=fwhm,
-            pm_pbar=progress_bar, 
-            pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))), 
-            pm_chunksize=50
-        )
+    # Use sequential processing instead of multiprocessing to avoid OpenMP conflicts
+    adjacency_mask = []
+    for loc in loc_list:
+        if use_numba and _HAS_NUMBA:
+            try:
+                result = extract_adjacency_spatial_numba(loc, spatial_type, fwhm)
+            except:
+                result = extract_adjacency_spatial(loc, spatial_type=spatial_type, fwhm=fwhm)
+        else:
+            result = extract_adjacency_spatial(loc, spatial_type=spatial_type, fwhm=fwhm)
+        adjacency_mask.append(result)
     
     if spatial_type=='visium':
         feat_A_mask_pair = [(feat[:,feat_idx].reshape((-1,1)), adjacency_mask[grp_idx][0], adjacency_mask[grp_idx][1]) \
@@ -315,27 +322,19 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     # Start the multiprocessing for finding connected components of each feature
     print("Calculation of connected components for each feature")
     
-    # Use Numba-optimized functions if available
-    if use_numba and _HAS_NUMBA:
-        from .numba_optimizations import topological_comp_res_numba, optimized_parallel_processing
-        
-        output_cc = optimized_parallel_processing(
-            lambda x: topological_comp_res(x[0], x[1], x[2], spatial_type=spatial_type, min_size=min_size, thres_per=thres_per, return_mode='cc_loc'),
-            feat_A_mask_pair,
-            num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))),
-            progress_bar=progress_bar
-        )
-    else:
-        output_cc = parmap.starmap(
-            topological_comp_res, 
-            feat_A_mask_pair, 
-            spatial_type=spatial_type,
-            min_size=min_size, 
-            thres_per=thres_per, 
-            return_mode='cc_loc',
-            pm_pbar=progress_bar, 
-            pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5)))
-        )
+    # Use sequential processing for connected components
+    output_cc = []
+    for args in feat_A_mask_pair:
+        if use_numba and _HAS_NUMBA:
+            try:
+                result = topological_comp_res_numba(args[0], args[1], args[2], spatial_type, min_size, thres_per, 'cc_loc')
+            except:
+                result = topological_comp_res(args[0], args[1], args[2], spatial_type=spatial_type, 
+                                             min_size=min_size, thres_per=thres_per, return_mode='cc_loc')
+        else:
+            result = topological_comp_res(args[0], args[1], args[2], spatial_type=spatial_type, 
+                                         min_size=min_size, thres_per=thres_per, return_mode='cc_loc')
+        output_cc.append(result)
 
     # Make dataframe for the similarity between feature 1 and 2 across the groups
     print('Calculation of composite jaccard indexes between feature pairs')
@@ -380,29 +379,24 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     # Add the connected component location information to the .obs
     data_mod.obs = data_mod.obs.join(output_cc_loc, lsuffix='_prev'+str(data_count))
 
-    # Get the output for jaccard
-    # Use Numba-optimized parallel processing if available
-    if use_numba and _HAS_NUMBA:
-        from .numba_optimizations import compute_jaccard_similarity_numba, compute_weighted_jaccard_similarity_numba, optimized_parallel_processing
-        
-        # Create a partial function with fixed parameters
-        import functools
-        jaccard_func = functools.partial(jaccard_wrapper, jaccard_type=jaccard_type)
-        
-        # Use optimized_parallel_processing with the partial function
-        output_j = optimized_parallel_processing(
-            jaccard_func,
-            CCxy_loc_mat_list,
-            num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))),
-            progress_bar=progress_bar
-        )
-    else:
-        output_j = parmap.starmap(
-            jaccard_composite, 
-            CCxy_loc_mat_list,
-            pm_pbar=progress_bar, 
-            pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5)))
-        )
+    # Get the output for jaccard - use sequential processing
+    output_j = []
+    for args in CCxy_loc_mat_list:
+        if use_numba and _HAS_NUMBA and jaccard_type == 'default':
+            try:
+                CCx_loc_mat, CCy_loc_mat = args[0], args[1]
+                result = compute_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat)
+            except:
+                result = jaccard_composite(*args)
+        elif use_numba and _HAS_NUMBA and jaccard_type == 'weighted':
+            try:
+                CCx_loc_mat, CCy_loc_mat, feat_x_val, feat_y_val = args
+                result = compute_weighted_jaccard_similarity_numba(CCx_loc_mat, CCy_loc_mat, feat_x_val, feat_y_val)
+            except:
+                result = jaccard_composite(*args)
+        else:
+            result = jaccard_composite(*args)
+        output_j.append(result)
     
     # Create dataframe for J metrics
     output_j = pd.DataFrame(output_j, columns=['J_comp'])
@@ -411,6 +405,10 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
 
     # Save the result to the data.uns
     data_mod.uns[f"J_result_{J_result_name}"] = df_top_total
+
+    # Restore Numba threading if we changed it
+    if use_numba and _HAS_NUMBA:
+        numba.set_num_threads(old_threading_layer)
 
     print("End of the whole process: %.2f seconds" % (time.time()-start_time))
 
