@@ -543,22 +543,49 @@ def topological_comp_res_numba(feat=None, A=None, mask=None,
     # Calculate adjacency matrix and mask if data is provided
     # Gaussian smoothing with zero padding
     p = len(feat)
+    
+    # Check shapes and fix if necessary
     if spatial_type == 'visium':
-        smooth = np.sum(mask*repmat(feat,1,p), axis=0)
-        smooth = smooth/np.sum(smooth)*np.sum(feat)
+        # Convert to dense arrays if needed
+        if isinstance(A, sparse.spmatrix):
+            A_dense = A.toarray()
+        else:
+            A_dense = A
+            
+        # Ensure mask has the right shape
+        if mask.shape != (p, p):
+            # Fall back to standard implementation
+            from .topological_comp import topological_comp_res
+            return topological_comp_res(
+                feat=feat, A=A, mask=mask,
+                spatial_type=spatial_type, min_size=min_size, 
+                thres_per=thres_per, return_mode=return_mode
+            )
+            
+        # Reshape feat for broadcasting
+        feat_reshaped = feat.reshape(-1, 1)
+        # Apply smoothing
+        smooth = np.zeros(p)
+        for i in range(p):
+            for j in range(p):
+                smooth[i] += mask[i, j] * feat_reshaped[j, 0]
+                
+        # Normalize
+        if np.sum(smooth) > 0:
+            smooth = smooth / np.sum(smooth) * np.sum(feat)
     else:
         # Already smoothed features as input
         smooth = feat.flatten()
 
-    ## Estimate dendrogram for feat_x
-    t = smooth*(smooth>0)
+    ## Estimate dendrogram for feat
+    t = smooth * (smooth > 0)
     # Find nonzero unique value and sort in descending order
     threshold = np.flip(np.sort(np.setdiff1d(t, 0), axis=None))
     
     try:
         # Try using the Numba-optimized version
         CC, E, duration, history = make_original_dendrogram_cc_numba(
-            smooth, A.toarray() if isinstance(A, sparse.spmatrix) else A, threshold, min_size
+            smooth, A_dense if spatial_type == 'visium' else A, threshold, min_size
         )
         
         # Import necessary functions for the rest of the processing
