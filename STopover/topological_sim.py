@@ -35,8 +35,8 @@ except ImportError:
     _HAS_NUMBA = False
     print("Numba not found. Using standard Python implementation.")
 
-def topological_sim(data, loc, spatial_type='visium', fwhm=2.5, threshold=None, min_size=5, 
-                   num_workers=None, progress_bar=True, use_numba=True, memory_efficient=True):
+def topological_sim_pairs_(data, loc, spatial_type='visium', fwhm=2.5, threshold=None, min_size=5, 
+                           num_workers=None, progress_bar=True, use_numba=True, memory_efficient=True):
     '''
     ## Compute topological similarity between samples
     
