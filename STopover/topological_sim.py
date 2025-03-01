@@ -12,9 +12,7 @@ import pandas as pd
 
 import os
 import time
-import parmap
 import scipy.sparse as sparse
-from scipy.ndimage import gaussian_filter
 
 from .topological_comp import extract_adjacency_spatial, topological_comp_res
 from .topological_comp import extract_connected_loc_mat
@@ -169,6 +167,8 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
     # Extract feature values
     print('Calculation of connected components for each feature')
     val_list = []
+    df_top_total = pd.DataFrame()  # Initialize df_top_total
+    
     for num, element in enumerate(group_list):
         # Extract feature values
         if element is None: data_sub = data
@@ -179,13 +179,21 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
         val_arr = np.zeros((data_sub.shape[0], len(feat_list)))
         
         # Add index for feature 1 and 2
-        df_top = pd.DataFrame({'Feat_1': feat_list[0], 'Feat_2': feat_list[1]})
+        # Create DataFrame with proper index to avoid ValueError
+        df_top = pd.DataFrame({
+            'Feat_1': [feat_list[0]] * len(df_feat),
+            'Feat_2': [feat_list[1]] * len(df_feat)
+        }, index=range(len(df_feat)))
+        
         df_top['Index_1'] = df_top['Feat_1'].apply(lambda x: feat_list.index(x))
         df_top['Index_2'] = df_top['Feat_2'].apply(lambda x: feat_list.index(x))
         
         # Add mean value for feature 1 and 2
         df_top['Mean_1'] = df_top['Index_1'].apply(lambda x: np.mean(val_arr[:,x]))
         df_top['Mean_2'] = df_top['Index_2'].apply(lambda x: np.mean(val_arr[:,x]))
+        
+        # Add group information
+        if element is not None: df_top[group_name] = element
         
         # Add to total dataframe
         df_top_total = pd.concat([df_top_total, df_top], axis=0)
