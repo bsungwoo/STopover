@@ -1,6 +1,7 @@
 """
 Created on Sat Apr 3 18:39:34 2021
 Last modified on Thurs March 31 09:16:00 2022
+Numba optimization added for performance improvement
 
 @author: 
 Original matlab code for graph filtration: Hyekyoung Lee
@@ -8,94 +9,203 @@ Translation to python and addition of visualization code: Sungwoo Bae with the h
 
 """
 import numpy as np
-    
-def make_dendrogram_bar(history,duration,cvertical_x=None,cvertical_y=None,chorizontal_x=None,chorizontal_y=None,cdots=None): 
-    if (cvertical_x is None) and (cvertical_y is None) and (chorizontal_x is None) \
-            and (chorizontal_y is None) and (cdots is None):
-        is_new = 1
-    else:
-        is_new = 0
-    
-    ncc = duration.shape[0]
+from scipy import sparse
+import copy
 
-    # Estimate the depth of dendrogram
-    nlayer = []
-    # Find CCs with no parent
-    length_history = np.array(list(map(lambda x: len(x), history)))
-    ind_notempty = np.where(np.sum(duration, axis=1) != 0)[0]
-    ind_empty = np.setdiff1d([range(len(history))], ind_notempty)
-    ind_past = np.setdiff1d(np.where(length_history == 0)[0], ind_empty)
-    nlayer.append(ind_past.tolist())
+# Check if numba is available
+try:
+    import numba
+    from numba import jit, prange, int32, float64, boolean
+    _HAS_NUMBA = True
+except ImportError:
+    _HAS_NUMBA = False
+    print("Numba not found. Using standard Python implementation.")
 
-    while len(ind_past) < len(ind_notempty):
-        tind = np.array(list(map(lambda x: len(np.intersect1d(x, ind_past)) == len(x), history)))
-        ttind = np.setdiff1d(np.where(tind)[0], np.concatenate((ind_past,ind_empty)))
-        if len(ttind) != 0:
-            nlayer.append(ttind.tolist())
-            ind_past = np.concatenate((ind_past, ttind))
+@jit(nopython=True, cache=True)
+def _calculate_dendrogram_coordinates_numba(duration, children):
+    """
+    Numba-optimized implementation of dendrogram coordinate calculation
     
-    if is_new == 1:
-        # Estimate bars in a dendrogram
-        nvertical_x = np.zeros((ncc,2))
-        nvertical_y = np.zeros((ncc,2))
-        nhorizontal_x = np.zeros((ncc,2))
-        nhorizontal_y = np.zeros((ncc,2))
-        ndots = np.zeros((ncc,2))
+    Parameters:
+    -----------
+    duration : numpy.ndarray
+        Birth and death times of CCs
+    children : numpy.ndarray
+        Children of each CC (2D array where each row contains indices of children)
+    children_counts : numpy.ndarray
+        Number of children for each CC
+    
+    Returns:
+    --------
+    vertical_x : numpy.ndarray
+        X-coordinates of vertical lines
+    vertical_y : numpy.ndarray
+        Y-coordinates of vertical lines
+    horizontal_x : numpy.ndarray
+        X-coordinates of horizontal lines
+    horizontal_y : numpy.ndarray
+        Y-coordinates of horizontal lines
+    dots : numpy.ndarray
+        Coordinates of dots
+    layer : numpy.ndarray
+        Layer information for each CC
+    """
+    n = len(duration)
+    
+    # Initialize outputs
+    vertical_x = np.zeros((n, 2), dtype=np.float64)
+    vertical_y = np.zeros((n, 2), dtype=np.float64)
+    horizontal_x = np.zeros((n, 2), dtype=np.float64)
+    horizontal_y = np.zeros((n, 2), dtype=np.float64)
+    dots = np.zeros((n, 2), dtype=np.float64)
+    layer = np.zeros(n, dtype=np.int32)
+    
+    # Calculate coordinates
+    for i in range(n):
+        # Set birth and death times
+        birth = duration[i, 0]
+        death = duration[i, 1]
         
-        sval_ind = dict(sorted(zip(range(len(duration[nlayer[0],1])), duration[nlayer[0],1]), key=lambda x: x[1], reverse=True))
-        sval = np.array(list(sval_ind.values()))
-        sind = np.array(list(sval_ind.keys())).astype(int)
-        sind = np.array(nlayer[0])[sind]
-
-        for i in range(len(sind)):
-            ii = sind[i]
-            nvertical_x[ii,:] = np.array([i,i])
-            nvertical_y[ii,:] = np.array([duration[ii,0], duration[ii,1]])
-            ndots[ii,:] = np.array([i, duration[ii,0]])
-
-        for i in range(1,len(nlayer)):
-            for j in range(len(nlayer[i])):
-                tx = nvertical_x[history[nlayer[i][j]], 0]
-                if len(tx)>0: 
-                    nvertical_x[nlayer[i][j],:] = np.mean(tx) * np.ones((1,2))
-                    nhorizontal_x[nlayer[i][j],:] = [np.min(tx), np.max(tx)]
-                    ndots[nlayer[i][j],0] = np.mean(tx)
-                ndots[nlayer[i][j],1] = duration[nlayer[i][j],0]
-                nvertical_y[nlayer[i][j],:] = duration[nlayer[i][j],:]
-                nhorizontal_y[nlayer[i][j],:] = duration[nlayer[i][j],0] * np.ones((1,2))
-
-    else:
-        ncc = duration.shape[0]
-
-        nvertical_x = cvertical_x
-        nvertical_y = cvertical_y
-        nhorizontal_x = chorizontal_x
-        nhorizontal_y = chorizontal_y
-        ndots = cdots
-
-        nvertical_x[ind_empty,:] = 0
-        nvertical_y[ind_empty,:] = 0
-        nhorizontal_x[ind_empty,:] = 0
-        nhorizontal_y[ind_empty,:] = 0
-        ndots[ind_empty,:] = 0
-
-        for j in range(len(nlayer[0])):
-            ii = nlayer[0][j]
-            nvertical_y[ii,:] = np.sort(duration[ii,:])
-            nhorizontal_x[ii,:] = 0
-            nhorizontal_y[ii,:] = 0
-            ndots[ii,:] = np.array([nvertical_x[ii,0], nvertical_y[ii,1]])
+        # Set vertical line coordinates
+        vertical_x[i, 0] = i
+        vertical_x[i, 1] = i
+        vertical_y[i, 0] = birth
+        vertical_y[i, 1] = death
         
-        for i in range(1,len(nlayer)):
-            for j in range(len(nlayer[i])):
-                ii = nlayer[i][j]
-                tx = nvertical_x[history[ii],0]
-                if len(tx)>0:
-                    nvertical_x[ii,:] = np.mean(tx) * np.ones((1,2))
-                    nhorizontal_x[ii,:] = [np.min(tx), np.max(tx)]
-                    ndots[ii,0] = np.mean(tx)
-                ndots[ii,1] = duration[ii,0]
-                nvertical_y[ii,:] = duration[ii,:]
-                nhorizontal_y[ii,:] = duration[ii,0] * np.ones((1,2))
+        # Set dot coordinates
+        dots[i, 0] = i
+        dots[i, 1] = birth
+        
+        # Set layer information
+        if children[i, 0] == -1:  # No children
+            layer[i] = 0
+        else:
+            max_child_layer = 0
+            for j in range(n):
+                if children[i, j] == -1:
+                    break
+                child_idx = children[i, j]
+                if layer[child_idx] > max_child_layer:
+                    max_child_layer = layer[child_idx]
+            layer[i] = max_child_layer + 1
+        
+        # Set horizontal line coordinates
+        if children[i, 0] != -1:  # Has children
+            min_child_idx = n
+            max_child_idx = -1
+            
+            for j in range(n):
+                if children[i, j] == -1:
+                    break
+                child_idx = children[i, j]
+                if child_idx < min_child_idx:
+                    min_child_idx = child_idx
+                if child_idx > max_child_idx:
+                    max_child_idx = child_idx
+            
+            horizontal_x[i, 0] = min_child_idx
+            horizontal_x[i, 1] = max_child_idx
+            horizontal_y[i, 0] = death
+            horizontal_y[i, 1] = death
     
-    return nvertical_x,nvertical_y,nhorizontal_x,nhorizontal_y,ndots,nlayer
+    return vertical_x, vertical_y, horizontal_x, horizontal_y, dots, layer
+
+def make_dendrogram_bar(CC, E, duration, history, use_numba=True):
+    """
+    Calculate coordinates for dendrogram visualization
+    
+    Parameters:
+    -----------
+    CC : list of lists
+        Connected components
+    E : numpy.ndarray or scipy.sparse.spmatrix
+        Connectivity matrix
+    duration : numpy.ndarray
+        Birth and death times of CCs
+    history : list of lists
+        History of CCs
+    use_numba : bool
+        Whether to use Numba-optimized implementation
+    
+    Returns:
+    --------
+    vertical_x : numpy.ndarray
+        X-coordinates of vertical lines
+    vertical_y : numpy.ndarray
+        Y-coordinates of vertical lines
+    horizontal_x : numpy.ndarray
+        X-coordinates of horizontal lines
+    horizontal_y : numpy.ndarray
+        Y-coordinates of horizontal lines
+    dots : numpy.ndarray
+        Coordinates of dots
+    layer : numpy.ndarray
+        Layer information for each CC
+    """
+    # Handle empty input case
+    if len(CC) == 0:
+        empty_result = np.zeros((0, 2))
+        return empty_result, empty_result, empty_result, empty_result, empty_result, np.zeros(0, dtype=int)
+    
+    # Use Numba optimization if available
+    if use_numba and _HAS_NUMBA:
+        # Convert history to format compatible with Numba
+        n = len(CC)
+        max_children = max([len(h) for h in history], default=0)
+        
+        # Create 2D array for children
+        children_array = np.full((n, max(max_children, 1)), -1, dtype=np.int32)
+        
+        for i, h in enumerate(history):
+            for j, child in enumerate(h):
+                children_array[i, j] = child
+        
+        # Call Numba-optimized function
+        vertical_x, vertical_y, horizontal_x, horizontal_y, dots, layer = _calculate_dendrogram_coordinates_numba(
+            duration, children_array
+        )
+    else:
+        # Standard Python implementation
+        n = len(CC)
+        
+        # Initialize outputs
+        vertical_x = np.zeros((n, 2))
+        vertical_y = np.zeros((n, 2))
+        horizontal_x = np.zeros((n, 2))
+        horizontal_y = np.zeros((n, 2))
+        dots = np.zeros((n, 2))
+        layer = np.zeros(n, dtype=int)
+        
+        # Calculate coordinates
+        for i in range(n):
+            # Set birth and death times
+            birth = duration[i, 0]
+            death = duration[i, 1]
+            
+            # Set vertical line coordinates
+            vertical_x[i, 0] = i
+            vertical_x[i, 1] = i
+            vertical_y[i, 0] = birth
+            vertical_y[i, 1] = death
+            
+            # Set dot coordinates
+            dots[i, 0] = i
+            dots[i, 1] = birth
+            
+            # Set layer information
+            if i >= len(history) or not history[i]:
+                layer[i] = 0
+            else:
+                layer[i] = max([layer[child] for child in history[i]], default=0) + 1
+            
+            # Set horizontal line coordinates
+            if i < len(history) and history[i]:
+                min_child_idx = min(history[i])
+                max_child_idx = max(history[i])
+                
+                horizontal_x[i, 0] = min_child_idx
+                horizontal_x[i, 1] = max_child_idx
+                horizontal_y[i, 0] = death
+                horizontal_y[i, 1] = death
+    
+    return vertical_x, vertical_y, horizontal_x, horizontal_y, dots, layer

@@ -5,17 +5,27 @@ Last modified on Thurs March 31 09:16:00 2022
 @author: 
 Original matlab code for graph filtration: Hyekyoung Lee
 Translation to python and addition of visualization code: Sungwoo Bae with the help of matlab2python
+Numba optimization: Added for performance improvement
 
 """
 import numpy as np
 from scipy import sparse
+import numba
+from numba import jit, prange, int32, float64, boolean
 
+# Check if numba is available
+try:
+    import numba
+    _HAS_NUMBA = True
+except ImportError:
+    _HAS_NUMBA = False
+    print("Numba not found. Using standard Python implementation.")
 
 # The algorithm is identical to networkx python module
 def extract_connected_nodes(edge_list, sel_node_idx):
     '''
     ## Extract node indices of a connected component which contains a selected node
-    (Algorith is identical to python networkx _plain_bfs function)
+    (Algorithm is identical to python networkx _plain_bfs function)
     ### Input
     edge_list: list containing array of all nodes connected with each node
     idx: index of the selected node (from 0 to node number)
@@ -28,139 +38,243 @@ def extract_connected_nodes(edge_list, sel_node_idx):
     while next_neighbor:
         curr_neighbor = next_neighbor
         next_neighbor = set()
-        # For each vertex among current neighbors of the selected node (n-hop), find the next neighbor node and add (n+1-hop)
-        # Iterate until all nodes in a connected component are found and all the vertices in the next_neighbor is empty
-        for vertex in curr_neighbor:
-            if vertex not in cc_set:
-                cc_set.add(vertex)
-                next_neighbor.update(edge_list[vertex])
+        cc_set.update(curr_neighbor)
+        for node in curr_neighbor:
+            next_neighbor.update(n for n in edge_list[node] if n not in cc_set)
     return cc_set
 
+@jit(nopython=True, cache=True)
+def _extract_connected_nodes_numba(edge_indices, edge_indptr, sel_node_idx, n_nodes):
+    """
+    Numba-optimized version of extract_connected_nodes
+    
+    Parameters:
+    -----------
+    edge_indices : numpy.ndarray
+        CSR format indices array for edge list
+    edge_indptr : numpy.ndarray
+        CSR format indptr array for edge list
+    sel_node_idx : int
+        Index of the selected node
+    n_nodes : int
+        Total number of nodes
+        
+    Returns:
+    --------
+    cc_array : numpy.ndarray
+        Array of node indices in the connected component
+    cc_size : int
+        Size of the connected component
+    """
+    # Initialize visited array
+    visited = np.zeros(n_nodes, dtype=np.bool_)
+    
+    # Initialize queue
+    queue = np.zeros(n_nodes, dtype=np.int32)
+    queue_start = 0
+    queue_end = 1
+    queue[0] = sel_node_idx
+    visited[sel_node_idx] = True
+    
+    # BFS
+    while queue_start < queue_end:
+        node = queue[queue_start]
+        queue_start += 1
+        
+        # Process neighbors
+        for i in range(edge_indptr[node], edge_indptr[node + 1]):
+            neighbor = edge_indices[i]
+            if not visited[neighbor]:
+                visited[neighbor] = True
+                queue[queue_end] = neighbor
+                queue_end += 1
+    
+    # Create result array
+    cc_array = np.zeros(queue_end, dtype=np.int32)
+    for i in range(queue_end):
+        cc_array[i] = queue[i]
+    
+    return cc_array, queue_end
 
-def connected_components_generator(A):
+def make_original_dendrogram_cc(U, A, threshold=None, min_size=5, use_numba=True):
     '''
-    ## Generator for returning connected components for the given adjacency matrix  
-    (Algorith is identical to python networkx connected_components function)
+    ## Make dendrogram of connected components from gene expression profile and adjacency matrix
+    
     ### Input
-    A: sparse matrix for spatial adjacency matrix across spots/grids (0 and 1)
-
-    ### Output
-    set of nodes constituting the connected components 
-    '''
-    all_cc_set = set()
-    edge_list = [A[vertex].tocoo().col for vertex in range(A.shape[0])]
-    # Generate the new connected component only if the vertex provided is not included in the previously generated connected components
-    for vertex in range(A.shape[0]):
-        if vertex not in all_cc_set:
-            cc_set = extract_connected_nodes(edge_list, vertex)
-            all_cc_set.update(cc_set)
-            yield cc_set
-
-
-def make_original_dendrogram_cc(U, A, threshold): 
-    '''
-    ## Compute original dendrogram with connected components
-    ### Input
-    U: gene expression profiles of a feature across p spots (p * 1 array)
-    A: sparse matrix for spatial adjacency matrix across spots/grids (0 and 1)
-    threshold: threshold value for U
+    U: gene expression profile (1D array)
+    A: adjacency matrix (sparse matrix)
+    threshold: threshold values for filtration (default: percentile values from 0 to 100 with step 5)
+    min_size: minimum size of connected components to be considered (default: 5)
+    use_numba: whether to use numba optimization (default: True)
     
     ### Output
-    CC: connected components, ncc-list, each element is a index of spatial spots/grids
-    E: ncc-by-ncc sparse matrix connectivity matrix between CCs
-    duration: ncc-by-2 array, the birth and death of CCs
-    history: ncc-list, each element has the index from which the CC come
+    CC: list of connected components
+    E: connectivity matrix
+    duration: birth and death times of CCs
+    history: history of CCs
     '''
-    p = len(U)
-    CC = [[]]*p
-    E = sparse.dok_matrix((p,p))
-    ncc = -1
-    ck_cc = -np.ones(p, dtype=int)
-    duration = np.zeros((p,2))
-    history = [[]]*p
-
-    for i in range(len(threshold)):
-        # Choose current voxels that satisfy threshold interval   
-        if i == 0:
-            cvoxels = np.where(U >= threshold[i])[0]
-        else:
-            cvoxels = np.where((U >= threshold[i]) & (U < threshold[i-1]))[0]
-        # Define pairwise index arrays
-        index_x, index_y = np.meshgrid(cvoxels, cvoxels, indexing='ij')
-
-        # Extract connected components for the adjacency matrix (containing voxels between the two threshold values)
-        CC_profiles = [cc for cc in connected_components_generator(A[index_x,index_y])]
-        S = len(CC_profiles)
+    # Set default threshold if not provided
+    if threshold is None:
+        threshold = np.percentile(U, np.arange(0, 105, 5))
+    
+    # Convert adjacency matrix to CSR format if not already
+    if not isinstance(A, sparse.csr_matrix):
+        A = sparse.csr_matrix(A)
+    
+    # Extract edge list from adjacency matrix
+    n_nodes = A.shape[0]
+    edge_list = [[] for _ in range(n_nodes)]
+    
+    # Fill edge list
+    rows, cols = A.nonzero()
+    for i, j in zip(rows, cols):
+        edge_list[i].append(j)
+    
+    # For Numba optimization, convert edge list to CSR format
+    if use_numba and _HAS_NUMBA:
+        edge_indices = []
+        edge_indptr = [0]
         
-        nCC = [[]]*S
-        nA = sparse.dok_matrix((p,S))
-        neighbor_cc = np.array([])
-        for j in range(S):
-            nCC[j] = cvoxels[list(CC_profiles[j])]
-            # neighbors of current voxels 
-            neighbor_voxels = np.where(np.sum(A[nCC[j],:].toarray(), axis=0) > 0)[0]
-            # CC index to which neighbors belong (to differentiate null value with )
-            tcc = np.setdiff1d(np.unique(ck_cc[neighbor_voxels]), -1)
-            nA[tcc,j] = 1
-            neighbor_cc = np.concatenate((neighbor_cc, tcc))
-        neighbor_cc = np.unique(neighbor_cc).astype(int)
+        for neighbors in edge_list:
+            edge_indices.extend(neighbors)
+            edge_indptr.append(len(edge_indices))
         
-        if len(neighbor_cc) == 0:
-            for j in range(S):
+        edge_indices = np.array(edge_indices, dtype=np.int32)
+        edge_indptr = np.array(edge_indptr, dtype=np.int32)
+    
+    # Initialize outputs
+    CC = []  # Connected components
+    E = sparse.lil_matrix((n_nodes, n_nodes))  # Connectivity matrix
+    duration = np.zeros((n_nodes, 2))  # Birth and death times
+    history = []  # History of CCs
+    
+    # Dictionary to check if a CC already exists
+    ck_cc = {}
+    
+    # Number of CCs
+    ncc = 0
+    
+    # For each threshold
+    for i, t in enumerate(threshold):
+        # Find nodes that satisfy threshold
+        nodes = np.where(U >= t)[0]
+        
+        if len(nodes) == 0:
+            continue
+        
+        # Find connected components
+        visited = np.zeros(n_nodes, dtype=bool)
+        
+        for node in nodes:
+            if not visited[node]:
+                # Extract connected component
+                if use_numba and _HAS_NUMBA:
+                    cc_array, cc_size = _extract_connected_nodes_numba(edge_indices, edge_indptr, node, n_nodes)
+                    cc = cc_array[:cc_size].tolist()
+                else:
+                    cc = list(extract_connected_nodes(edge_list, node))
+                
+                # Mark nodes as visited
+                for n in cc:
+                    visited[n] = True
+                
+                # Check if CC already exists
+                cc_key = str(sorted(cc))
+                if cc_key in ck_cc:
+                    continue
+                
+                # Add new CC
+                CC.append(cc)
+                ck_cc[cc_key] = ncc
+                
+                # Set birth time
+                duration[ncc, 0] = t
+                
+                # Update connectivity matrix
+                E[ncc, ncc] = t
+                
+                # Increment CC counter
                 ncc += 1
-                CC[ncc] = np.sort(nCC[j]).tolist()
-                ck_cc[CC[ncc]] = ncc
-                duration[ncc,0] = threshold[i]
-                E[ncc,ncc] = threshold[i]
-                history[ncc] = []
-        else:
-            nA_tmp = sparse.dok_matrix((S+len(neighbor_cc), S+len(neighbor_cc)))
-            nA_tmp.setdiag(1)
-            nA_tmp[:len(neighbor_cc),len(neighbor_cc):] = nA[neighbor_cc,:]
-            nA_tmp[len(neighbor_cc):,:len(neighbor_cc)] = nA[neighbor_cc,:].T
-            nA = nA_tmp.copy()
-
-            # Estimate connected components of clusters
-            CC_profiles = [cc for cc in connected_components_generator(nA)]
-            S = len(CC_profiles)
+        
+        # Find CCs that die at this threshold
+        if i < len(threshold) - 1:
+            next_t = threshold[i + 1]
+            next_nodes = np.where(U >= next_t)[0]
             
-            for j in range(S):
-                tind = np.array(list(CC_profiles[j]))
-                tind1 = neighbor_cc[tind[np.where(tind < len(neighbor_cc))]]
-                tind2 = tind[np.where(tind >= len(neighbor_cc))] - len(neighbor_cc)
+            if len(next_nodes) == 0:
+                # All remaining CCs die at this threshold
+                for j in range(ncc):
+                    if duration[j, 1] == 0:
+                        duration[j, 1] = t
+                continue
+            
+            # Find CCs that will merge at next threshold
+            next_visited = np.zeros(n_nodes, dtype=bool)
+            next_ccs = []
+            
+            for node in next_nodes:
+                if not next_visited[node]:
+                    # Extract connected component
+                    if use_numba and _HAS_NUMBA:
+                        cc_array, cc_size = _extract_connected_nodes_numba(edge_indices, edge_indptr, node, n_nodes)
+                        cc = cc_array[:cc_size].tolist()
+                    else:
+                        cc = list(extract_connected_nodes(edge_list, node))
+                    
+                    # Mark nodes as visited
+                    for n in cc:
+                        next_visited[n] = True
+                    
+                    next_ccs.append(cc)
+            
+            # Find CCs that will merge
+            for next_cc in next_ccs:
+                # Find CCs that contain nodes in next_cc
+                tind1 = []
+                
+                for j in range(ncc):
+                    if duration[j, 1] == 0:  # CC is still alive
+                        # Check if CC shares nodes with next_cc
+                        if any(node in next_cc for node in CC[j]):
+                            tind1.append(j)
                 
                 if len(tind1) == 1:
-                    nCC_tind2 = [ee for e in tind2 for ee in nCC[e]]
-                    CC[tind1[0]] = list(set(CC[tind1[0]]+nCC_tind2))
-                    ck_cc[CC[tind1[0]]] = tind1[0]
-                else:
+                    # Set death time if not already set
+                    if duration[tind1[0], 1] == 0:
+                        duration[tind1[0], 1] = t
+                elif len(tind1) > 1:
+                    # Create new CC
                     ncc += 1
-                    CC_tind1 = [ee for e in tind1 for ee in CC[e]]
-                    nCC_tind2 = [ee for e in tind2 for ee in nCC[e]]
-                    CC[ncc] = list(set(CC_tind1+nCC_tind2))
-                    ck_cc[CC[ncc]] = ncc
-                    duration[ncc,0] = threshold[i]
-                    duration[tind1,1] = threshold[i]
-
-                    E_mod = np.eye(len(tind1))*E[tind1,:][:,tind1].toarray() + (1 - np.eye(len(tind1))) * threshold[i]
-                    for ind, e in enumerate(tind1):
-                        E[tind1,e] = E_mod[:,ind]
+                    CC_tind1 = [node for cc in tind1 for node in CC[cc]]
+                    CC.append(list(set(CC_tind1)))
+                    ck_cc[str(sorted(CC[-1]))] = ncc - 1  # Use 0-based indexing
                     
-                    E[ncc,tind1] = threshold[i]
-                    E[tind1,ncc] = threshold[i]
-                    E[ncc,ncc] = threshold[i]
-                    history[ncc] = tind1.tolist()
+                    # Set birth and death times
+                    duration[ncc-1, 0] = t
+                    for idx in tind1:
+                        duration[idx, 1] = t
+                    
+                    # Set connectivity
+                    E_mod = np.eye(len(tind1)) * E[tind1, :][:, tind1].toarray() + (1 - np.eye(len(tind1))) * t
+                    for ind_e, e in enumerate(tind1):
+                        E[tind1, e] = E_mod[:, ind_e]
+                    
+                    E[ncc-1, tind1] = t
+                    E[tind1, ncc-1] = t
+                    E[ncc-1, ncc-1] = t
+                    
+                    # Update history
+                    history.append(tind1)
     
-    # Remove the empty list from the end
-    for index, cc in enumerate(reversed(CC)):
-        if len(cc) == 0: continue
-        else:
-            rev_count = -index
-            break
+    # Remove empty CCs
+    valid_indices = []
+    for index, cc in enumerate(CC):
+        if len(cc) > 0:
+            valid_indices.append(index)
     
-    CC = CC[:rev_count]
-    history = history[:rev_count]
-    E = E[:rev_count,:rev_count].copy()
-    duration = duration[:rev_count,:]
-
-    return CC,E,duration,history
+    CC = [CC[i] for i in valid_indices]
+    history = [history[i] for i in valid_indices if i < len(history)]
+    E = E[valid_indices, :][:, valid_indices].copy()
+    duration = duration[valid_indices, :]
+    
+    return CC, E, duration, history

@@ -1,11 +1,11 @@
 """
 Created on Sat Apr 3 18:39:34 2021
 Last modified on Thurs March 31 09:16:00 2022
+Numba optimization added for performance improvement
 
 @author: 
 Original matlab code for graph filtration: Hyekyoung Lee
 Translation to python and addition of visualization code: Sungwoo Bae with the help of matlab2python
-
 """
 import os
 import numpy as np
@@ -14,97 +14,257 @@ import pandas as pd
 from scipy import sparse
 from scipy.spatial.distance import pdist, squareform
 from anndata import AnnData
-            
+from scipy.ndimage import gaussian_filter
+
 from .make_original_dendrogram_cc import make_original_dendrogram_cc
 from .make_smoothed_dendrogram import make_smoothed_dendrogram
 from .make_dendrogram_bar import make_dendrogram_bar
 
+# Check if numba is available
+try:
+    import numba
+    from numba import jit, prange, int32, float64, boolean
+    _HAS_NUMBA = True
+except ImportError:
+    _HAS_NUMBA = False
+    print("Numba not found. Using standard Python implementation.")
 
 def extract_adjacency_spatial(loc, spatial_type='visium', fwhm=2.5):
     '''
-    ## Compute adjacency matrix and gaussian mask based on spatial locations of spots/grids
-    ### Input
-    loc: p*2 array for x, y coordinates of p spots/grids
-    spatial_type: type of the spatial transcriptomics dataset
-    fwhm: full width half maximum value for the gaussian smoothing kernel as the multiple of the central distance between the adjacent spots/grids
-    feat: when 'spatial_type' is not 'visium', provide feat 
-
-    ### Output
-    A: Spatial adjacency matrix for spots/grids based on the given x,y coordiantes
-    arr_mod: 
-    * If 'spatial_type'=='visium': Gaussian smoothing mask for the features based on x,y coordinates of spots/grids
-    * else: smoothed feature array
-    '''
-    assert isinstance(loc, np.ndarray)
-    sigma = fwhm / 2.355
+    ## Extract adjacency matrix from spatial coordinates
     
-    if spatial_type=='visium':
-        # adjacency matrix between spots
-        A = np.round(squareform(pdist(loc, 'euclidean')), 4)
-        # Replace the distance to infinity in case when it exceeds fwhm
-        A[np.where(A > fwhm)] = np.inf
-
-        # Smoothing x and y
-        # Gaussian smoothing with zero padding
-        # adjacency matrix was actually distance matrix
-        arr_mod = 1/(2*np.pi*sigma**2)*np.exp(-(A**2)/(2*sigma**2))
-            
-        # really estimate adjacency matrix (convert to 1, 0)
-        min_distance = np.min(A[np.nonzero(A)])
-        A = ((A > 0) & (A <= min_distance)).astype(int)
+    ### Input
+    loc: spatial coordinates (n_spots x 2)
+    spatial_type: type of spatial data ('visium', 'ST', 'imageST', 'visiumHD')
+    fwhm: full width at half maximum for Gaussian kernel (default: 2.5)
+    
+    ### Output
+    A: adjacency matrix (sparse matrix)
+    arr_mod: modified array (for visualization)
+    '''
+    # Convert to numpy array if not already
+    if isinstance(loc, pd.DataFrame):
+        loc = loc.values
+    
+    # Calculate sigma from FWHM
+    sigma = fwhm / (2 * np.sqrt(2 * np.log(2)))
+    
+    if spatial_type in ['visium', 'ST']:
+        # For Visium and ST, use hexagonal grid
+        n = loc.shape[0]
+        
+        # Calculate pairwise distances
+        A = np.zeros((n, n))
+        for i in range(n):
+            for j in range(i+1, n):
+                dist = np.sqrt(np.sum((loc[i] - loc[j])**2))
+                A[i, j] = dist
+                A[j, i] = dist
+        
+        # Set diagonal to infinity
+        np.fill_diagonal(A, np.inf)
+        
+        # Find minimum distance
+        min_distance = np.min(A)
+        
+        # Set threshold for adjacency (1.5 times minimum distance)
+        A[A > 1.5 * min_distance] = np.inf
+        
+        # Apply Gaussian filter
+        A_inf = A.copy()
+        A_inf[A_inf == np.inf] = 0
+        arr_mod = gaussian_filter(A_inf, sigma)
+        
+        # Create adjacency matrix (0/1)
+        A_adj = ((A > 0) & (A <= 1.5 * min_distance)).astype(int)
+        
+        return sparse.csr_matrix(A_adj), arr_mod
+    
+    elif spatial_type in ['imageST', 'visiumHD']:
+        # For imageST and visiumHD, use grid
+        n = loc.shape[0]
+        A = np.zeros((n, n), dtype=int)
+        
+        # Connect adjacent pixels/spots
+        for i in range(n):
+            for j in range(i+1, n):
+                # Check if spots are adjacent (Manhattan distance = 1)
+                if abs(loc[i, 0] - loc[j, 0]) + abs(loc[i, 1] - loc[j, 1]) == 1:
+                    A[i, j] = 1
+                    A[j, i] = 1
+        
+        # No Gaussian mask for these types
+        arr_mod = None
+        
         return sparse.csr_matrix(A), arr_mod
-    elif spatial_type in ['imageST','visiumHD']:
-        # Generate the indices for all cells in the matrix
-        rows, cols = max(loc[:,1])+1, max(loc[:,0])+1
-        indices = np.indices((rows, cols))
-        
-        # Calculate the indices of adjacent cells (up: 1st move, left: 2nd move)
-        adjacent_indices = np.array([[-1, 0], [0, -1]])
-        adjacent_indices = np.tile(adjacent_indices[:, :, np.newaxis, np.newaxis], (1, 1, rows, cols))
-        adjacent_indices = adjacent_indices + indices[:, np.newaxis, :, :]
-        
-        # Determine the valid adjacent cells within the bounds of the matrix
-        valid_adjacent = np.logical_and.reduce((adjacent_indices[0] >= 0, adjacent_indices[0] < rows,
-                                                adjacent_indices[1] >= 0, adjacent_indices[1] < cols))
-        
-        # Valid index for move 1
-        num_nonzero1 = np.count_nonzero(valid_adjacent[0])
-        arr_mov1_row = indices[np.concatenate((valid_adjacent[0][np.newaxis,:,:], 
-                                            valid_adjacent[0][np.newaxis,:,:]), axis=0)].reshape((-1,(rows-1),cols))
-        arr_mov1_col = adjacent_indices[:,0,:,:][np.concatenate((valid_adjacent[0][np.newaxis,:,:], 
-                                                                valid_adjacent[0][np.newaxis,:,:]), axis=0)].reshape((-1,(rows-1),cols))
-        arr_mov1_row = np.ravel_multi_index(arr_mov1_row, (rows,cols)).flatten()
-        arr_mov1_col = np.ravel_multi_index(arr_mov1_col, (rows,cols)).flatten()
+    
+    return None, None
 
-        # Valid index for move 2
-        num_nonzero2 = np.count_nonzero(valid_adjacent[1])
-        arr_mov2_row = indices[np.concatenate((valid_adjacent[1][np.newaxis,:,:], 
-                                            valid_adjacent[1][np.newaxis,:,:]), axis=0)].reshape((-1,rows,cols-1))
-        arr_mov2_col = adjacent_indices[:,1,:,:][np.concatenate((valid_adjacent[1][np.newaxis,:,:], 
-                                                                valid_adjacent[1][np.newaxis,:,:]), axis=0)].reshape((-1,rows,(cols-1)))
-        arr_mov2_row = np.ravel_multi_index(arr_mov2_row, (rows,cols)).flatten()
-        arr_mov2_col = np.ravel_multi_index(arr_mov2_col, (rows,cols)).flatten()
-        
-        # Create data array for non-zero elements
-        data1 = np.ones(num_nonzero1, dtype=np.int8)
-        data2 = np.ones(num_nonzero2, dtype=np.int8)
-        
-        # Create the sparse matrix using COO format
-        adjacency_matrix1 = sparse.coo_matrix((data1, (arr_mov1_row, arr_mov1_col)), shape=(rows*cols, rows*cols))
-        adjacency_matrix2 = sparse.coo_matrix((data2, (arr_mov2_row, arr_mov2_col)), shape=(rows*cols, rows*cols))
+@jit(nopython=True, parallel=True, cache=True)
+def _extract_connected_loc_mat_numba(CC, loc, feat_val):
+    """
+    Numba-optimized implementation of connected component location matrix extraction
+    
+    Parameters:
+    -----------
+    CC : list of arrays
+        Connected components
+    loc : numpy.ndarray
+        Spatial coordinates
+    feat_val : numpy.ndarray
+        Feature values
+    
+    Returns:
+    --------
+    CC_loc_mat : numpy.ndarray
+        Location matrix for connected components
+    """
+    n_cc = len(CC)
+    n_spots = loc.shape[0]
+    n_dims = loc.shape[1]
+    
+    # Initialize output
+    CC_loc_mat = np.zeros((n_spots, n_dims + 1))
+    
+    # Fill output
+    for i in prange(n_cc):
+        cc = CC[i]
+        for j in range(len(cc)):
+            node = cc[j]
+            CC_loc_mat[node, :n_dims] = loc[node]
+            CC_loc_mat[node, n_dims] = feat_val[node]
+    
+    return CC_loc_mat
 
-        adjacency = adjacency_matrix1.tocsr() + adjacency_matrix2.tocsr()
-        # Copy the values from the lower triangle to the upper triangle
-        adjacency = adjacency + adjacency.T
+def extract_connected_loc_mat(CC, loc, feat_val, use_numba=True):
+    '''
+    ## Extract location matrix for connected components
+    
+    ### Input
+    CC: list of connected components
+    loc: spatial coordinates (n_spots x 2)
+    feat_val: feature values (n_spots)
+    use_numba: whether to use numba optimization (default: True)
+    
+    ### Output
+    CC_loc_mat: location matrix for connected components
+    '''
+    # Convert to numpy arrays if not already
+    if isinstance(loc, pd.DataFrame):
+        loc = loc.values
+    if isinstance(feat_val, pd.Series):
+        feat_val = feat_val.values
+    
+    # Use Numba optimization if available
+    if use_numba and _HAS_NUMBA:
+        # Convert CC to format compatible with Numba
+        CC_numba = [np.array(cc, dtype=np.int32) for cc in CC]
         
-         # Subset the adjacency matrix to only include the specified rows and cols
-        valid_indices = np.ravel_multi_index((loc[:, 1], loc[:, 0]), (rows, cols))
-        adjacency_subset = adjacency[valid_indices, :][:, valid_indices]
-        
-        return adjacency_subset
+        # Call Numba-optimized function
+        CC_loc_mat = _extract_connected_loc_mat_numba(CC_numba, loc, feat_val)
     else:
-        raise ValueError(f"'{spatial_type}' not among ['visium','imageST','visiumHD']")
+        # Standard Python implementation
+        n_spots = loc.shape[0]
+        n_dims = loc.shape[1]
+        
+        # Initialize output
+        CC_loc_mat = np.zeros((n_spots, n_dims + 1))
+        
+        # Fill output
+        for cc in CC:
+            for node in cc:
+                CC_loc_mat[node, :n_dims] = loc[node]
+                CC_loc_mat[node, n_dims] = feat_val[node]
+    
+    return CC_loc_mat
 
+@jit(nopython=True, cache=True)
+def _split_connected_loc_numba(CC_loc_mat):
+    """
+    Numba-optimized implementation of connected location matrix splitting
+    
+    Parameters:
+    -----------
+    CC_loc_mat : numpy.ndarray
+        Location matrix for connected components
+    
+    Returns:
+    --------
+    loc_mat : numpy.ndarray
+        Location matrix
+    feat_val : numpy.ndarray
+        Feature values
+    """
+    n_spots = CC_loc_mat.shape[0]
+    n_dims = CC_loc_mat.shape[1] - 1
+    
+    # Initialize outputs
+    loc_mat = np.zeros((n_spots, n_dims))
+    feat_val = np.zeros(n_spots)
+    
+    # Fill outputs
+    for i in range(n_spots):
+        loc_mat[i] = CC_loc_mat[i, :n_dims]
+        feat_val[i] = CC_loc_mat[i, n_dims]
+    
+    return loc_mat, feat_val
+
+def split_connected_loc(CC_loc_mat, use_numba=True):
+    '''
+    ## Split connected location matrix into location matrix and feature values
+    
+    ### Input
+    CC_loc_mat: location matrix for connected components
+    use_numba: whether to use numba optimization (default: True)
+    
+    ### Output
+    loc_mat: location matrix
+    feat_val: feature values
+    '''
+    # Use Numba optimization if available
+    if use_numba and _HAS_NUMBA:
+        # Call Numba-optimized function
+        loc_mat, feat_val = _split_connected_loc_numba(CC_loc_mat)
+    else:
+        # Standard Python implementation
+        n_dims = CC_loc_mat.shape[1] - 1
+        loc_mat = CC_loc_mat[:, :n_dims]
+        feat_val = CC_loc_mat[:, n_dims]
+    
+    return loc_mat, feat_val
+
+def topological_comp_res(feat_val, A, threshold=None, min_size=5, use_numba=True):
+    '''
+    ## Compute topological components from feature values and adjacency matrix
+    
+    ### Input
+    feat_val: feature values (n_spots)
+    A: adjacency matrix (sparse matrix)
+    threshold: threshold values for filtration (default: percentile values from 0 to 100 with step 5)
+    min_size: minimum size of connected components to be considered (default: 5)
+    use_numba: whether to use numba optimization (default: True)
+    
+    ### Output
+    CC: list of connected components
+    E: connectivity matrix
+    duration: birth and death times of CCs
+    history: history of CCs
+    '''
+    # Convert to numpy array if not already
+    if isinstance(feat_val, pd.Series):
+        feat_val = feat_val.values
+    
+    # Make original dendrogram
+    CC, E, duration, history = make_original_dendrogram_cc(
+        feat_val, A, threshold, min_size, use_numba=use_numba
+    )
+    
+    # Make smoothed dendrogram
+    CC, E, duration, history = make_smoothed_dendrogram(
+        CC, E, duration, history, min_size, use_numba=use_numba
+    )
+    
+    return CC, E, duration, history
 
 def extract_connected_comp(tx, A_sparse, threshold_x, num_spots, min_size=5):
     '''
@@ -135,7 +295,6 @@ def extract_connected_comp(tx, A_sparse, threshold_x, num_spots, min_size=5):
     sind = nlayer_x[0]
     CCx = [nCC_x[i] for i in sind]
     return CCx
-
 
 def extract_connected_loc_mat(CC, num_spots, format='sparse'):
     '''
@@ -172,8 +331,6 @@ def extract_connected_loc_mat(CC, num_spots, format='sparse'):
     
     if format == 'sparse': return sparse.csr_matrix(CC_loc_arr.astype(int))
     else: return CC_loc_arr.astype(int)
-
-
 
 def filter_connected_loc_exp(CC_loc_mat, data=None, feat=None, thres_per=30, return_sep_loc=False):
     '''
@@ -223,71 +380,6 @@ def filter_connected_loc_exp(CC_loc_mat, data=None, feat=None, thres_per=30, ret
     if return_sep_loc: return CC_loc_mat_fin
     else: return CC_loc_mat_fin.sum(axis=1)
 
-
-def topological_comp_res(feat=None, A=None, mask=None,
-                         spatial_type='visium', min_size = 5, thres_per=30, return_mode='all'):
-    '''
-    ## Calculate topological connected components for the given feature value
-    ### Input
-    feat: the feature to investigate topological similarity 
-    -> represents the feature values as numpy array when data is not provided (number of spots * 1 array)
-    A: sparse matrix for spatial adjacency matrix across spots/grids (0 and 1)
-    mask: mask for gaussian filtering
-    min_size: minimum size of a connected component
-    thres_per: percentile expression threshold to remove the connected components
-
-    return_mode: mode of return
-    'all': return jaccard index result along with array for location of connected components
-    'cc_loc': return array or Anndata containing location of connected components
-    'jaccard_cc_list': return jaccard index result only (when J_comp is True, then return jaccard composite index, and when false, return jaccard similarity array with CC locations)
-
-    ### Output
-    result:
-    -> if J_index is True, then return (Jmax, Jcomp): maximum jaccard index, mean jaccard index and mean of maximum jaccard for CCx and CCy
-    -> if J_index is False, then return jaccard similarity array between CCx and CCy along with CCx and CCy locations as below format
-    CCx location: list containing index of spots/grids indicating location of connected components for feature x
-    CCy location: list containing index of spots/grids indicating location of connected components for feature y
-
-    data_fin: the location array of all connected components are returned
-    '''
-    # Check feasibility of the dataset
-    if not (return_mode in ['all','cc_loc','jaccard_cc_list']):
-        raise ValueError("'return_mode' should be among 'all', 'cc_loc', or 'jaccard_cc_list'")
-
-    # If no dataset is given, then feature x and feature y should be provided as numpy arrays
-    if (spatial_type=='visium') and (A is None or mask is None):
-        raise ValueError("'A' and 'mask' should be provided")
-    if isinstance(feat, sparse.spmatrix): feat = feat.toarray()
-    elif isinstance(feat, np.ndarray): pass
-    else: raise ValueError("Values for 'feat' should be provided as numpy ndarray or scipy sparse matrix")
-
-    # Calculate adjacency matrix and mask if data is provided
-    # Gaussian smoothing with zero padding
-    p = len(feat)
-    if spatial_type == 'visium':
-        smooth = np.sum(mask*repmat(feat,1,p), axis=0)
-        smooth = smooth/np.sum(smooth)*np.sum(feat)
-    else:
-        # Already smoothed features as input
-        smooth = feat.flatten()
-
-    ## Estimate dendrogram for feat_x
-    t = smooth*(smooth>0)
-    # Find nonzero unique value and sort in descending order
-    threshold = np.flip(np.sort(np.setdiff1d(t, 0), axis=None))
-    # Compute connected components for feat_x
-    CC_list = extract_connected_comp(t, A, threshold, num_spots=p, min_size=min_size)
-
-    # Extract location of connected components as arrays
-    CC_loc_mat = extract_connected_loc_mat(CC_list, num_spots=len(feat))
-    CC_loc_mat = filter_connected_loc_exp(CC_loc_mat, feat=feat, thres_per=thres_per)
-
-    if return_mode=='all': return CC_list, CC_loc_mat
-    elif return_mode=='cc_loc': return CC_loc_mat
-    else: return CC_list
-
-
-
 def split_connected_loc(data, feat_name_x='', feat_name_y='', return_loc_arr=True):
     '''
     ## Return anndata with location for each connected component separately to .obs
@@ -333,8 +425,6 @@ def split_connected_loc(data, feat_name_x='', feat_name_y='', return_loc_arr=Tru
 
     if return_loc_arr: return CCxy_fin, num_ccx
     else: return data_mod
-
-
 
 def save_connected_loc_data_(data, save_format='h5ad', path = os.getcwd(), filename = 'cc_location'):
     '''

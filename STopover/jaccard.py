@@ -3,39 +3,135 @@ import pandas as pd
 
 from scipy.spatial.distance import pdist, squareform
 from scipy import sparse
+from numba import jit
 
 from .topological_comp import split_connected_loc
 from .topological_comp import extract_connected_loc_mat
 
+# Check if numba is available
+try:
+    import numba
+    _HAS_NUMBA = True
+except ImportError:
+    _HAS_NUMBA = False
+    print("Numba not found. Using standard Python implementation.")
 
-def jaccard_composite(CCx_loc_sum, CCy_loc_sum, feat_x=None, feat_y=None):
+@jit(nopython=True, cache=True)
+def jaccard_similarity_numba(x, y):
+    """
+    Numba-optimized implementation of Jaccard similarity
+    
+    Parameters:
+    -----------
+    x, y : numpy.ndarray
+        Binary arrays
+    
+    Returns:
+    --------
+    j : float
+        Jaccard similarity
+    """
+    intersection = np.sum((x != 0) & (y != 0))
+    union = np.sum((x != 0) | (y != 0))
+    
+    if union > 0:
+        return intersection / union
+    else:
+        return 0.0
+
+@jit(nopython=True, cache=True)
+def weighted_jaccard_similarity_numba(x, y, feat_x, feat_y):
+    """
+    Numba-optimized implementation of weighted Jaccard similarity
+    
+    Parameters:
+    -----------
+    x, y : numpy.ndarray
+        Binary arrays
+    feat_x, feat_y : numpy.ndarray
+        Feature values
+    
+    Returns:
+    --------
+    j : float
+        Weighted Jaccard similarity
+    """
+    # Normalize feature values
+    feat_x_norm = (feat_x - np.min(feat_x)) / (np.max(feat_x) - np.min(feat_x) + 1e-10)
+    feat_y_norm = (feat_y - np.min(feat_y)) / (np.max(feat_y) - np.min(feat_y) + 1e-10)
+    
+    # Apply binary masks
+    feat_x_masked = feat_x_norm * (x != 0)
+    feat_y_masked = feat_y_norm * (y != 0)
+    
+    # Calculate weighted Jaccard
+    sum_min = np.sum(np.minimum(feat_x_masked, feat_y_masked))
+    sum_max = np.sum(np.maximum(feat_x_masked, feat_y_masked))
+    
+    if sum_max > 0:
+        return sum_min / sum_max
+    else:
+        return 0.0
+
+
+def jaccard_composite(CCx_loc_sum, CCy_loc_sum, feat_x=None, feat_y=None, use_numba=True):
     '''
     ## Calculate jaccard composite index from the connected component location array
     ### Input
     CCx_loc_sum, CCy_loc_sum: numpy ndarray or scipy sparse matrix (shape: (-1,1)) representing the summed connected component location (x or y) in one column
     feat_x, feat_y: feature values corresponding to the feature x and y (shape: (-1,1))
+    use_numba: whether to use Numba-optimized functions
     
     ### Output
     return composite jaccard simliarity index calculated between all CCx and all CCy (jaccard between all connected components)
     '''
-    if isinstance(CCx_loc_sum, np.ndarray) and isinstance(CCy_loc_sum, np.ndarray): 
-        CCxy_loc_sum = np.concatenate((CCx_loc_sum, CCy_loc_sum), axis=1)
-    elif isinstance(CCx_loc_sum, sparse.spmatrix) and isinstance(CCy_loc_sum, sparse.spmatrix): 
-        CCxy_loc_sum = np.concatenate((CCx_loc_sum.toarray(), CCy_loc_sum.toarray()), axis=1)
-    else: raise ValueError("'CCx_loc' and 'CCy_loc' should be both numpy ndarray or scipy sparse matrix")
+    # Convert sparse matrices to dense if necessary
+    if isinstance(CCx_loc_sum, sparse.spmatrix): 
+        CCx_loc_sum = CCx_loc_sum.toarray()
+    if isinstance(CCy_loc_sum, sparse.spmatrix): 
+        CCy_loc_sum = CCy_loc_sum.toarray()
+    
+    # Ensure arrays are 2D
+    if CCx_loc_sum.ndim == 1:
+        CCx_loc_sum = CCx_loc_sum.reshape(-1, 1)
+    if CCy_loc_sum.ndim == 1:
+        CCy_loc_sum = CCy_loc_sum.reshape(-1, 1)
+    
+    # Concatenate arrays
+    CCxy_loc_sum = np.concatenate((CCx_loc_sum, CCy_loc_sum), axis=1)
 
-    if np.count_nonzero(CCxy_loc_sum) == 0: J_comp = 0
+    if np.count_nonzero(CCxy_loc_sum) == 0: 
+        J_comp = 0
     else:
         if (feat_x is None) and (feat_y is None):
-            J_comp = 1 - pdist((CCxy_loc_sum != 0).T, 'jaccard')[0]
+            if use_numba and _HAS_NUMBA:
+                # Use numba-optimized function
+                J_comp = jaccard_similarity_numba(CCx_loc_sum, CCy_loc_sum)
+            else:
+                # Use scipy pdist
+                J_comp = 1 - pdist((CCxy_loc_sum != 0).T, 'jaccard')[0]
         else:
-            if isinstance(feat_x, np.ndarray) and isinstance(feat_y, np.ndarray): 
-                feat_val = np.concatenate((feat_x, feat_y), axis=1)
-            elif isinstance(feat_x, sparse.spmatrix) and isinstance(feat_y, sparse.spmatrix): 
-                feat_val = np.concatenate((feat_x.toarray(), feat_y.toarray()), axis=1)
-            else: raise ValueError("'feat_x' and 'feat_y' should be both numpy ndarray or scipy sparse matrix")
-            feat_val = np.array(CCxy_loc_sum != 0)*(feat_val-feat_val.min(axis=0))/(feat_val.max(axis=0)-feat_val.min(axis=0))
-            J_comp = np.sum(feat_val.min(axis=1))/np.sum(feat_val.max(axis=1))
+            if isinstance(feat_x, sparse.spmatrix): 
+                feat_x = feat_x.toarray()
+            if isinstance(feat_y, sparse.spmatrix): 
+                feat_y = feat_y.toarray()
+            
+            # Ensure arrays are 2D
+            if feat_x.ndim == 1:
+                feat_x = feat_x.reshape(-1, 1)
+            if feat_y.ndim == 1:
+                feat_y = feat_y.reshape(-1, 1)
+            
+            # Concatenate feature values
+            feat_val = np.concatenate((feat_x, feat_y), axis=1)
+            
+            if use_numba and _HAS_NUMBA:
+                # Use numba-optimized function
+                J_comp = weighted_jaccard_similarity_numba(CCx_loc_sum, CCy_loc_sum, feat_x, feat_y)
+            else:
+                # Use original implementation
+                feat_val = np.array(CCxy_loc_sum != 0)*(feat_val-feat_val.min(axis=0))/(feat_val.max(axis=0)-feat_val.min(axis=0))
+                J_comp = np.sum(feat_val.min(axis=1))/np.sum(feat_val.max(axis=1))
     
     return J_comp
 

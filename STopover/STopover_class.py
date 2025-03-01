@@ -13,6 +13,14 @@ from .topological_vis import *
 
 import pkg_resources
 
+# Check if numba is available
+try:
+    import numba
+    _HAS_NUMBA = True
+except ImportError:
+    _HAS_NUMBA = False
+    print("Numba not found. Using standard Python implementation.")
+
 class STopover_visium(AnnData):
     '''
     ## Class to calculate connected component location and jaccard similarity indices in visium dataset
@@ -151,7 +159,7 @@ class STopover_visium(AnnData):
 
     def topological_similarity(self, feat_pairs=None, use_lr_db=False, lr_db_species='human', db_name='CellTalk',
                                group_name='batch', group_list=None, jaccard_type='default', J_result_name='result', 
-                               num_workers=os.cpu_count(), progress_bar=True):
+                               num_workers=os.cpu_count(), progress_bar=True, use_numba=True):
         if use_lr_db:
             feat_pairs = self.return_lr_db(lr_db_species=lr_db_species, db_name=db_name)
             if db_name=="Omnipath": 
@@ -178,7 +186,7 @@ class STopover_visium(AnnData):
         
         df, adata = topological_sim_pairs_(data=self, feat_pairs=feat_pairs, spatial_type=self.spatial_type, group_list=group_list, group_name=group_name,
                                             fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per, jaccard_type=jaccard_type,
-                                            num_workers=num_workers, progress_bar=progress_bar)
+                                            num_workers=num_workers, progress_bar=progress_bar, use_numba=use_numba and _HAS_NUMBA)
         # save jaccard index result in .uns of anndata
         adata.uns['_'.join(('J',str(J_result_name),str(self.J_count)))] = df
         # Initialize the object
@@ -186,7 +194,7 @@ class STopover_visium(AnnData):
 
       
     def run_significance_test(self, feat_pairs_sig_test=None, nperm=1000, seed=0, 
-                              jaccard_type='default', num_workers=os.cpu_count(), progress_bar=True):
+                              jaccard_type='default', num_workers=os.cpu_count(), progress_bar=True, use_numba=True):
         '''
         ## Perform a significant test using a permutation test and calculate p-values
         * feat_pairs_sig_test: feature pairs for the significance test (default: None -> Test all saved in .uns)
@@ -203,7 +211,7 @@ class STopover_visium(AnnData):
         
         df, adata = run_permutation_test(self, feat_pairs_sig_test, nperm=nperm, seed=seed, spatial_type = self.spatial_type,
                                          fwhm=self.fwhm, min_size=self.min_size, thres_per=self.thres_per, jaccard_type=jaccard_type,
-                                         num_workers=num_workers, progress_bar=progress_bar)
+                                         num_workers=num_workers, progress_bar=progress_bar, use_numba=use_numba and _HAS_NUMBA)
         
         # save jaccard index result in .uns of anndata
         adata.uns['_'.join((adata_keys[-1], 'sig'))] = df
@@ -252,23 +260,27 @@ class STopover_visium(AnnData):
         * if J_comp is False, then return pairwise jaccard similarity array between CCx and CCy (dim 0: CCx, dim 1: CCy)
         '''
         J_result = jaccard_and_connected_loc_(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y, J_comp=J_comp, 
-                                              jaccard_type=jaccard_type, return_mode='jaccard', return_sep_loc=False)
+                                              jaccard_type=jaccard_type, return_mode='jaccard', return_sep_loc=False, 
+                                              use_numba=use_numba and _HAS_NUMBA)
         return J_result
 
 
-    def jaccard_top_n_connected_loc(self, feat_name_x='', feat_name_y='', top_n = 2, jaccard_type='default'):
+    def jaccard_top_n_connected_loc(self, feat_name_x='', feat_name_y='', top_n = 2, jaccard_type='default', use_numba=True):
         '''
         ## Calculate top n connected component locations for given feature pairs x and y
         ### Input
         * feat_name_x, feat_name_y: name of the feature x and y
         * top_n: the number of the top connected components to be found
         * jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
+        * use_numba: whether to use numba optimization (default: True)
 
         ### Output
         * AnnData with intersecting location of top n connected components between feature x and y saved in metadata(.obs)
             -> top 1, 2, 3, ... intersecting connected component locations are separately saved
         '''
-        adata, J_top_n = jaccard_top_n_connected_loc_(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y, top_n = top_n, jaccard_type=jaccard_type)
+        adata, J_top_n = jaccard_top_n_connected_loc_(data=self, feat_name_x=feat_name_x, feat_name_y=feat_name_y, 
+                                                      top_n = top_n, jaccard_type=jaccard_type, 
+                                                      use_numba=use_numba and _HAS_NUMBA)
         adata.uns['_'.join(('J_top',feat_name_x, feat_name_y, str(top_n)))] = J_top_n
         # Initialize the object
         self.reinitalize(sp_adata=adata, lognorm=False, min_size=self.min_size, fwhm=self.fwhm, thres_per=self.thres_per, save_path=self.save_path, J_count=self.J_count+1)
@@ -485,7 +497,7 @@ class STopover_imageST(STopover_visium):
 
 
     def topological_similarity_celltype_pair(self, celltype_x='', celltype_y='', feat_pairs=None, use_lr_db=False, lr_db_species='human', db_name='CellTalk',
-                                             group_name='batch', group_list=None, jaccard_type='default', J_result_name='result', num_workers=os.cpu_count(), progress_bar=True):
+                                             group_name='batch', group_list=None, jaccard_type='default', J_result_name='result', num_workers=os.cpu_count(), progress_bar=True, use_numba=True):
         '''
         ## Calculate Jaccard index between the two cell type-specific expression anndata of image-based ST data
         ### Input
@@ -493,6 +505,7 @@ class STopover_imageST(STopover_visium):
         * celltype_y: name of the cell type y (should be among the column names of .obs)
             when use_lr_db=True, then the ligand expression in celltype x and receptor expression in celltype y will be searched
         * other parameters: refer to the topological_similarity method
+        * use_numba: whether to use numba optimization (default: True)
         '''
         adata_x, adata_y = self.celltype_specific_adata(cell_types=[celltype_x, celltype_y])
         # Create combined anndata for two cell type specific count matrices
@@ -536,7 +549,8 @@ class STopover_imageST(STopover_visium):
         
         # Calculate topological similarites between the pairs from the two cell types  
         adata_xy.topological_similarity(feat_pairs=feat_pairs, use_lr_db=use_lr_db, lr_db_species=lr_db_species, db_name=db_name,
-                                        group_name=group_name, group_list=group_list, jaccard_type=jaccard_type, J_result_name=J_result_name, num_workers=num_workers, progress_bar=progress_bar)
+                                        group_name=group_name, group_list=group_list, jaccard_type=jaccard_type, J_result_name=J_result_name, 
+                                        num_workers=num_workers, progress_bar=progress_bar, use_numba=use_numba and _HAS_NUMBA)
         return adata_xy
 
 

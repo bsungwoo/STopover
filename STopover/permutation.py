@@ -1,3 +1,12 @@
+"""
+Created on Sat Apr 3 18:39:34 2021
+Last modified on Thurs March 31 09:16:00 2022
+Numba optimization added for performance improvement
+
+@author: 
+Original matlab code for graph filtration: Hyekyoung Lee
+Translation to python and addition of visualization code: Sungwoo Bae with the help of matlab2python
+"""
 import numpy as np
 import pandas as pd
 from scipy import sparse
@@ -7,11 +16,71 @@ import os
 import time
 import parmap
 
-from .topological_comp import extract_adjacency_spatial
-from .topological_comp import topological_comp_res
+from .topological_comp import extract_adjacency_spatial, topological_comp_res
 
-from .jaccard import jaccard_composite
+# Check if numba is available
+try:
+    import numba
+    from numba import jit, prange, int32, float64, boolean
+    from .numba_optimizations import (
+        extract_adjacency_spatial_numba, 
+        compute_jaccard_similarity_numba, 
+        compute_weighted_jaccard_similarity_numba,
+        optimized_parallel_processing,
+        shuffle_array_numba
+    )
+    _HAS_NUMBA = True
+except ImportError:
+    _HAS_NUMBA = False
+    print("Numba not found. Using standard Python implementation.")
 
+@jit(nopython=True, cache=True)
+def _shuffle_generator_numba(arr_length, seed, n_shuffles):
+    """
+    Numba-optimized function to generate multiple shuffled indices
+    
+    Parameters:
+    -----------
+    arr_length : int
+        Length of the array to shuffle
+    seed : int
+        Random seed
+    n_shuffles : int
+        Number of shuffles to generate
+        
+    Returns:
+    --------
+    shuffled_indices : numpy.ndarray
+        2D array of shuffled indices (n_shuffles x arr_length)
+    """
+    # Initialize random number generator with seed
+    np.random.seed(seed)
+    
+    # Initialize output array
+    shuffled_indices = np.zeros((n_shuffles, arr_length), dtype=np.int32)
+    
+    # Generate base array of indices
+    base_indices = np.arange(arr_length, dtype=np.int32)
+    
+    # Generate shuffled indices
+    for i in range(n_shuffles):
+        # Create a copy of the base indices
+        indices = base_indices.copy()
+        
+        # Fisher-Yates shuffle
+        for j in range(arr_length - 1, 0, -1):
+            # Generate random index
+            k = np.random.randint(0, j + 1)
+            
+            # Swap elements
+            temp = indices[j]
+            indices[j] = indices[k]
+            indices[k] = temp
+        
+        # Store shuffled indices
+        shuffled_indices[i] = indices
+    
+    return shuffled_indices
 
 def shuffle_generator(arr, seed):
     """
@@ -31,7 +100,6 @@ def shuffle_generator(arr, seed):
         shuffled_arr = rng.permutation(arr)  # This creates a shuffled copy of the array
         # Yield the shuffled array
         yield shuffled_arr
-    
 
 def calculate_p_value(group):
     """
@@ -46,10 +114,93 @@ def calculate_p_value(group):
     # Assign the p-value (it will be the same for all rows in the group, but you can assign it to the first row)
     return pd.Series({'p_value': p_value})
 
+@jit(nopython=True, cache=True)
+def _apply_gaussian_filter_numba(values, row_indices, col_indices, unique_rows, unique_cols, sigma):
+    """
+    Numba-optimized function to apply Gaussian filter to spatial data
+    
+    Parameters:
+    -----------
+    values : numpy.ndarray
+        Feature values (n_spots x n_features)
+    row_indices : numpy.ndarray
+        Row indices for each spot
+    col_indices : numpy.ndarray
+        Column indices for each spot
+    unique_rows : numpy.ndarray
+        Unique row coordinates
+    unique_cols : numpy.ndarray
+        Unique column coordinates
+    sigma : float
+        Sigma parameter for Gaussian filter
+        
+    Returns:
+    --------
+    smoothed_values : numpy.ndarray
+        Smoothed feature values (n_spots x n_features)
+    """
+    n_spots = values.shape[0]
+    n_features = values.shape[1]
+    n_rows = len(unique_rows)
+    n_cols = len(unique_cols)
+    
+    # Initialize 3D array for spatial data
+    arr = np.zeros((n_rows, n_cols, n_features))
+    
+    # Fill the array using the mapped indices
+    for i in range(n_spots):
+        row_idx = row_indices[i]
+        col_idx = col_indices[i]
+        for j in range(n_features):
+            arr[row_idx, col_idx, j] = values[i, j]
+    
+    # Apply Gaussian filter
+    smoothed = np.zeros((n_rows, n_cols, n_features))
+    
+    # Compute truncation distance
+    truncate = 2.355
+    radius = int(truncate * sigma + 0.5)
+    
+    # Apply filter manually
+    for i in range(n_rows):
+        for j in range(n_cols):
+            for k in range(n_features):
+                if arr[i, j, k] == 0:
+                    continue
+                
+                # Compute weighted sum
+                weighted_sum = 0.0
+                weight_sum = 0.0
+                
+                for ii in range(max(0, i - radius), min(n_rows, i + radius + 1)):
+                    for jj in range(max(0, j - radius), min(n_cols, j + radius + 1)):
+                        # Compute distance
+                        dist_sq = (ii - i)**2 + (jj - j)**2
+                        
+                        # Compute weight
+                        weight = np.exp(-dist_sq / (2 * sigma**2))
+                        
+                        # Update weighted sum
+                        weighted_sum += arr[ii, jj, k] * weight
+                        weight_sum += weight
+                
+                # Normalize
+                if weight_sum > 0:
+                    smoothed[i, j, k] = weighted_sum / weight_sum
+    
+    # Extract smoothed values for original spots
+    smoothed_values = np.zeros((n_spots, n_features))
+    for i in range(n_spots):
+        row_idx = row_indices[i]
+        col_idx = col_indices[i]
+        for j in range(n_features):
+            smoothed_values[i, j] = smoothed[row_idx, col_idx, j]
+    
+    return smoothed_values
 
-def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'visium',
+def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type='visium',
                          fwhm=2.5, min_size=5, thres_per=30, jaccard_type='default',
-                         num_workers=os.cpu_count(), progress_bar=True):
+                         num_workers=os.cpu_count(), progress_bar=True, use_numba=True):
     '''
     ## Calculate Jaccard index for given feature pairs and return dataframe
         -> if the group is given, divide the spatial data according to the group and calculate topological overlap separately in each group
@@ -77,6 +228,7 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
     jaccard_type: type of the jaccard index output ('default': jaccard index or 'weighted': weighted jaccard index)
     num_workers: number of workers to use for multiprocessing
     progress_bar: whether to show the progress bar during multiprocessing
+    use_numba: whether to use numba optimization (default: True)
 
     ### Output
     df_top_total: dataframe that contains spatial overlap measures represented by (Jmax, Jmean, Jmmx, Jmmy) for the feature pairs
@@ -157,8 +309,13 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
         df_tmp['Index_1'] = df_xy.loc[df_tmp.iloc[:,1]].reset_index()['index_x'].astype(int).values
         df_tmp['Index_2'] = df_xy.loc[df_tmp.iloc[:,2]].reset_index()['index_y'].astype(int).values
 
-        # Initialize the shuffle generator with the length of the DataFrame
-        shuffle_gen = shuffle_generator(np.arange(len(data_sub)), seed=seed)
+        # Generate shuffled indices using Numba if available
+        if use_numba and _HAS_NUMBA:
+            shuffled_indices = _shuffle_generator_numba(len(data_sub), seed, nperm)
+        else:
+            # Initialize the shuffle generator with the length of the DataFrame
+            shuffle_gen = shuffle_generator(np.arange(len(data_sub)), seed=seed)
+            shuffled_indices = np.array([next(shuffle_gen) for _ in range(nperm)])
 
         # Extract the non-overlapping feat list from group i and save index number corresponding to feature pairs
         if obs_tf_x != obs_tf_y:
@@ -194,37 +351,54 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
         
         # Add permuted feature results
         perm_list = []
-        for _ in range(nperm):
+        for perm_idx in range(nperm):
             if spatial_type=='visium':
-                perm_list.append(val_element[next(shuffle_gen),:])
+                perm_list.append(val_element[shuffled_indices[perm_idx],:])
             else:
                 sigma = fwhm / 2.355
                 cols, rows = df_loc['array_col'].values, df_loc['array_row'].values
 
-                # Convert val_element to a 3D array where each "slice" along the third axis corresponds to a feature
-                # Map unique coordinates to indices
-                unique_rows = np.unique(rows)
-                unique_cols = np.unique(cols)
-                row_indices = np.searchsorted(unique_rows, rows)
-                col_indices = np.searchsorted(unique_cols, cols)
-                # Initialize the array with the mapped dimensions
-                arr = np.zeros((len(unique_rows), len(unique_cols), val_element.shape[1]))
-                # Fill the array using the mapped indices
-                arr[row_indices, col_indices, :] = val_element
-            
-                # Apply the Gaussian filter along the first two dimensions for each feature simultaneously
-                smooth = gaussian_filter(arr, sigma=(sigma, sigma, 0), truncate=2.355, mode='constant')
-                # Normalize the smoothed array
-                smooth_sum = np.sum(smooth, axis=(0, 1), keepdims=True)
-                val_element_sum = np.sum(val_element, axis=0, keepdims=True)
-                smooth = smooth / smooth_sum * val_element_sum
+                # Apply Gaussian filter using Numba if available
+                if use_numba and _HAS_NUMBA:
+                    # Map unique coordinates to indices
+                    unique_rows = np.unique(rows)
+                    unique_cols = np.unique(cols)
+                    row_indices = np.searchsorted(unique_rows, rows)
+                    col_indices = np.searchsorted(unique_cols, cols)
+                    
+                    # Apply Gaussian filter using Numba
+                    smooth_subset = _apply_gaussian_filter_numba(
+                        val_element, row_indices, col_indices, 
+                        unique_rows, unique_cols, sigma
+                    )
+                    
+                    # Shuffle the smoothed values
+                    perm_list.append(smooth_subset[shuffled_indices[perm_idx], :])
+                else:
+                    # Convert val_element to a 3D array where each "slice" along the third axis corresponds to a feature
+                    # Map unique coordinates to indices
+                    unique_rows = np.unique(rows)
+                    unique_cols = np.unique(cols)
+                    row_indices = np.searchsorted(unique_rows, rows)
+                    col_indices = np.searchsorted(unique_cols, cols)
+                    # Initialize the array with the mapped dimensions
+                    arr = np.zeros((len(unique_rows), len(unique_cols), val_element.shape[1]))
+                    # Fill the array using the mapped indices
+                    arr[row_indices, col_indices, :] = val_element
                 
-                # Subset the smooth array using the original rows and cols indices
-                smooth_subset = smooth[row_indices, col_indices, :]
-                # Flatten the smoothed array along the first two dimensions
-                smooth_subset = smooth_subset.reshape(-1, val_element.shape[1])
-                # Append the shuffled smoothed array to perm_list
-                perm_list.append(smooth_subset[next(shuffle_gen), :])
+                    # Apply the Gaussian filter along the first two dimensions for each feature simultaneously
+                    smooth = gaussian_filter(arr, sigma=(sigma, sigma, 0), truncate=2.355, mode='constant')
+                    # Normalize the smoothed array
+                    smooth_sum = np.sum(smooth, axis=(0, 1), keepdims=True)
+                    val_element_sum = np.sum(val_element, axis=0, keepdims=True)
+                    smooth = smooth / smooth_sum * val_element_sum
+                    
+                    # Subset the smooth array using the original rows and cols indices
+                    smooth_subset = smooth[row_indices, col_indices, :]
+                    # Flatten the smoothed array along the first two dimensions
+                    smooth_subset = smooth_subset.reshape(-1, val_element.shape[1])
+                    # Append the shuffled smoothed array to perm_list
+                    perm_list.append(smooth_subset[shuffled_indices[perm_idx], :])
         val_list.append(perm_list)
 
     # Make dataframe for the list of feature 1 and 2 across the groups
@@ -234,8 +408,26 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
 
     # Start the multiprocessing for extracting adjacency matrix and mask
     print(f"Calculation of adjacency matrix for {spatial_type}")
-    adjacency_mask = parmap.map(extract_adjacency_spatial, loc_list, spatial_type=spatial_type, fwhm=fwhm,
-                                pm_pbar=progress_bar, pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))), pm_chunksize=50)
+    
+    # Use Numba-optimized function if available
+    if use_numba and _HAS_NUMBA:
+        adjacency_mask = optimized_parallel_processing(
+            extract_adjacency_spatial_numba if use_numba else extract_adjacency_spatial,
+            [(loc, spatial_type, fwhm) for loc in loc_list],
+            num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))),
+            progress_bar=progress_bar
+        )
+    else:
+        adjacency_mask = parmap.map(
+            extract_adjacency_spatial, 
+            loc_list, 
+            spatial_type=spatial_type, 
+            fwhm=fwhm,
+            pm_pbar=progress_bar, 
+            pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))), 
+            pm_chunksize=50
+        )
+    
     if spatial_type=='visium':
         feat_A_mask_pair = [(feat[perm_idx][:,feat_idx].reshape((-1,1)),
                             adjacency_mask[grp_idx][0], adjacency_mask[grp_idx][1]) \
@@ -249,9 +441,27 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
 
     # Start the multiprocessing for finding connected components of each feature
     print("Calculation of connected components for each feature")
-    output_cc = parmap.starmap(topological_comp_res, feat_A_mask_pair, spatial_type=spatial_type,
-                               min_size=min_size, thres_per=thres_per, return_mode='cc_loc',
-                               pm_pbar=progress_bar, pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5))))
+    
+    # Use Numba-optimized parallel processing if available
+    if use_numba and _HAS_NUMBA:
+        output_cc = optimized_parallel_processing(
+            topological_comp_res,
+            feat_A_mask_pair,
+            num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))),
+            progress_bar=progress_bar,
+            kwargs={'spatial_type': spatial_type, 'min_size': min_size, 
+                   'thres_per': thres_per, 'return_mode': 'cc_loc', 'use_numba': use_numba}
+        )
+    else:
+        output_cc = parmap.starmap(
+            topological_comp_res, 
+            feat_A_mask_pair, 
+            spatial_type=spatial_type,
+            min_size=min_size, 
+            thres_per=thres_per, 
+            return_mode='cc_loc',
+            pm_pbar=progress_bar, 
+            pm_processes=int(max(1, min(os.cpu_count(), num_workers//1.5)))
 
     # Make dataframe for the similarity between feature 1 and 2 across the groups
     print('Calculation of composite jaccard indexes between feature pairs')
@@ -295,13 +505,26 @@ def run_permutation_test(data, feat_pairs, nperm=1000, seed=0, spatial_type = 'v
     output_cc_loc = pd.concat(output_cc_loc, axis=0).reset_index(drop=True)
     output_cc_loc[[i for i in output_cc_loc.columns if i not in ['barcode','perm_idx']]] = \
         output_cc_loc[[i for i in output_cc_loc.columns if i not in ['barcode','perm_idx']]].fillna(0).astype(pd.SparseDtype("int", fill_value=0)).astype('category')
-    # Add the connected component location information to the .obs
+    # Add the connected component location information to the .uns
     data_mod.uns[f"cc_loc_{adata_keys[-1]}_perm"] = output_cc_loc
 
     # Get the output for jaccard
-    output_j = parmap.starmap(jaccard_composite, CCxy_loc_mat_list,
-                              pm_pbar=progress_bar,
-                              pm_processes=int(max(1, min(os.cpu_count(), num_workers)//1.5)))
+    # Use Numba-optimized parallel processing if available
+    if use_numba and _HAS_NUMBA:
+        jaccard_func = compute_weighted_jaccard_similarity_numba if jaccard_type == "weighted" else compute_jaccard_similarity_numba
+        output_j = optimized_parallel_processing(
+            jaccard_func if use_numba else jaccard_composite,
+            CCxy_loc_mat_list,
+            num_workers=int(max(1, min(os.cpu_count(), num_workers//1.5))),
+            progress_bar=progress_bar
+        )
+    else:
+        output_j = parmap.starmap(
+            jaccard_composite,
+            CCxy_loc_mat_list,
+            pm_pbar=progress_bar,
+            pm_processes=int(max(1, min(os.cpu_count(), num_workers)//1.5))
+        )
 
     # Create a dataframe for J metrics and calculate p-values
     df_perm_fin = df_perm.assign(J_comp_perm=output_j).groupby([group_name, 'Feat_1', 'Feat_2']).apply(calculate_p_value).reset_index()
