@@ -26,11 +26,10 @@ Eigen::SparseMatrix<double> scipy_sparse_to_eigen_sparse(const py::object& scipy
             matrix = matrix.attr("tocoo")();
         }
         
-        // Get dimensions
-        py::int_ rows = matrix.attr("shape")[0];
-        py::int_ cols = matrix.attr("shape")[1];
-        int n_rows = py::cast<int>(rows);
-        int n_cols = py::cast<int>(cols);
+        // Get dimensions - properly access the shape tuple
+        py::tuple shape = matrix.attr("shape");
+        int n_rows = py::cast<int>(shape[0]);
+        int n_cols = py::cast<int>(shape[1]);
         
         // Get arrays
         py::array_t<int> row_indices = py::cast<py::array_t<int>>(matrix.attr("row"));
