@@ -258,7 +258,7 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
     ThreadPool pool(num_workers);
     
     // Create a queue of tasks and futures
-    std::vector<std::future<std::tuple<int, std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>> futures;
+    std::vector<std::future<std::tuple<size_t, std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>> futures;
     futures.reserve(feats.size());
     
     // Enqueue all tasks
@@ -285,32 +285,35 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
                     throw std::runtime_error("Feature must be a 1D array");
                 }
                 
-                // Ensure contiguous memory
-                if (!feat.flags().c_contiguous) {
-                    log_message("Thread: Feature array is not C-contiguous, creating a copy");
+                // Check if contiguous and make a copy if needed
+                if (feat_buffer.strides[0] != sizeof(double)) {
+                    log_message("Thread: Feature array is not contiguous, creating a copy");
                     feat = py::array_t<double>::ensure(feat);
                     feat_buffer = feat.request();
                 }
                 
+                // Map to Eigen vector
                 Eigen::Map<Eigen::VectorXd> feat_eigen(
-                    static_cast<double*>(feat_buffer.ptr), 
+                    static_cast<double*>(feat_buffer.ptr),
                     feat_buffer.shape[0]
                 );
                 
                 log_message("Thread: Converted feature " + std::to_string(i) + " with size " + std::to_string(feat_eigen.size()));
                 
                 // Convert adjacency matrix
+                log_message("Thread: Converting adjacency matrix " + std::to_string(i));
                 Eigen::SparseMatrix<double> A_eigen;
                 try {
                     A_eigen = scipy_sparse_to_eigen_sparse(A_matrices[i]);
-                    log_message("Thread: Converted adjacency matrix " + std::to_string(i) + 
-                               " with size (" + std::to_string(A_eigen.rows()) + ", " + std::to_string(A_eigen.cols()) + ")");
+                    log_message("Thread: Converted adjacency matrix " + std::to_string(i) +
+                              " with size (" + std::to_string(A_eigen.rows()) + ", " + 
+                              std::to_string(A_eigen.cols()) + ")");
                 } catch (const std::exception& e) {
                     log_message("Thread: ERROR converting adjacency matrix: " + std::string(e.what()));
                     throw;
                 }
                 
-                // Convert mask array to Eigen matrix, ensuring contiguity
+                // Convert mask array to Eigen matrix
                 py::array_t<double> mask = masks[i];
                 py::buffer_info mask_buffer = mask.request();
                 
@@ -318,21 +321,18 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
                     throw std::runtime_error("Mask must be a 2D array");
                 }
                 
-                // Ensure contiguous memory
-                if (!mask.flags().c_contiguous && !mask.flags().f_contiguous) {
+                // Check contiguity
+                if (mask_buffer.strides[0] != mask_buffer.shape[1] * sizeof(double) ||
+                    mask_buffer.strides[1] != sizeof(double)) {
                     log_message("Thread: Mask array is not contiguous, creating a copy");
                     mask = py::array_t<double>::ensure(mask);
                     mask_buffer = mask.request();
                 }
                 
-                // Map to Eigen matrix with appropriate stride
+                // Map to Eigen matrix
                 Eigen::Map<Eigen::MatrixXd> mask_eigen(
                     static_cast<double*>(mask_buffer.ptr),
-                    mask_buffer.shape[0], mask_buffer.shape[1],
-                    Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>(
-                        mask_buffer.strides[0] / sizeof(double),
-                        mask_buffer.strides[1] / sizeof(double)
-                    )
+                    mask_buffer.shape[0], mask_buffer.shape[1]
                 );
                 
                 log_message("Thread: Converted mask " + std::to_string(i) + 
@@ -376,7 +376,7 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
     
     for (auto& future : futures) {
         auto result = future.get();
-        int idx = std::get<0>(result);
+        size_t idx = std::get<0>(result);
         results[idx] = std::make_tuple(std::get<1>(result), std::get<2>(result));
         log_message("Getting result for feature " + std::to_string(idx));
     }
