@@ -227,7 +227,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
         ]
     
     print("Calculation of connected components for each feature")
-    output_cc = parallel_with_progress_topological_comp(
+    results = parallel_with_progress_topological_comp(
         feats=[feat[0] for feat in feat_A_mask_pair],
         A_matrices=[feat[1] for feat in feat_A_mask_pair],
         masks=[feat[2] for feat in feat_A_mask_pair],
@@ -246,7 +246,7 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
         feat_num = val_list[num].shape[1]
         
         # Get the relevant output_cc results
-        group_output_cc = output_cc[feat_num_sum:(feat_num_sum + feat_num)]
+        group_output_cc = results[feat_num_sum:(feat_num_sum + feat_num)]
         
         # Check if all elements have the same shape
         if not group_output_cc:
@@ -412,4 +412,24 @@ def topological_sim_pairs_(data, feat_pairs, spatial_type='visium', group_list=N
         print(f"Error in Jaccard calculation: {str(e)}")
     
     print("End of the whole process: %.2f seconds" % (time.time() - start_time))
+
+    # Process the results from topological_comp
+    for i, (cc_list, cc_loc_mat) in enumerate(results):
+        if cc_list and cc_loc_mat.nnz > 0:
+            # Convert cc_loc_mat to DataFrame
+            cc_loc_df = pd.DataFrame.sparse.from_spmatrix(cc_loc_mat)
+            
+            # Rename columns to match component IDs (1-indexed)
+            cc_loc_df.columns = [f"CC_{j+1}" for j in range(cc_loc_df.shape[1])]
+            
+            # Add to data_mod
+            for col in cc_loc_df.columns:
+                data_mod.obs[f"{col}_{feat_names[i]}"] = cc_loc_df[col].values
+            
+            # Store combined CC information
+            if i == 0:  # First feature
+                data_mod.obs['Comb_CC_'] = cc_loc_df.sum(axis=1).values
+            else:
+                data_mod.obs['Comb_CC_'] += cc_loc_df.sum(axis=1).values
+
     return df_top_total, data_mod

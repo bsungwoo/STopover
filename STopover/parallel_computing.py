@@ -40,16 +40,17 @@ def parallel_with_progress_extract_adjacency(locs, spatial_type="visium", fwhm=2
         return [(sparse.csr_matrix((0, 0)), np.empty((0, 0))) for _ in range(len(locs))]
 
 
-def parallel_with_progress_topological_comp(feats, A_matrices, masks, spatial_type="visium",
-                                            min_size=5, thres_per=30, return_mode="all", num_workers=4):
+def parallel_with_progress_topological_comp(
+    feats, A_matrices, masks, spatial_type="visium", min_size=5, 
+    thres_per=30, return_mode="all", num_workers=4):
     """
     Parallel computation for topological component extraction.
     Progress is shown using a tqdm progress bar.
     
     Args:
         feats (list): List of feature arrays (NumPy arrays).
-        A_matrices (list): List of adjacency matrices (scipy sparse CSR matrices).
-        masks (list): List of Gaussian smoothing masks (NumPy arrays).
+        A_matrices (list): List of adjacency matrices (SciPy sparse matrices).
+        masks (list): List of Gaussian masks (NumPy arrays).
         spatial_type (str): Type of spatial data.
         min_size (int): Minimum size of connected component.
         thres_per (int): Percentile threshold for filtering connected components.
@@ -57,14 +58,74 @@ def parallel_with_progress_topological_comp(feats, A_matrices, masks, spatial_ty
         num_workers (int): Number of parallel workers.
         
     Returns:
-        list: A list of topological component outputs for each feature.
+        list: A list of tuples (connected components, location matrix) for each feature.
     """
-    with tqdm.tqdm(total=len(feats)) as pbar:
-        progress_callback = lambda: pbar.update(1)
-        result = parallel_topological_comp(
-            feats, A_matrices, masks, spatial_type, min_size, thres_per, return_mode, num_workers, progress_callback
-        )
-    return result
+    try:
+        print(f"Starting parallel_topological_comp with {len(feats)} features")
+        
+        # Ensure features are properly formatted
+        for i, feat in enumerate(feats):
+            if not isinstance(feat, np.ndarray):
+                feats[i] = np.array(feat, dtype=np.float64)
+            
+            # Ensure the array is contiguous in memory
+            if not feats[i].flags.c_contiguous:
+                feats[i] = np.ascontiguousarray(feats[i], dtype=np.float64)
+            
+            # Reshape to 1D if needed
+            if feats[i].ndim > 1:
+                feats[i] = feats[i].reshape(-1)
+        
+        # Convert sparse matrices to CSR format if needed
+        for i, A in enumerate(A_matrices):
+            if not sparse.issparse(A):
+                A_matrices[i] = sparse.csr_matrix(A)
+            elif not isinstance(A, sparse.csr_matrix):
+                A_matrices[i] = A.tocsr()
+        
+        # Ensure masks are properly formatted
+        for i, mask in enumerate(masks):
+            if not isinstance(mask, np.ndarray):
+                masks[i] = np.array(mask, dtype=np.float64)
+            
+            # Ensure the array is contiguous in memory
+            if not masks[i].flags.c_contiguous:
+                masks[i] = np.ascontiguousarray(masks[i], dtype=np.float64)
+        
+        with tqdm.tqdm(total=len(feats)) as pbar:
+            # Using a lambda for the callback so that each task updates the progress bar.
+            progress_callback = lambda: pbar.update(1)
+            
+            # Call the C++ function
+            result = parallel_topological_comp(
+                feats=feats,
+                A_matrices=A_matrices,
+                masks=masks,
+                spatial_type=spatial_type,
+                min_size=min_size,
+                thres_per=thres_per,
+                return_mode=return_mode,
+                num_workers=num_workers,
+                progress_callback=progress_callback
+            )
+            
+            # Process the results to ensure they're in the expected format
+            processed_result = []
+            for cc_list, cc_loc_mat in result:
+                # Convert cc_list to a list of NumPy arrays
+                cc_list_np = [np.array(cc, dtype=np.int32) for cc in cc_list]
+                
+                # Ensure cc_loc_mat is a SciPy sparse matrix
+                if not sparse.issparse(cc_loc_mat):
+                    cc_loc_mat = sparse.csr_matrix(cc_loc_mat)
+                
+                processed_result.append((cc_list_np, cc_loc_mat))
+            
+            return processed_result
+    except Exception as e:
+        print(f"ERROR in parallel_with_progress_topological_comp: {str(e)}")
+        # Return empty results instead of crashing
+        return [([], sparse.csr_matrix((len(feats[0]), 0))) for _ in range(len(feats))]
 
 
 def parallel_with_progress_jaccard_composite(cc_1_list, cc_2_list, jaccard_type="default", num_workers=4):
