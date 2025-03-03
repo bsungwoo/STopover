@@ -364,10 +364,15 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
         
         log_message("Enqueued feature " + std::to_string(i));
         
-        // Progress update every 10 features
-        if ((i + 1) % 10 == 0 && !progress_callback.is_none()) {
-            log_message("Called progress_callback after " + std::to_string(i + 1) + " features");
-            progress_callback();
+        // Progress update every feature
+        if (!progress_callback.is_none()) {
+            try {
+                py::gil_scoped_acquire acquire;
+                progress_callback();
+                log_message("Called progress_callback after feature " + std::to_string(i));
+            } catch (const std::exception& e) {
+                log_message("Error in progress callback: " + std::string(e.what()));
+            }
         }
     }
     

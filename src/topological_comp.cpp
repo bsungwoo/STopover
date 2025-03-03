@@ -176,12 +176,32 @@ std::vector<std::vector<int>> extract_connected_comp(
     log_message("extract_connected_comp: Starting with " + std::to_string(threshold_x.size()) + 
                " thresholds, min_size=" + std::to_string(min_size));
     
+    // Log adjacency matrix info
+    log_message("Adjacency matrix: " + std::to_string(A_sparse.rows()) + "x" + 
+               std::to_string(A_sparse.cols()) + " with " + 
+               std::to_string(A_sparse.nonZeros()) + " non-zeros");
+    
+    // Check if adjacency matrix is empty
+    if (A_sparse.nonZeros() == 0) {
+        log_message("WARNING: Adjacency matrix has no non-zero entries!");
+    }
+    
     std::vector<std::vector<int>> CC_list;
     
     if (threshold_x.empty()) {
         log_message("extract_connected_comp: Empty threshold list, returning empty CC_list");
         return CC_list;
     }
+    
+    // Log threshold values
+    std::string thresholds_str = "Thresholds: ";
+    for (size_t i = 0; i < std::min(threshold_x.size(), size_t(10)); ++i) {
+        thresholds_str += std::to_string(threshold_x[i]) + " ";
+    }
+    if (threshold_x.size() > 10) {
+        thresholds_str += "... (" + std::to_string(threshold_x.size()) + " total)";
+    }
+    log_message(thresholds_str);
     
     // For each threshold value
     for (size_t i = 0; i < threshold_x.size(); ++i) {
@@ -205,6 +225,7 @@ std::vector<std::vector<int>> extract_connected_comp(
         
         // Create adjacency list for selected spots
         std::vector<std::vector<int>> adj_list(selected_spots.size());
+        int total_edges = 0;
         
         // Create mapping from original indices to compressed indices
         std::map<int, int> index_map;
@@ -219,12 +240,24 @@ std::vector<std::vector<int>> extract_connected_comp(
                 int orig_k = it.row();
                 if (it.value() > 0 && index_map.find(orig_k) != index_map.end()) {
                     adj_list[j].push_back(index_map[orig_k]);
+                    total_edges++;
                 }
             }
         }
         
+        log_message("extract_connected_comp: Created adjacency list with " + 
+                   std::to_string(total_edges) + " edges for threshold " + 
+                   std::to_string(threshold));
+        
+        if (total_edges == 0) {
+            log_message("WARNING: No edges in adjacency list for threshold " + 
+                       std::to_string(threshold) + ", skipping component extraction");
+            continue;
+        }
+        
         // Find connected components using BFS
         std::vector<bool> visited(selected_spots.size(), false);
+        int components_found = 0;
         
         for (size_t j = 0; j < selected_spots.size(); ++j) {
             if (!visited[j]) {
@@ -249,14 +282,18 @@ std::vector<std::vector<int>> extract_connected_comp(
                     }
                 }
                 
-                // Add component if it meets minimum size (fix the signed/unsigned comparison warning)
+                // Add component if it meets minimum size
                 if (static_cast<int>(component.size()) >= min_size) {
                     CC_list.push_back(component);
+                    components_found++;
                     log_message("extract_connected_comp: Found component with " + 
                                std::to_string(component.size()) + " spots");
                 }
             }
         }
+        
+        log_message("extract_connected_comp: Found " + std::to_string(components_found) + 
+                   " components for threshold " + std::to_string(threshold));
     }
     
     log_message("extract_connected_comp: Returning " + std::to_string(CC_list.size()) + " components");
