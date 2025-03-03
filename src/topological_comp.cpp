@@ -537,49 +537,44 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
                 threshold.push_back(t(i));
             }
         }
+        
+        // Sort thresholds in descending order
         std::sort(threshold.begin(), threshold.end(), std::greater<double>());
         
         // Remove duplicates
-        auto it = std::unique(threshold.begin(), threshold.end());
-        threshold.resize(std::distance(threshold.begin(), it));
+        threshold.erase(std::unique(threshold.begin(), threshold.end()), threshold.end());
         
-        // Compute connected components using make_original_dendrogram_cc
-        auto [cCC_x, cE_x, cduration_x, chistory_x] = make_original_dendrogram_cc(t, A, threshold);
+        log_message("topological_comp_res: Found " + std::to_string(threshold.size()) + " unique thresholds");
         
-        // Smooth the dendrogram
-        auto [nCC_x, nE_x, nduration_x, nhistory_x] = make_smoothed_dendrogram(
-            cCC_x, cE_x, cduration_x, chistory_x, Eigen::Vector2d(min_size, loc.rows()));
+        // If no thresholds, return empty result
+        if (threshold.empty()) {
+            log_message("topological_comp_res: No positive thresholds found, returning empty result");
+            std::vector<std::vector<int>> empty_CC_list;
+            Eigen::SparseMatrix<int> empty_CC_loc_mat(loc.rows(), 0);
+            return std::make_tuple(empty_CC_list, empty_CC_loc_mat);
+        }
         
-        // Estimate dendrogram bars for plotting
-        Eigen::MatrixXd cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x;
-        std::vector<std::vector<int>> clayer_x;
-        std::tie(cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, clayer_x) = 
-            make_dendrogram_bar(chistory_x, cduration_x);
+        // Make original dendrogram
+        auto [nCC, nE, nduration, nchildren] = make_original_dendrogram_cc(t, A, threshold);
         
-        // Estimate smoothed dendrogram bars
-        Eigen::MatrixXd cvertical_x_new, cvertical_y_new, chorizontal_x_new, chorizontal_y_new, cdots_new;
-        std::vector<std::vector<int>> nlayer_x;
-        std::tie(cvertical_x_new, cvertical_y_new, chorizontal_x_new, chorizontal_y_new, cdots_new, nlayer_x) = 
-            make_dendrogram_bar(nhistory_x, nduration_x, cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x);
-        
-        // Extract connected components based on layer information
+        // Filter connected components by size
         std::vector<std::vector<int>> CC_list;
-        if (!nlayer_x.empty() && !nlayer_x[0].empty()) {
-            // Extract the first layer indices
-            std::vector<int> sind = nlayer_x[0];
-            
-            // Populate CC_list with the connected components corresponding to sind
-            for (const auto& i : sind) {
-                if (i >= 0 && i < static_cast<int>(nCC_x.size())) { // Validate index
-                    CC_list.push_back(nCC_x[i]);
-                } else {
-                    log_message("Warning: Index " + std::to_string(i) + " is out of bounds for nCC_x with size " + 
-                               std::to_string(nCC_x.size()) + ". Skipping.");
-                }
+        for (const auto& cc : nCC) {
+            if (static_cast<int>(cc.size()) >= min_size) {
+                CC_list.push_back(cc);
             }
         }
         
-        log_message("topological_comp_res: Extracted " + std::to_string(CC_list.size()) + " connected components");
+        log_message("topological_comp_res: After size filtering, " + 
+                   std::to_string(CC_list.size()) + " components remain");
+        
+        // If no components after filtering, return empty result
+        if (CC_list.empty()) {
+            log_message("topological_comp_res: No components after size filtering, returning empty result");
+            std::vector<std::vector<int>> empty_CC_list;
+            Eigen::SparseMatrix<int> empty_CC_loc_mat(loc.rows(), 0);
+            return std::make_tuple(empty_CC_list, empty_CC_loc_mat);
+        }
         
         // Create CC_loc_mat
         Eigen::SparseMatrix<int> CC_loc_mat(loc.rows(), CC_list.size());
@@ -602,11 +597,10 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
                    std::to_string(CC_loc_mat.cols()) + ") and " + 
                    std::to_string(CC_loc_mat.nonZeros()) + " non-zeros");
         
-        // Filter connected components based on feature expression percentile
-        if (thres_per < 100) {
-            // Compute mean expression for each connected component
+        // Filter by expression level if requested
+        if (return_mode == "filtered") {
+            // Calculate mean expression for each component
             std::vector<std::pair<int, double>> component_means;
-            
             for (size_t j = 0; j < CC_list.size(); ++j) {
                 const auto& component = CC_list[j];
                 double sum = 0.0;
