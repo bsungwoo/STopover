@@ -8,6 +8,8 @@
 #include <vector>
 #include <Eigen/Sparse>
 #include <Eigen/Dense>
+#include <map>
+#include <queue>     // Added missing include for std::queue
 
 // Function to compute adjacency matrix and Gaussian smoothing mask based on spatial locations
 std::tuple<Eigen::SparseMatrix<double>, Eigen::MatrixXd> extract_adjacency_spatial(
@@ -247,8 +249,8 @@ std::vector<std::vector<int>> extract_connected_comp(
                     }
                 }
                 
-                // Add component if it meets minimum size
-                if (component.size() >= min_size) {
+                // Add component if it meets minimum size (fix the signed/unsigned comparison warning)
+                if (static_cast<int>(component.size()) >= min_size) {
                     CC_list.push_back(component);
                     log_message("extract_connected_comp: Found component with " + 
                                std::to_string(component.size()) + " spots");
@@ -332,6 +334,9 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
     const Eigen::VectorXd& feat, const Eigen::SparseMatrix<double>& A, const Eigen::MatrixXd& mask,
     const std::string& spatial_type, int min_size, int thres_per, const std::string& return_mode) {
 
+    // Define p at function scope, so it's available in the catch blocks
+    int p = feat.size();
+
     try {
         log_message("topological_comp_res: Starting with feat size " + std::to_string(feat.size()) + 
                    ", A size " + std::to_string(A.rows()) + "x" + std::to_string(A.cols()) + 
@@ -340,8 +345,6 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
         if (return_mode != "all" && return_mode != "cc_loc" && return_mode != "jaccard_cc_list") {
             throw std::invalid_argument("'return_mode' should be among 'all', 'cc_loc', or 'jaccard_cc_list'");
         }
-
-        int p = feat.size();
 
         // Calculate smoothed feature values
         Eigen::VectorXd smooth;
