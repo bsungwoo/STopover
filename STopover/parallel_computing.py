@@ -1,192 +1,159 @@
 import numpy as np
 import tqdm
-from .parallelize import parallel_extract_adjacency, parallel_topological_comp, parallel_jaccard_composite
-import scipy.sparse as sparse
+import gc
+from .parallelize import parallel_topological_comp, parallel_jaccard_composite
 
-def parallel_with_progress_extract_adjacency(locs, spatial_type="visium", fwhm=2.5, num_workers=4):
-    """
-    Parallel computation for extracting the adjacency matrix and Gaussian smoothing mask.
-    Progress is shown using a tqdm progress bar.
-    
-    Args:
-        locs (list): List of locations (NumPy arrays) to compute adjacency for.
-        spatial_type (str): Type of spatial data.
-        fwhm (float): Full-width half-maximum for Gaussian smoothing.
-        num_workers (int): Number of parallel workers.
-        
-    Returns:
-        list: A list of tuples (adjacency matrix, Gaussian mask) for each location.
-    """
-    try:
-        print(f"Starting parallel_extract_adjacency with {len(locs)} locations")
-        
-        # Ensure locations are properly formatted
-        for i, loc in enumerate(locs):
-            if not isinstance(loc, np.ndarray):
-                locs[i] = np.array(loc, dtype=np.float64)
-            
-            # Ensure the array is contiguous in memory
-            if not locs[i].flags.c_contiguous:
-                locs[i] = np.ascontiguousarray(locs[i], dtype=np.float64)
-        
-        with tqdm.tqdm(total=len(locs)) as pbar:
-            # Using a lambda for the callback so that each task updates the progress bar.
-            progress_callback = lambda: pbar.update(1)
-            result = parallel_extract_adjacency(locs, spatial_type, fwhm, num_workers, progress_callback)
-        return result
-    except Exception as e:
-        print(f"ERROR in parallel_with_progress_extract_adjacency: {str(e)}")
-        # Return empty results instead of crashing
-        return [(sparse.csr_matrix((0, 0)), np.empty((0, 0))) for _ in range(len(locs))]
-
+def default_log_callback(message):
+    print(f"C++ Log: {message}", end='')  # 'end' to avoid adding extra newlines
 
 def parallel_with_progress_topological_comp(
-    feats, A_matrices, masks, spatial_type="visium", min_size=5, 
-    thres_per=30, return_mode="all", num_workers=4):
+    locs, feats, spatial_type="visium", fwhm=2.5,
+    min_size=5, thres_per=30, return_mode="all", num_workers=0,
+    log_callback_func=None
+):
     """
-    Parallel computation for topological component extraction.
-    Progress is shown using a tqdm progress bar.
+    Parallel computation for topological component extraction using OpenMP.
     
     Args:
+        locs (list): List of locations (NumPy arrays).
         feats (list): List of feature arrays (NumPy arrays).
-        A_matrices (list): List of adjacency matrices (SciPy sparse matrices).
-        masks (list): List of Gaussian masks (NumPy arrays).
         spatial_type (str): Type of spatial data.
+        fwhm (float): Full-width half-maximum for Gaussian smoothing.
         min_size (int): Minimum size of connected component.
         thres_per (int): Percentile threshold for filtering connected components.
         return_mode (str): Return mode.
-        num_workers (int): Number of parallel workers.
-        
+        num_workers (int): Number of parallel workers (0 to auto-detect).
+        log_callback_func (callable, optional): Function to handle log messages from C++.
+    
     Returns:
-        list: A list of tuples (connected components, location matrix) for each feature.
+        list: A list of topological components for each feature.
     """
+    # Assign log_callback_func early to ensure it's not None during exception handling
+    if log_callback_func is None:
+        log_callback_func = default_log_callback
+
+    # Reshape feats to one-dimensional arrays if necessary
+    feats = [feat.reshape(-1) if feat.ndim > 1 else feat for feat in feats]
+
+    # Verify shapes
+    for i, feat in enumerate(feats):
+        if feat.ndim != 1:
+            log_callback_func(f"Error: feats[{i}] is not one-dimensional after reshape.\n")
+            raise ValueError(f"feats[{i}] is not one-dimensional after reshape.")
+
     try:
-        print(f"Starting parallel_topological_comp with {len(feats)} features")
-        
-        # Ensure features are properly formatted
-        for i, feat in enumerate(feats):
-            if not isinstance(feat, np.ndarray):
-                feats[i] = np.array(feat, dtype=np.float64)
-            
-            # Ensure the array is contiguous in memory
-            if not feats[i].flags.c_contiguous:
-                feats[i] = np.ascontiguousarray(feats[i], dtype=np.float64)
-            
-            # Reshape to 1D if needed
-            if feats[i].ndim > 1:
-                feats[i] = feats[i].reshape(-1)
-        
-        # Convert sparse matrices to CSR format if needed
-        for i, A in enumerate(A_matrices):
-            if not sparse.issparse(A):
-                A_matrices[i] = sparse.csr_matrix(A)
-            elif not isinstance(A, sparse.csr_matrix):
-                A_matrices[i] = A.tocsr()
-        
-        # Ensure masks are properly formatted
-        for i, mask in enumerate(masks):
-            if not isinstance(mask, np.ndarray):
-                masks[i] = np.array(mask, dtype=np.float64)
-            
-            # Ensure the array is contiguous in memory
-            if not masks[i].flags.c_contiguous:
-                masks[i] = np.ascontiguousarray(masks[i], dtype=np.float64)
-        
-        with tqdm.tqdm(total=len(feats)) as pbar:
-            # Using a lambda for the callback so that each task updates the progress bar.
-            progress_callback = lambda: pbar.update(1)
-            
-            # Call the C++ function
-            result = parallel_topological_comp(
+        # Convert all NumPy arrays to contiguous arrays of type float64
+        locs = [np.ascontiguousarray(loc, dtype=np.float64) for loc in locs]
+        feats = [np.ascontiguousarray(feat, dtype=np.float64) for feat in feats]
+    except Exception as e:
+        log_callback_func(f"Error during conversion to contiguous arrays: {e}\n")
+        raise
+
+    # Total number of tasks
+    total_tasks = len(locs)
+
+    # Initialize the progress bar
+    with tqdm.tqdm(total=total_tasks, desc="Processing Topological Components") as pbar:
+        # Define a progress callback function that updates the progress bar
+        def progress_callback(n):
+            pbar.update(n)
+
+        try:
+            # Call the C++ function, which handles parallelism with OpenMP
+            output = parallel_topological_comp(
+                locs=locs,
                 feats=feats,
-                A_matrices=A_matrices,
-                masks=masks,
                 spatial_type=spatial_type,
+                fwhm=fwhm,
                 min_size=min_size,
                 thres_per=thres_per,
                 return_mode=return_mode,
                 num_workers=num_workers,
-                progress_callback=progress_callback
+                progress_callback=progress_callback,
+                log_callback=None
             )
-            
-            # Process the results to ensure they're in the expected format
-            processed_result = []
-            for cc_list, cc_loc_mat in result:
-                # Convert cc_list to a list of NumPy arrays if needed
-                if not isinstance(cc_list, list):
-                    cc_list = [np.array(cc, dtype=np.int32) for cc in cc_list]
-                
-                # Ensure cc_loc_mat is a SciPy sparse matrix
-                if not sparse.issparse(cc_loc_mat):
-                    cc_loc_mat = sparse.csr_matrix(cc_loc_mat)
-                
-                processed_result.append((cc_list, cc_loc_mat))
-            
-            return processed_result
-    except Exception as e:
-        print(f"ERROR in parallel_with_progress_topological_comp: {str(e)}")
-        # Return empty results instead of crashing
-        return [([], sparse.csr_matrix((len(feats[0]), 0))) for _ in range(len(feats))]
+        except Exception as e:
+            log_callback_func(f"Error during topological_comp computation: {e}\n")
+            raise
+
+    # Optionally, trigger garbage collection
+    gc.collect()
+
+    return output
 
 
-def parallel_with_progress_jaccard_composite(cc_1_list, cc_2_list, jaccard_type="default", num_workers=4):
+def parallel_with_progress_jaccard_composite(
+    CCx_loc_sums, CCy_loc_sums, feat_xs=None, feat_ys=None,
+    jaccard_type="default", num_workers=0,
+    log_callback_func=None
+):
     """
-    Parallel computation for calculating Jaccard composite indices.
-    Progress is shown using a tqdm progress bar.
+    Parallel computation for Jaccard composite index.
+    Delegates internal batching to C++.
     
     Args:
-        cc_1_list (list): List of connected components for the first feature.
-        cc_2_list (list): List of connected components for the second feature.
-        jaccard_type (str): Type of Jaccard index to compute.
-        num_workers (int): Number of parallel workers.
-        
+        CCx_loc_sums (list or np.ndarray): List of NumPy arrays for connected component location sums for feature x.
+        CCy_loc_sums (list or np.ndarray): List of NumPy arrays for connected component location sums for feature y.
+        feat_xs (list or np.ndarray, optional): List of NumPy arrays for feature x values.
+        feat_ys (list or np.ndarray, optional): List of NumPy arrays for feature y values.
+        jaccard_type (str, optional): Type of Jaccard index to calculate. Either "default" or "weighted".
+        num_workers (int): Number of parallel workers (0 to auto-detect).
+        log_callback_func (callable, optional): Function to handle log messages from C++.
+    
     Returns:
-        list: A list of Jaccard indices.
+        list: A list of Jaccard composite indices.
     """
+    # Assign log_callback_func early to ensure it's not None during exception handling
+    if log_callback_func is None:
+        log_callback_func = default_log_callback
+
+    # Initialize feat_xs and feat_ys if not provided
+    if feat_xs is None:
+        feat_xs = [np.array([0.0], dtype=np.float64) for _ in range(len(CCx_loc_sums))]
+    if feat_ys is None:
+        feat_ys = [np.array([0.0], dtype=np.float64) for _ in range(len(CCy_loc_sums))]
+
+    # Validate input lengths
+    if not (len(CCx_loc_sums) == len(CCy_loc_sums) == len(feat_xs) == len(feat_ys)):
+        log_callback_func("Error: All input lists must have the same length.\n")
+        raise ValueError("All input lists must have the same length.")
+
     try:
-        # Validate inputs
-        if len(cc_1_list) != len(cc_2_list):
-            print(f"Error: cc_1_list length ({len(cc_1_list)}) doesn't match cc_2_list length ({len(cc_2_list)})")
-            return [0.0] * len(cc_1_list)
-            
-        # Check for empty arrays
-        for i, (cc1, cc2) in enumerate(zip(cc_1_list, cc_2_list)):
-            if cc1.size == 0 or cc2.size == 0:
-                print(f"Warning: Empty array at index {i}")
-                
-        # Convert arrays to the right type
-        cc_1_list_int = []
-        cc_2_list_int = []
-        
-        for i, (cc1, cc2) in enumerate(zip(cc_1_list, cc_2_list)):
-            try:
-                cc_1_list_int.append(np.asarray(cc1, dtype=np.int32))
-                cc_2_list_int.append(np.asarray(cc2, dtype=np.int32))
-            except Exception as e:
-                print(f"Error converting arrays at index {i}: {str(e)}")
-                cc_1_list_int.append(np.zeros((1, 1), dtype=np.int32))
-                cc_2_list_int.append(np.zeros((1, 1), dtype=np.int32))
-        
-        with tqdm.tqdm(total=len(cc_1_list)) as pbar:
-            # Using a lambda for the callback so that each task updates the progress bar.
-            progress_callback = lambda: pbar.update(1)
-            result = parallel_jaccard_composite(cc_1_list_int, cc_2_list_int, jaccard_type, num_workers, progress_callback)
-        return result
+        # Convert all NumPy arrays to contiguous arrays of type float64
+        CCx_loc_sums = [np.ascontiguousarray(arr, dtype=np.float64) for arr in CCx_loc_sums]
+        CCy_loc_sums = [np.ascontiguousarray(arr, dtype=np.float64) for arr in CCy_loc_sums]
+        feat_xs = [np.ascontiguousarray(arr, dtype=np.float64) for arr in feat_xs]
+        feat_ys = [np.ascontiguousarray(arr, dtype=np.float64) for arr in feat_ys]
     except Exception as e:
-        print(f"ERROR in parallel_with_progress_jaccard_composite: {str(e)}")
-        # Return zeros instead of crashing
-        return [0.0] * len(cc_1_list)
+        log_callback_func(f"Error during conversion to contiguous arrays: {e}\n")
+        raise
 
-# Example Usage:
-# Assuming you have the locs, feats, adjacency matrices, masks, and other inputs properly formatted.
-# locs = [numpy arrays for locations]
-# feats = [numpy arrays for features]
-# A_matrices = [scipy sparse matrices for adjacency matrices]
-# masks = [numpy arrays for masks]
-# CCx_loc_sums = [numpy arrays for CCx locations]
-# CCy_loc_sums = [numpy arrays for CCy locations]
+    # Total number of tasks
+    total_tasks = len(CCx_loc_sums)
 
-# Example calls:
-# result_extract_adjacency = parallel_with_progress_extract_adjacency(locs)
-# result_topological_comp = parallel_with_progress_topological_comp(feats, A_matrices, masks)
-# result_jaccard_composite = parallel_with_progress_jaccard_composite(CCx_loc_sums, CCy_loc_sums)
+    # Initialize the progress bar
+    with tqdm.tqdm(total=total_tasks, desc="Processing Jaccard Composite") as pbar:
+        # Define a progress callback function that updates the progress bar
+        def progress_callback(n):
+            pbar.update(n)
+
+        try:
+            # Call the C++ function, which handles parallelism with OpenMP
+            output_j = parallel_jaccard_composite(
+                CCx_loc_sums=CCx_loc_sums,
+                CCy_loc_sums=CCy_loc_sums,
+                feat_xs=feat_xs,
+                feat_ys=feat_ys,
+                jaccard_type=jaccard_type,
+                num_workers=num_workers,
+                progress_callback=progress_callback,
+                log_callback=None
+            )
+        except Exception as e:
+            log_callback_func(f"Error during jaccard_composite computation: {e}\n")
+            raise
+
+    # Optionally, trigger garbage collection
+    gc.collect()
+
+    return output_j

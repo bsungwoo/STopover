@@ -1,22 +1,20 @@
 #ifndef JACCARD_H
 #define JACCARD_H
 
-#include <pybind11/pybind11.h>
-#include <pybind11/eigen.h>
-#include <pybind11/stl.h>
-#include <Eigen/Sparse>
-#include <Eigen/Dense>
-#include <vector>
-#include <iostream>
-#include <numeric>
-#include <algorithm>
-#include <stdexcept>
-#include <set>
-#include <string>
+#include <Eigen/Dense> // Include Eigen's Dense module
 
-// Function to calculate the Jaccard composite index from connected component locations
-double jaccard_composite(const std::vector<std::vector<int>>& cc_1, 
-                         const std::vector<std::vector<int>>& cc_2,
-                         const std::string& jaccard_type);
+/**
+ * @brief Calculates the Jaccard composite index for a set of input vectors.
+ *
+ * @param CCx_loc_sum Eigen::VectorXd representing connected component location sums for feature x.
+ * @param CCy_loc_sum Eigen::VectorXd representing connected component location sums for feature y.
+ * @param feat_x Eigen::VectorXd representing feature x values.
+ * @param feat_y Eigen::VectorXd representing feature y values.
+ * @return double containing the Jaccard composite index.
+ */
+double jaccard_composite(const Eigen::VectorXd& CCx_loc_sum, 
+                         const Eigen::VectorXd& CCy_loc_sum,
+                         const Eigen::VectorXd* feat_x = nullptr,
+                         const Eigen::VectorXd* feat_y = nullptr);
 
 #endif // JACCARD_H
