@@ -14,44 +14,66 @@ namespace py = pybind11;
 
 Eigen::SparseMatrix<double> scipy_sparse_to_eigen_sparse(const py::object& scipy_sparse_matrix) {
     try {
+        // Create a local copy to work with, since the input is const
+        py::object matrix = scipy_sparse_matrix;
+        
         // Check if the matrix is in COO format, if not, convert it
-        py::object matrix_format = scipy_sparse_matrix.attr("format")();
-        if (py::cast<std::string>(matrix_format) != "coo") {
-            log_message("Converting sparse matrix from " + py::cast<std::string>(matrix_format) + " to COO format");
-            scipy_sparse_matrix = scipy_sparse_matrix.attr("tocoo")();
+        py::str format = matrix.attr("format")();
+        std::string format_str = py::cast<std::string>(format);
+        
+        if (format_str != "coo") {
+            log_message("Converting sparse matrix from " + format_str + " to COO format");
+            matrix = matrix.attr("tocoo")();
         }
-        
-        // Get the shape, row indices, column indices, and data from the COO matrix
-        py::tuple shape = scipy_sparse_matrix.attr("shape");
-        py::array_t<int> row_indices = scipy_sparse_matrix.attr("row");
-        py::array_t<int> col_indices = scipy_sparse_matrix.attr("col");
-        py::array_t<double> data = scipy_sparse_matrix.attr("data");
-        
-        // Get the data pointers
-        auto row_ptr = row_indices.data();
-        auto col_ptr = col_indices.data();
-        auto data_ptr = data.data();
         
         // Get dimensions
-        int rows = py::cast<int>(shape[0]);
-        int cols = py::cast<int>(shape[1]);
-        int nnz = data.size(); // Number of non-zero elements
+        py::int_ rows = matrix.attr("shape")[0];
+        py::int_ cols = matrix.attr("shape")[1];
+        int n_rows = py::cast<int>(rows);
+        int n_cols = py::cast<int>(cols);
         
-        // Create the Eigen sparse matrix
-        Eigen::SparseMatrix<double> eigen_sparse(rows, cols);
-        eigen_sparse.reserve(nnz);
+        // Get arrays
+        py::array_t<int> row_indices = py::cast<py::array_t<int>>(matrix.attr("row"));
+        py::array_t<int> col_indices = py::cast<py::array_t<int>>(matrix.attr("col"));
+        py::array_t<double> data = py::cast<py::array_t<double>>(matrix.attr("data"));
         
-        // Fill the triplet list
-        std::vector<Eigen::Triplet<double>> tripletList;
-        tripletList.reserve(nnz);
+        // Get buffer info
+        py::buffer_info row_buffer = row_indices.request();
+        py::buffer_info col_buffer = col_indices.request();
+        py::buffer_info data_buffer = data.request();
         
-        for (int i = 0; i < nnz; ++i) {
-            tripletList.push_back(Eigen::Triplet<double>(row_ptr[i], col_ptr[i], data_ptr[i]));
+        // Check dimensions
+        if (row_buffer.ndim != 1 || col_buffer.ndim != 1 || data_buffer.ndim != 1) {
+            throw std::runtime_error("Sparse matrix row/col/data arrays must be 1D");
         }
         
-        // Set from triplets and compress
-        eigen_sparse.setFromTriplets(tripletList.begin(), tripletList.end());
+        int nnz = data_buffer.shape[0];
+        
+        if (row_buffer.shape[0] != nnz || col_buffer.shape[0] != nnz) {
+            throw std::runtime_error("Sparse matrix row/col/data arrays must have the same length");
+        }
+        
+        // Get pointers
+        int* row_ptr = static_cast<int*>(row_buffer.ptr);
+        int* col_ptr = static_cast<int*>(col_buffer.ptr);
+        double* data_ptr = static_cast<double*>(data_buffer.ptr);
+        
+        // Build Eigen sparse matrix from triplets
+        typedef Eigen::Triplet<double> T;
+        std::vector<T> triplets;
+        triplets.reserve(nnz);
+        
+        for (int i = 0; i < nnz; ++i) {
+            triplets.push_back(T(row_ptr[i], col_ptr[i], data_ptr[i]));
+        }
+        
+        Eigen::SparseMatrix<double> eigen_sparse(n_rows, n_cols);
+        eigen_sparse.setFromTriplets(triplets.begin(), triplets.end());
         eigen_sparse.makeCompressed();
+        
+        log_message("Converted SciPy sparse matrix to Eigen::SparseMatrix<double> with shape (" + 
+                   std::to_string(n_rows) + ", " + std::to_string(n_cols) + ") and " + 
+                   std::to_string(eigen_sparse.nonZeros()) + " non-zero entries");
         
         return eigen_sparse;
     }
