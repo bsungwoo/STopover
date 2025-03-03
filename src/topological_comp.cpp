@@ -471,15 +471,19 @@ std::vector<std::vector<int>> extract_connected_comp_python_style(
     }
 }
 
-// Fix the topological_comp_res function
+// Update the function signature to match what parallelize.cpp expects
 std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_comp_res(
-    const Eigen::MatrixXd& loc, const Eigen::VectorXd& feat, 
-    const std::string& spatial_type, double fwhm,
-    int min_size, double thres_per, const std::string& return_mode) {
+    const Eigen::MatrixXd& loc, 
+    const Eigen::SparseMatrix<double>& A, 
+    const Eigen::MatrixXd& mask,
+    const std::string& spatial_type, 
+    int min_size, 
+    int thres_per, 
+    const std::string& return_mode) {
 
     try {
         // Define p at the beginning of the function
-        int p = feat.size();
+        int p = loc.rows();
         
         if (return_mode != "all" && return_mode != "cc_loc" && return_mode != "jaccard_cc_list") {
             throw std::invalid_argument("'return_mode' should be among 'all', 'cc_loc', or 'jaccard_cc_list'");
@@ -487,13 +491,9 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
 
         log_message("topological_comp_res: Starting with " + std::to_string(p) + " spots");
         
-        // Extract adjacency matrix and mask
-        auto [A, mask] = extract_adjacency_spatial(loc, spatial_type, fwhm);
+        // Extract feature vector from the first column of loc
+        Eigen::VectorXd feat = loc.col(0);
         
-        log_message("Adjacency matrix: " + std::to_string(A.rows()) + "x" + 
-                   std::to_string(A.cols()) + " with " + 
-                   std::to_string(A.nonZeros()) + " non-zeros");
-
         // Smooth the feature values with given mask
         Eigen::VectorXd smooth;
         try {
@@ -503,18 +503,18 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
             double min_smooth = smooth.minCoeff();
             double max_smooth = smooth.maxCoeff();
             double mean_smooth = smooth.mean();
-            int positive_smooth = (smooth.array() > 0).count();
+            int positive_count = (smooth.array() > 0).count();
             
             log_message("Smoothed feature stats: min=" + std::to_string(min_smooth) + 
                        ", max=" + std::to_string(max_smooth) + 
                        ", mean=" + std::to_string(mean_smooth) + 
-                       ", positive values=" + std::to_string(positive_smooth) + 
+                       ", positive values=" + std::to_string(positive_count) + 
                        " out of " + std::to_string(smooth.size()));
         } catch (const std::exception& e) {
-            log_message("ERROR in smoothing: " + std::string(e.what()));
+            log_message("Error during smoothing: " + std::string(e.what()));
             throw;
         }
-
+        
         // Create thresholds from positive values in smoothed features
         Eigen::VectorXd t = smooth.cwiseMax(0);
                 
@@ -526,36 +526,16 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
                 threshold_values.push_back(t(i));
             }
         }
-        
         std::sort(threshold_values.begin(), threshold_values.end(), std::greater<double>());
-        
-        // Remove duplicates
-        threshold_values.erase(
-            std::unique(threshold_values.begin(), threshold_values.end()),
-            threshold_values.end()
-        );
         
         log_message("Created " + std::to_string(threshold_values.size()) + " threshold values");
         
-        if (threshold_values.empty()) {
-            log_message("WARNING: No positive threshold values found");
-            std::vector<std::vector<int>> empty_CC_list;
-            Eigen::SparseMatrix<int> empty_CC_loc_mat(p, 0);
-            return std::make_tuple(empty_CC_list, empty_CC_loc_mat);
-        }
-
-        // Compute connected components
+        // Extract connected components
         std::vector<std::vector<int>> CC_list = extract_connected_comp_python_style(t, A, threshold_values, p, min_size);
         
         log_message("Found " + std::to_string(CC_list.size()) + " connected components");
         
-        if (CC_list.empty()) {
-            log_message("WARNING: No connected components found");
-            Eigen::SparseMatrix<int> empty_CC_loc_mat(p, 0);
-            return std::make_tuple(CC_list, empty_CC_loc_mat);
-        }
-
-        // Create CC_loc_mat (sparse matrix representation of connected components)
+        // Create connected location matrix
         Eigen::SparseMatrix<int> CC_loc_mat(p, CC_list.size());
         std::vector<Eigen::Triplet<int>> triplets;
         
@@ -575,35 +555,31 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
                    std::to_string(CC_loc_mat.rows()) + ", " + 
                    std::to_string(CC_loc_mat.cols()) + ") and " + 
                    std::to_string(CC_loc_mat.nonZeros()) + " non-zeros");
-
-        // Filter components based on expression percentile if needed
-        if (thres_per > 0 && thres_per < 100) {
+        
+        // If thres_per is greater than 0, filter components based on expression percentile
+        if (thres_per > 0) {
             // Compute mean expression for each component
             std::vector<std::pair<int, double>> component_means;
-            component_means.reserve(CC_list.size());
-            
-            for (size_t j = 0; j < CC_list.size(); ++j) {
-                const auto& component = CC_list[j];
+            for (size_t i = 0; i < CC_list.size(); ++i) {
+                const auto& component = CC_list[i];
                 double sum = 0.0;
                 for (int idx : component) {
-                    if (idx >= 0 && idx < p) {  // Safety check
-                        sum += feat(idx);
-                    }
+                    sum += feat(idx);
                 }
-                double mean = component.empty() ? 0.0 : sum / component.size();
-                component_means.emplace_back(j, mean);
+                double mean = sum / component.size();
+                component_means.emplace_back(i, mean);
             }
             
-            // Sort by mean expression in descending order
+            // Sort components by mean expression in descending order
             std::sort(component_means.begin(), component_means.end(),
                      [](const auto& a, const auto& b) { return a.second > b.second; });
             
-            // Determine how many components to keep
-            int keep_count = std::max(1, static_cast<int>(std::ceil(CC_list.size() * (1.0 - thres_per / 100.0))));
-            keep_count = std::min(keep_count, static_cast<int>(component_means.size()));
+            // Keep top thres_per% of components
+            int keep_count = std::max(1, static_cast<int>(CC_list.size() * thres_per / 100.0));
+            keep_count = std::min(keep_count, static_cast<int>(CC_list.size()));
             
-            log_message("Filtering components: keeping top " + std::to_string(keep_count) + 
-                       " out of " + std::to_string(CC_list.size()) + 
+            log_message("Keeping top " + std::to_string(keep_count) + " components out of " + 
+                       std::to_string(CC_list.size()) + 
                        " based on thres_per=" + std::to_string(thres_per));
             
             // Get indices of components to keep
@@ -650,7 +626,7 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
     catch (const std::exception& e) {
         log_message("ERROR in topological_comp_res: " + std::string(e.what()));
         std::vector<std::vector<int>> empty_CC_list;
-        Eigen::SparseMatrix<int> empty_CC_loc_mat(feat.size(), 0);  // Use feat.size() instead of p
+        Eigen::SparseMatrix<int> empty_CC_loc_mat(loc.rows(), 0);
         return std::make_tuple(empty_CC_list, empty_CC_loc_mat);
     }
 }

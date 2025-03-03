@@ -340,6 +340,14 @@ std::vector<std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>>>
                 
                 // Run topological computation
                 log_message("Thread: Starting topological_comp_res for feature " + std::to_string(i));
+                std::cout << "Calling topological_comp_res with:" << std::endl;
+                std::cout << "  feat_eigen: " << feat_eigen.rows() << "x" << feat_eigen.cols() << std::endl;
+                std::cout << "  A_eigen: " << A_eigen.rows() << "x" << A_eigen.cols() << std::endl;
+                std::cout << "  mask_eigen: " << mask_eigen.rows() << "x" << mask_eigen.cols() << std::endl;
+                std::cout << "  spatial_type: " << spatial_type << std::endl;
+                std::cout << "  min_size: " << min_size << std::endl;
+                std::cout << "  thres_per: " << thres_per << std::endl;
+                std::cout << "  return_mode: " << return_mode << std::endl;
                 auto result = topological_comp_res(feat_eigen, A_eigen, mask_eigen, 
                                                 spatial_type, min_size, thres_per, return_mode);
                 log_message("Thread: Completed topological_comp_res for feature " + std::to_string(i));
