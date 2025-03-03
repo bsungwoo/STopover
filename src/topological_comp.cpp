@@ -171,15 +171,94 @@ std::vector<std::vector<int>> extract_connected_comp(
     const Eigen::VectorXd& tx, const Eigen::SparseMatrix<double>& A_sparse, 
     const std::vector<double>& threshold_x, int num_spots, int min_size) {
     
-    auto [cCC_x, cE_x, cduration_x, chistory_x] = make_original_dendrogram_cc(tx, A_sparse, threshold_x);
-    auto [nCC_x, nduration_x, nhistory_x] = make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, Eigen::ArrayXd::LinSpaced(2, min_size, num_spots));
-    auto [cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, nlayer_x] = make_dendrogram_bar(chistory_x, cduration_x);
-
-    std::vector<std::vector<int>> CCx;
-    for (size_t i = 0; i < nlayer_x.size(); ++i) {
-        CCx.emplace_back(std::vector<int>{nCC_x[i]});
+    log_message("extract_connected_comp: Starting with " + std::to_string(threshold_x.size()) + 
+               " thresholds, min_size=" + std::to_string(min_size));
+    
+    std::vector<std::vector<int>> CC_list;
+    
+    if (threshold_x.empty()) {
+        log_message("extract_connected_comp: Empty threshold list, returning empty CC_list");
+        return CC_list;
     }
-    return CCx;
+    
+    // For each threshold value
+    for (size_t i = 0; i < threshold_x.size(); ++i) {
+        double threshold = threshold_x[i];
+        
+        // Find spots that meet the threshold
+        std::vector<int> selected_spots;
+        for (int j = 0; j < tx.size(); ++j) {
+            if (tx(j) >= threshold) {
+                selected_spots.push_back(j);
+            }
+        }
+        
+        if (selected_spots.empty()) {
+            log_message("extract_connected_comp: No spots meet threshold " + std::to_string(threshold));
+            continue;
+        }
+        
+        log_message("extract_connected_comp: Found " + std::to_string(selected_spots.size()) + 
+                   " spots meeting threshold " + std::to_string(threshold));
+        
+        // Create adjacency list for selected spots
+        std::vector<std::vector<int>> adj_list(selected_spots.size());
+        
+        // Create mapping from original indices to compressed indices
+        std::map<int, int> index_map;
+        for (size_t j = 0; j < selected_spots.size(); ++j) {
+            index_map[selected_spots[j]] = j;
+        }
+        
+        // Populate adjacency list
+        for (size_t j = 0; j < selected_spots.size(); ++j) {
+            int orig_j = selected_spots[j];
+            for (Eigen::SparseMatrix<double>::InnerIterator it(A_sparse, orig_j); it; ++it) {
+                int orig_k = it.row();
+                if (it.value() > 0 && index_map.find(orig_k) != index_map.end()) {
+                    adj_list[j].push_back(index_map[orig_k]);
+                }
+            }
+        }
+        
+        // Find connected components using BFS
+        std::vector<bool> visited(selected_spots.size(), false);
+        
+        for (size_t j = 0; j < selected_spots.size(); ++j) {
+            if (!visited[j]) {
+                std::vector<int> component;
+                std::queue<int> queue;
+                queue.push(j);
+                
+                while (!queue.empty()) {
+                    int current = queue.front();
+                    queue.pop();
+                    
+                    if (!visited[current]) {
+                        visited[current] = true;
+                        component.push_back(selected_spots[current]);
+                        
+                        // Add neighbors to queue
+                        for (int neighbor : adj_list[current]) {
+                            if (!visited[neighbor]) {
+                                queue.push(neighbor);
+                            }
+                        }
+                    }
+                }
+                
+                // Add component if it meets minimum size
+                if (component.size() >= min_size) {
+                    CC_list.push_back(component);
+                    log_message("extract_connected_comp: Found component with " + 
+                               std::to_string(component.size()) + " spots");
+                }
+            }
+        }
+    }
+    
+    log_message("extract_connected_comp: Returning " + std::to_string(CC_list.size()) + " components");
+    return CC_list;
 }
 
 // Function to extract the connected location matrix
@@ -253,32 +332,86 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
     const Eigen::VectorXd& feat, const Eigen::SparseMatrix<double>& A, const Eigen::MatrixXd& mask,
     const std::string& spatial_type, int min_size, int thres_per, const std::string& return_mode) {
 
-    if (return_mode != "all" && return_mode != "cc_loc" && return_mode != "jaccard_cc_list") {
-        throw std::invalid_argument("'return_mode' should be among 'all', 'cc_loc', or 'jaccard_cc_list'");
-    }
-
-    int p = feat.size();
-
-    Eigen::VectorXd smooth;
-    if (spatial_type == "visium") {
-        double feat_sum = feat.sum();
-        if (feat_sum == 0) {
-            throw std::invalid_argument("Sum of 'feat' vector is zero, cannot divide by zero.");
+    try {
+        log_message("topological_comp_res: Starting with feat size " + std::to_string(feat.size()) + 
+                   ", A size " + std::to_string(A.rows()) + "x" + std::to_string(A.cols()) + 
+                   ", mask shape " + std::to_string(mask.rows()) + "x" + std::to_string(mask.cols()));
+        
+        if (return_mode != "all" && return_mode != "cc_loc" && return_mode != "jaccard_cc_list") {
+            throw std::invalid_argument("'return_mode' should be among 'all', 'cc_loc', or 'jaccard_cc_list'");
         }
-        smooth = (mask * feat).array() / feat_sum;
-    } else {
-        smooth = feat;
+
+        int p = feat.size();
+
+        // Calculate smoothed feature values
+        Eigen::VectorXd smooth;
+        if (spatial_type == "visium") {
+            double feat_sum = feat.sum();
+            if (feat_sum == 0) {
+                log_message("topological_comp_res: Sum of 'feat' vector is zero");
+                // Return empty components instead of throwing
+                std::vector<std::vector<int>> empty_CC_list;
+                Eigen::SparseMatrix<int> empty_CC_loc_mat(p, 1);
+                return std::make_tuple(empty_CC_list, empty_CC_loc_mat);
+            }
+            
+            log_message("topological_comp_res: Computing smoothed features");
+            smooth = (mask * feat).array() / feat_sum;
+        } else {
+            smooth = feat;
+        }
+
+        // Create thresholds from positive values in smoothed features
+        Eigen::VectorXd t = smooth.cwiseMax(0);
+        
+        // Convert to vector and sort in descending order
+        std::vector<double> threshold_values;
+        threshold_values.reserve(t.size());
+        for (int i = 0; i < t.size(); i++) {
+            if (t(i) > 0) {  // Only include positive values
+                threshold_values.push_back(t(i));
+            }
+        }
+        
+        std::sort(threshold_values.begin(), threshold_values.end(), std::greater<double>());
+        
+        // Remove duplicates but keep at least one value (even if zero)
+        threshold_values.erase(std::unique(threshold_values.begin(), threshold_values.end()), threshold_values.end());
+        
+        // Ensure we have at least one threshold
+        if (threshold_values.empty()) {
+            threshold_values.push_back(0.0);
+        }
+        
+        log_message("topological_comp_res: Created " + std::to_string(threshold_values.size()) + 
+                   " threshold values, max=" + std::to_string(threshold_values.front()));
+
+        // Extract connected components
+        auto CC_list = extract_connected_comp(t, A, threshold_values, p, min_size);
+        log_message("topological_comp_res: Extracted " + std::to_string(CC_list.size()) + " connected components");
+
+        // Create location matrix
+        Eigen::SparseMatrix<int> CC_loc_mat = extract_connected_loc_mat(CC_list, p, "sparse");
+        
+        // Filter by expression values
+        CC_loc_mat = filter_connected_loc_exp(CC_loc_mat, feat, thres_per);
+        log_message("topological_comp_res: Final connected components matrix has " + 
+                   std::to_string(CC_loc_mat.nonZeros()) + " non-zero entries");
+
+        return std::make_tuple(CC_list, CC_loc_mat);
     }
-
-    Eigen::VectorXd t = smooth.cwiseMax(0);
-    std::vector<double> threshold(t.data(), t.data() + t.size());
-    std::sort(threshold.begin(), threshold.end(), std::greater<double>());
-    threshold.erase(std::unique(threshold.begin(), threshold.end()), threshold.end());
-
-    auto CC_list = extract_connected_comp(t, A, threshold, p, min_size);
-
-    Eigen::SparseMatrix<int> CC_loc_mat = extract_connected_loc_mat(CC_list, p, "sparse");
-    CC_loc_mat = filter_connected_loc_exp(CC_loc_mat, feat, thres_per);
-
-    return std::make_tuple(CC_list, CC_loc_mat);
+    catch (const std::exception& e) {
+        log_message("ERROR in topological_comp_res: " + std::string(e.what()));
+        // Return empty results
+        std::vector<std::vector<int>> empty_CC_list;
+        Eigen::SparseMatrix<int> empty_CC_loc_mat(p, 1);
+        return std::make_tuple(empty_CC_list, empty_CC_loc_mat);
+    }
+    catch (...) {
+        log_message("UNKNOWN ERROR in topological_comp_res");
+        // Return empty results
+        std::vector<std::vector<int>> empty_CC_list;
+        Eigen::SparseMatrix<int> empty_CC_loc_mat(p, 1);  
+        return std::make_tuple(empty_CC_list, empty_CC_loc_mat);
+    }
 }
