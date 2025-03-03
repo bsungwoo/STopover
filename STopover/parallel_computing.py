@@ -112,14 +112,15 @@ def parallel_with_progress_topological_comp(
             # Process the results to ensure they're in the expected format
             processed_result = []
             for cc_list, cc_loc_mat in result:
-                # Convert cc_list to a list of NumPy arrays
-                cc_list_np = [np.array(cc, dtype=np.int32) for cc in cc_list]
+                # Convert cc_list to a list of NumPy arrays if needed
+                if not isinstance(cc_list, list):
+                    cc_list = [np.array(cc, dtype=np.int32) for cc in cc_list]
                 
                 # Ensure cc_loc_mat is a SciPy sparse matrix
                 if not sparse.issparse(cc_loc_mat):
                     cc_loc_mat = sparse.csr_matrix(cc_loc_mat)
                 
-                processed_result.append((cc_list_np, cc_loc_mat))
+                processed_result.append((cc_list, cc_loc_mat))
             
             return processed_result
     except Exception as e:
