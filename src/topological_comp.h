@@ -41,4 +41,20 @@ std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<int>> topological_
     const Eigen::VectorXd& feat, const Eigen::SparseMatrix<double>& A, const Eigen::MatrixXd& mask,
     const std::string& spatial_type, int min_size, int thres_per, const std::string& return_mode);
 
+// Function to log messages
+void log_message(const std::string& message);
+
+// Function to extract connected components
+std::vector<std::vector<int>> extract_connected_comp_python_style(
+    const Eigen::VectorXd& tx,
+    const Eigen::SparseMatrix<double>& A_sparse,
+    const std::vector<double>& threshold_x,
+    int num_spots,
+    int min_size);
+
+// Function to smooth feature vector
+Eigen::VectorXd smooth_feature_vector_python_style(
+    const Eigen::VectorXd& feat,
+    const Eigen::MatrixXd& mask);
+
 #endif // TOPOLOGICAL_COMP_H
