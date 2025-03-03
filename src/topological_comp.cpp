@@ -392,92 +392,90 @@ std::vector<std::vector<int>> extract_connected_comp_python_style(
     int num_spots, 
     int min_size) {
 
-    log_message("extract_connected_comp_python_style: Starting with " + std::to_string(threshold_x.size()) + 
-               " thresholds, min_size=" + std::to_string(min_size));
-    
-    // Log adjacency matrix info
-    log_message("Adjacency matrix: " + std::to_string(A_sparse.rows()) + "x" + 
-               std::to_string(A_sparse.cols()) + " with " + 
-               std::to_string(A_sparse.nonZeros()) + " non-zeros");
-    
-    // Check if adjacency matrix is empty
-    if (A_sparse.nonZeros() == 0) {
-        log_message("WARNING: Adjacency matrix has no non-zero entries!");
-    }
-    
-    if (threshold_x.empty()) {
-        log_message("extract_connected_comp_python_style: Empty threshold list, returning empty CC_list");
-        return {};
-    }
-    
-    // Log threshold values
-    std::string thresholds_str = "Thresholds: ";
-    for (size_t i = 0; i < std::min(threshold_x.size(), size_t(10)); ++i) {
-        thresholds_str += std::to_string(threshold_x[i]) + " ";
-    }
-    if (threshold_x.size() > 10) {
-        thresholds_str += "... (" + std::to_string(threshold_x.size()) + " total)";
-    }
-    log_message(thresholds_str);
-    
-    // Log feature vector stats
-    double min_val = tx.minCoeff();
-    double max_val = tx.maxCoeff();
-    double mean_val = tx.mean();
-    int positive_count = (tx.array() > 0).count();
-    
-    log_message("Feature vector stats: min=" + std::to_string(min_val) + 
-               ", max=" + std::to_string(max_val) + 
-               ", mean=" + std::to_string(mean_val) + 
-               ", positive values=" + std::to_string(positive_count) + 
-               " out of " + std::to_string(tx.size()));
-
     try {
-        // Compute connected components using make_original_dendrogram_cc
-        auto [cCC_x, cE_x, cduration_x, chistory_x] = make_original_dendrogram_cc(tx, A_sparse, threshold_x);
+        log_message("extract_connected_comp_python_style: Starting with " + std::to_string(threshold_x.size()) + 
+                   " thresholds, min_size=" + std::to_string(min_size));
         
-        log_message("make_original_dendrogram_cc returned " + std::to_string(cCC_x.size()) + " components");
+        // Log adjacency matrix info
+        log_message("Adjacency matrix: " + std::to_string(A_sparse.rows()) + "x" + 
+                   std::to_string(A_sparse.cols()) + " with " + 
+                   std::to_string(A_sparse.nonZeros()) + " non-zeros");
         
-        if (cCC_x.empty()) {
-            log_message("WARNING: make_original_dendrogram_cc returned no components");
+        // Check if adjacency matrix is empty
+        if (A_sparse.nonZeros() == 0) {
+            log_message("WARNING: Adjacency matrix has no non-zero entries!");
+        }
+        
+        if (threshold_x.empty()) {
+            log_message("extract_connected_comp_python_style: Empty threshold list, returning empty CC_list");
             return {};
         }
         
-        // Log the first few components
-        for (size_t i = 0; i < std::min(cCC_x.size(), size_t(3)); ++i) {
-            log_message("Component " + std::to_string(i) + " size: " + std::to_string(cCC_x[i].size()));
+        // Log threshold values
+        std::string thresholds_str = "Thresholds: ";
+        for (size_t i = 0; i < std::min(threshold_x.size(), size_t(10)); ++i) {
+            thresholds_str += std::to_string(threshold_x[i]) + " ";
         }
-
+        if (threshold_x.size() > 10) {
+            thresholds_str += "... (" + std::to_string(threshold_x.size()) + " total)";
+        }
+        log_message(thresholds_str);
+        
+        // Log feature vector stats
+        double min_val = tx.minCoeff();
+        double max_val = tx.maxCoeff();
+        double mean_val = tx.mean();
+        int positive_count = (tx.array() > 0).count();
+        
+        log_message("Feature vector stats: min=" + std::to_string(min_val) + 
+                   ", max=" + std::to_string(max_val) + 
+                   ", mean=" + std::to_string(mean_val) + 
+                   ", positive values=" + std::to_string(positive_count) + 
+                   " out of " + std::to_string(tx.size()));
+        
+        // Compute connected components using make_original_dendrogram_cc
+        auto dendrogram_result = make_original_dendrogram_cc(tx, A_sparse, threshold_x);
+        
+        // Extract the components from the result
+        std::vector<std::vector<int>> cCC_x = std::get<0>(dendrogram_result);
+        Eigen::SparseMatrix<double> cE_x = std::get<1>(dendrogram_result);
+        Eigen::MatrixXd cduration_x = std::get<2>(dendrogram_result);
+        std::vector<std::vector<int>> chistory_x = std::get<3>(dendrogram_result);
+        
+        log_message("Original dendrogram has " + std::to_string(cCC_x.size()) + " components");
+        
         // Set size limits for smoothing
-        Eigen::Vector2d size_limits(min_size, num_spots);
+        Eigen::Vector2d size_limits;
+        size_limits << min_size, num_spots;
         
         // Smooth the dendrogram
-        auto [nCC_x, nE_x, nduration_x, nhistory_x] = make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, size_limits);
+        auto smoothed_result = make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, size_limits);
         
-        log_message("make_smoothed_dendrogram returned " + std::to_string(nCC_x.size()) + " components");
+        // Extract the components from the smoothed result
+        std::vector<std::vector<int>> nCC_x = std::get<0>(smoothed_result);
+        Eigen::SparseMatrix<double> nE_x = std::get<1>(smoothed_result);
+        Eigen::MatrixXd nduration_x = std::get<2>(smoothed_result);
+        std::vector<std::vector<int>> nhistory_x = std::get<3>(smoothed_result);
         
-        if (nCC_x.empty()) {
-            log_message("WARNING: make_smoothed_dendrogram returned no components");
-            return {};
-        }
+        log_message("Smoothed dendrogram has " + std::to_string(nCC_x.size()) + " components");
         
-        // Log the first few smoothed components
-        for (size_t i = 0; i < std::min(nCC_x.size(), size_t(3)); ++i) {
-            log_message("Smoothed component " + std::to_string(i) + " size: " + std::to_string(nCC_x[i].size()));
-        }
-
         // Estimate dendrogram bars for plotting
-        auto [cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, clayer_x] = 
-            make_dendrogram_bar(chistory_x, cduration_x);
+        auto bar_result = make_dendrogram_bar(chistory_x, cduration_x);
         
-        log_message("Original dendrogram bar layers: " + std::to_string(clayer_x.size()));
-
+        Eigen::MatrixXd cvertical_x_x = std::get<0>(bar_result);
+        Eigen::MatrixXd cvertical_y_x = std::get<1>(bar_result);
+        Eigen::MatrixXd chorizontal_x_x = std::get<2>(bar_result);
+        Eigen::MatrixXd chorizontal_y_x = std::get<3>(bar_result);
+        Eigen::MatrixXd cdots_x = std::get<4>(bar_result);
+        std::vector<std::vector<int>> clayer_x = std::get<5>(bar_result);
+        
         // Estimate smoothed dendrogram bars
-        auto [cvertical_x_new, cvertical_y_new, chorizontal_x_new, chorizontal_y_new, cdots_new, nlayer_x] = 
-            make_dendrogram_bar(nhistory_x, nduration_x, cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x);
+        auto smoothed_bar_result = make_dendrogram_bar(
+            nhistory_x, nduration_x, cvertical_x_x, cvertical_y_x, 
+            chorizontal_x_x, chorizontal_y_x, cdots_x);
         
-        log_message("Smoothed dendrogram bar layers: " + std::to_string(nlayer_x.size()));
-
+        std::vector<std::vector<int>> nlayer_x = std::get<5>(smoothed_bar_result);
+        
         // Extract connected components based on layer information
         if (nlayer_x.empty()) {
             log_message("WARNING: No layers in smoothed dendrogram");
