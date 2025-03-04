@@ -20,6 +20,6 @@ std::vector<std::set<int>> connected_components_generator(const Eigen::SparseMat
 
 // Function to create the original dendrogram with connected components
 std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<double>, Eigen::MatrixXd, std::vector<std::vector<int>>>
-make_original_dendrogram_cc(const Eigen::VectorXd& U, const Eigen::SparseMatrix<int>& A, const std::vector<double>& threshold);
+make_original_dendrogram_cc(const Eigen::VectorXd& U, const Eigen::SparseMatrix<double>& A, const std::vector<double>& threshold);
 
 #endif // ORIGINAL_DENDROGRAM_H

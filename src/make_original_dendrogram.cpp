@@ -22,7 +22,7 @@ std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_
 }
 
 // Function to generate connected components from a sparse adjacency matrix
-std::vector<std::set<int>> connected_components_generator(const Eigen::SparseMatrix<int>& A) {
+std::vector<std::set<int>> connected_components_generator(const Eigen::SparseMatrix<double>& A) {
     std::vector<std::set<int>> components;
     std::vector<bool> visited(A.rows(), false);
 
@@ -38,7 +38,7 @@ std::vector<std::set<int>> connected_components_generator(const Eigen::SparseMat
                 if (!visited[curr]) {
                     visited[curr] = true;
                     cc_set.insert(curr);
-                    for (Eigen::SparseMatrix<int>::InnerIterator it(A, curr); it; ++it) {
+                    for (Eigen::SparseMatrix<double>::InnerIterator it(A, curr); it; ++it) {
                         if (!visited[it.index()]) {
                             queue.push(it.index());
                         }
@@ -53,7 +53,7 @@ std::vector<std::set<int>> connected_components_generator(const Eigen::SparseMat
 
 // Function to create the original dendrogram with connected components
 std::tuple<std::vector<std::vector<int>>, Eigen::SparseMatrix<double>, Eigen::MatrixXd, std::vector<std::vector<int>>>
-make_original_dendrogram_cc(const Eigen::VectorXd& U, const Eigen::SparseMatrix<int>& A, const std::vector<double>& threshold) {
+make_original_dendrogram_cc(const Eigen::VectorXd& U, const Eigen::SparseMatrix<double>& A, const std::vector<double>& threshold) {
     int p = U.size();
     std::vector<std::vector<int>> CC(p);
     Eigen::SparseMatrix<double> E(p, p);
