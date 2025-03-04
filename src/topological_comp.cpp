@@ -220,111 +220,96 @@ std::vector<std::vector<int>> extract_connected_comp_python_style(
 }
 
 // Function to extract the connected location matrix
-Eigen::SparseMatrix<double> extract_connected_loc_mat_python_style(
+Eigen::SparseMatrix<double> extract_connected_loc_mat(
     const std::vector<std::vector<int>>& CC, int num_spots, const std::string& format) {
-
-    // Initialize a double matrix with zeros
-    Eigen::MatrixXd CC_loc_arr = Eigen::MatrixXd::Zero(num_spots, CC.size());
-
-    std::vector<bool> spot_assigned(num_spots, false); // Track spot assignments
-
-    for (size_t num = 0; num < CC.size(); ++num) {
-        const auto& element = CC[num];
-        for (int idx : element) {
-            if (idx >= 0 && idx < num_spots) { // Safety check
-                if (!spot_assigned[idx]) { // Ensure exclusivity
-                    CC_loc_arr(idx, num) = static_cast<double>(num) + 1.0;
-                    spot_assigned[idx] = true;
+    
+    log_message("extract_connected_loc_mat: Starting with " + std::to_string(CC.size()) + 
+               " connected components, num_spots=" + std::to_string(num_spots));
+    
+    try {
+        // Create triplet list for sparse matrix
+        typedef Eigen::Triplet<double> T;
+        std::vector<T> tripletList;
+        
+        // Estimate number of non-zeros
+        int estimated_nnz = 0;
+        for (const auto& cc : CC) {
+            estimated_nnz += cc.size();
+        }
+        tripletList.reserve(estimated_nnz);
+        
+        // Fill triplet list
+        for (size_t i = 0; i < CC.size(); ++i) {
+            for (const auto& spot : CC[i]) {
+                if (spot >= 0 && spot < num_spots) {
+                    tripletList.push_back(T(spot, i, 1.0)); // Use 1.0 (double) not 1 (int)
                 }
             }
         }
-    }
-
-    if (format == "sparse") {
-        return CC_loc_arr.sparseView();
-    } else {
-        throw std::invalid_argument("Sparse format required for compatibility.");
+        
+        // Create sparse matrix
+        Eigen::SparseMatrix<double> CC_loc_mat(num_spots, CC.size());
+        CC_loc_mat.setFromTriplets(tripletList.begin(), tripletList.end());
+        
+        log_message("extract_connected_loc_mat: Created matrix with " + 
+                   std::to_string(CC_loc_mat.nonZeros()) + " non-zeros");
+        
+        return CC_loc_mat;
+    } catch (const std::exception& e) {
+        log_message("ERROR in extract_connected_loc_mat: " + std::string(e.what()));
+        throw; // Re-throw to be caught by the caller
     }
 }
 
 // Function to filter connected components based on expression percentile
-Eigen::SparseMatrix<double> filter_connected_loc_exp_python_style(
-    const Eigen::SparseMatrix<double>& CC_loc_mat, // Changed to double
-    const Eigen::VectorXd& feat_data,
-    double thres_per) {
-
-    // Vector to store the mean expression value of each connected component
-    std::vector<std::pair<int, double>> CC_mean;
-
-    // Compute mean expression for each connected component
-    for (int i = 0; i < CC_loc_mat.cols(); ++i) {
-        // Get the indices of the spots in this connected component
-        std::vector<int> indices;
-        for (Eigen::SparseMatrix<double>::InnerIterator it(CC_loc_mat, i); it; ++it) {
-            indices.push_back(it.row());
-        }
-        if (!indices.empty()) {
-            // Compute the mean of feat_data over these indices
-            double sum = 0.0;
-            for (int idx : indices) {
-                sum += feat_data(idx);
+Eigen::SparseMatrix<double> filter_connected_loc_exp(
+    const Eigen::SparseMatrix<double>& CC_loc_mat, const Eigen::VectorXd& feat_data, double thres_per) {
+    
+    log_message("filter_connected_loc_exp: Starting with matrix size=" + 
+               std::to_string(CC_loc_mat.rows()) + "x" + std::to_string(CC_loc_mat.cols()) + 
+               ", thres_per=" + std::to_string(thres_per));
+    
+    try {
+        // Calculate percentile threshold
+        std::vector<double> feat_vec(feat_data.data(), feat_data.data() + feat_data.size());
+        std::sort(feat_vec.begin(), feat_vec.end());
+        int idx = static_cast<int>(feat_vec.size() * thres_per / 100.0);
+        double threshold = feat_vec[idx];
+        
+        log_message("filter_connected_loc_exp: Threshold at " + std::to_string(thres_per) + 
+                   "% percentile = " + std::to_string(threshold));
+        
+        // Create filtered matrix
+        typedef Eigen::Triplet<double> T;
+        std::vector<T> tripletList;
+        
+        // Estimate number of non-zeros
+        tripletList.reserve(CC_loc_mat.nonZeros());
+        
+        // Filter components based on feature expression
+        for (int k = 0; k < CC_loc_mat.outerSize(); ++k) {
+            for (Eigen::SparseMatrix<double>::InnerIterator it(CC_loc_mat, k); it; ++it) {
+                int row = it.row();
+                int col = it.col();
+                
+                if (feat_data(row) >= threshold) {
+                    tripletList.push_back(T(row, col, 1.0)); // Use 1.0 (double) not 1 (int)
+                }
             }
-            double mean_value = sum / static_cast<double>(indices.size());
-            CC_mean.emplace_back(i, mean_value);
         }
+        
+        // Create sparse matrix
+        Eigen::SparseMatrix<double> filtered_mat(CC_loc_mat.rows(), CC_loc_mat.cols());
+        filtered_mat.setFromTriplets(tripletList.begin(), tripletList.end());
+        
+        log_message("filter_connected_loc_exp: Created filtered matrix with " + 
+                   std::to_string(filtered_mat.nonZeros()) + " non-zeros");
+        
+        return filtered_mat;
+    } catch (const std::exception& e) {
+        log_message("ERROR in filter_connected_loc_exp: " + std::string(e.what()));
+        throw; // Re-throw to be caught by the caller
     }
-
-    // Sort components based on expression values in descending order
-    std::sort(CC_mean.begin(), CC_mean.end(),
-              [](const std::pair<int, double>& a, const std::pair<int, double>& b) -> bool {
-                  return a.second > b.second;
-              });
-
-    // Determine the number of components to keep based on the threshold percentile
-    int total_components = static_cast<int>(CC_mean.size());
-    int cutoff = static_cast<int>(total_components * (1.0 - (thres_per / 100.0)));
-
-    // Clamp cutoff to [0, total_components]
-    cutoff = std::max(0, std::min(cutoff, total_components));
-
-    // Resize CC_mean to include only the top components
-    CC_mean.resize(cutoff);
-
-    // Get the indices of components to keep (zero-based)
-    std::vector<int> components_to_keep;
-    components_to_keep.reserve(CC_mean.size());
-
-    for (const auto& pair : CC_mean) {
-        int col_idx = pair.first; // column index, 0-based
-        components_to_keep.emplace_back(col_idx);
-    }
-
-    // Sort components_to_keep in ascending order to match Python's selection
-    std::sort(components_to_keep.begin(), components_to_keep.end());
-
-    // Handle the case where no components are kept
-    if (components_to_keep.empty()) {
-        // Return an empty sparse matrix with the same number of rows and zero columns
-        return Eigen::SparseMatrix<double>(CC_loc_mat.rows(), 0);
-    }
-
-    // Create a new sparse matrix with filtered connected components
-    Eigen::SparseMatrix<double> CC_loc_mat_fin(CC_loc_mat.rows(), components_to_keep.size());
-    std::vector<Eigen::Triplet<double>> tripletList_fin;
-    tripletList_fin.reserve(CC_loc_mat.nonZeros()); // Reserve enough space
-
-    for (size_t idx = 0; idx < components_to_keep.size(); ++idx) {
-        int original_col = components_to_keep[idx];
-        for (Eigen::SparseMatrix<double>::InnerIterator it(CC_loc_mat, original_col); it; ++it) {
-            tripletList_fin.emplace_back(it.row(), static_cast<int>(idx), it.value());
-        }
-    }
-
-    // Populate the filtered sparse matrix
-    CC_loc_mat_fin.setFromTriplets(tripletList_fin.begin(), tripletList_fin.end());
-    CC_loc_mat_fin.makeCompressed();
-
-    return CC_loc_mat_fin;
 }
 
 // Function for topological connected component analysis
@@ -476,7 +461,7 @@ Eigen::VectorXd topological_comp_res(
         Eigen::SparseMatrix<double> CC_loc_mat_double;
         try {
             // First get the matrix as double type
-            CC_loc_mat_double = extract_connected_loc_mat_python_style(CC_list, loc.rows(), "sparse");
+            CC_loc_mat_double = extract_connected_loc_mat(CC_list, loc.rows(), "sparse");
             log_message("topological_comp_res: Created CC_loc_mat with " + 
                        std::to_string(CC_loc_mat_double.nonZeros()) + " non-zeros");
         } catch (const std::exception& e) {
@@ -487,7 +472,7 @@ Eigen::VectorXd topological_comp_res(
         // Filter connected components based on feature expression percentile
         Eigen::SparseMatrix<double> filtered_CC_loc_mat;
         try {
-            filtered_CC_loc_mat = filter_connected_loc_exp_python_style(CC_loc_mat_double, feat, thres_per);
+            filtered_CC_loc_mat = filter_connected_loc_exp(CC_loc_mat_double, feat, thres_per);
             log_message("topological_comp_res: Filtered CC_loc_mat, now has " + 
                        std::to_string(filtered_CC_loc_mat.nonZeros()) + " non-zeros");
         } catch (const std::exception& e) {
