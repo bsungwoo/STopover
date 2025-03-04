@@ -337,10 +337,14 @@ Eigen::VectorXd topological_comp_res(
                ", min_size=" + std::to_string(min_size) + 
                ", thres_per=" + std::to_string(thres_per) + 
                ", return_mode=" + return_mode);
+    log_message("Input dimensions: loc=" + std::to_string(loc.rows()) + "x" + std::to_string(loc.cols()) + 
+               ", feat=" + std::to_string(feat.size()));
     
     try {
         // Extract adjacency matrix and mask
+        log_message("Calling extract_adjacency_spatial...");
         auto [A, mask] = extract_adjacency_spatial(loc, spatial_type, fwhm);
+        log_message("extract_adjacency_spatial completed. A has " + std::to_string(A.nonZeros()) + " non-zeros");
         
         // Check if adjacency matrix is valid
         if (A.nonZeros() == 0) {
@@ -351,6 +355,7 @@ Eigen::VectorXd topological_comp_res(
         // Smooth the feature values
         Eigen::VectorXd smooth;
         try {
+            log_message("Starting feature smoothing...");
             // Apply Gaussian smoothing using the mask
             if (mask.size() > 0) {
                 // Following the original algorithm's smoothing approach
@@ -361,29 +366,36 @@ Eigen::VectorXd topological_comp_res(
                 double sum_smooth = sum_per_column.sum();
                 double sum_feat = feat.sum();
                 
+                log_message("Smoothing stats: sum_smooth=" + std::to_string(sum_smooth) + 
+                           ", sum_feat=" + std::to_string(sum_feat));
+                
                 if (sum_smooth > 0) {
                     smooth = sum_per_column.array() / sum_smooth * sum_feat;
                 } else {
+                    log_message("sum_smooth is zero, using original features");
                     smooth = feat; // Fallback to original features if smoothing fails
                 }
             } else {
                 // If no mask, use original feature values
+                log_message("No mask available, using original features");
                 smooth = feat;
             }
             
-            log_message("topological_comp_res: Smoothed feature vector, sum = " + std::to_string(smooth.sum()));
+            log_message("Smoothing completed, smooth vector sum = " + std::to_string(smooth.sum()));
         } catch (const std::exception& e) {
             log_message("ERROR in smoothing: " + std::string(e.what()) + ", using original features");
             smooth = feat;
         }
         
         // Apply t = smooth*(smooth > 0)
+        log_message("Creating thresholded vector t...");
         Eigen::VectorXd t = Eigen::VectorXd::Zero(smooth.size());
         for (int i = 0; i < smooth.size(); ++i) {
             t(i) = smooth(i) > 0 ? smooth(i) : 0;
         }
         
         // Compute unique nonzero thresholds in descending order
+        log_message("Computing unique thresholds...");
         std::vector<double> threshold;
         for (int i = 0; i < t.size(); ++i) {
             if (t(i) > 0) {
@@ -397,21 +409,60 @@ Eigen::VectorXd topological_comp_res(
         // Remove duplicates
         threshold.erase(std::unique(threshold.begin(), threshold.end()), threshold.end());
         
-        log_message("topological_comp_res: Found " + std::to_string(threshold.size()) + " unique thresholds");
+        log_message("Found " + std::to_string(threshold.size()) + " unique thresholds");
         
         // If no thresholds, return empty result
         if (threshold.empty()) {
-            log_message("topological_comp_res: No positive thresholds found, returning empty result");
+            log_message("No positive thresholds found, returning empty result");
             return Eigen::VectorXd::Zero(loc.rows());
         }
         
         // Extract connected components
         std::vector<std::vector<int>> CC_list;
         try {
-            CC_list = extract_connected_comp_python_style(t, A, threshold, loc.rows(), min_size);
+            log_message("Calling make_original_dendrogram_cc...");
+            auto [cCC_x, cE_x, cduration_x, chistory_x] = make_original_dendrogram_cc(t, A, threshold);
+            log_message("make_original_dendrogram_cc completed successfully");
+            
+            // Smooth the dendrogram
+            auto [nCC_x, nE_x, nduration_x, nhistory_x] = make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, Eigen::Vector2d(min_size, loc.rows()));
+
+            // Estimate dendrogram bars for plotting
+            Eigen::MatrixXd cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x;
+            std::vector<std::vector<int>> clayer_x;
+            std::tie(cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, clayer_x) = 
+                make_dendrogram_bar(chistory_x, cduration_x);
+
+            // Estimate smoothed dendrogram bars
+            Eigen::MatrixXd cvertical_x_new, cvertical_y_new, chorizontal_x_new, chorizontal_y_new, cdots_new;
+            std::vector<std::vector<int>> nlayer_x;
+            std::tie(cvertical_x_new, cvertical_y_new, chorizontal_x_new, chorizontal_y_new, cdots_new, nlayer_x) = 
+                make_dendrogram_bar(nhistory_x, nduration_x, cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x);
+
+            // Extract connected components based on layer information
+            if (nlayer_x.empty() || nlayer_x[0].empty()) {
+                // No connected components found; return an empty vector
+                return Eigen::VectorXd::Zero(loc.rows());
+            }
+
+            // Extract the first layer indices
+            std::vector<int> sind = nlayer_x[0];
+            CC_list.clear();
+            CC_list.reserve(sind.size());
+
+            // Populate CC_list with the connected components corresponding to sind
+            for (const auto& i : sind) {
+                if (i >= 0 && i < static_cast<int>(nCC_x.size())) { // Validate index
+                    CC_list.emplace_back(nCC_x[i]);
+                } else {
+                    // Handle invalid indices if necessary
+                    std::cerr << "Warning: Index " << i << " is out of bounds for nCC_x with size " << nCC_x.size() << ". Skipping.\n";
+                }
+            }
+
             log_message("topological_comp_res: Extracted " + std::to_string(CC_list.size()) + " connected components");
         } catch (const std::exception& e) {
-            log_message("ERROR in extract_connected_comp: " + std::string(e.what()));
+            log_message("ERROR in make_original_dendrogram_cc: " + std::string(e.what()));
             return Eigen::VectorXd::Zero(loc.rows());
         }
         
