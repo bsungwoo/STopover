@@ -2,6 +2,7 @@
 #include "make_original_dendrogram.h"
 #include "make_smoothed_dendrogram.h"
 #include "make_dendrogram_bar.h"
+#include "logging.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -421,28 +422,30 @@ Eigen::VectorXd topological_comp_res(
         }
         
         // Create connected component location matrix
-        Eigen::SparseMatrix<double> CC_loc_mat;
+        Eigen::SparseMatrix<double> CC_loc_mat_double;
         try {
-            CC_loc_mat = extract_connected_loc_mat_python_style(CC_list, loc.rows(), "sparse");
+            // First get the matrix as double type
+            CC_loc_mat_double = extract_connected_loc_mat_python_style(CC_list, loc.rows(), "sparse");
             log_message("topological_comp_res: Created CC_loc_mat with " + 
-                       std::to_string(CC_loc_mat.nonZeros()) + " non-zeros");
+                       std::to_string(CC_loc_mat_double.nonZeros()) + " non-zeros");
         } catch (const std::exception& e) {
             log_message("ERROR in extract_connected_loc_mat: " + std::string(e.what()));
             return Eigen::VectorXd::Zero(loc.rows());
         }
         
         // Filter connected components based on feature expression percentile
+        Eigen::SparseMatrix<double> filtered_CC_loc_mat;
         try {
-            CC_loc_mat = filter_connected_loc_exp_python_style(CC_loc_mat, feat, thres_per);
+            filtered_CC_loc_mat = filter_connected_loc_exp_python_style(CC_loc_mat_double, feat, thres_per);
             log_message("topological_comp_res: Filtered CC_loc_mat, now has " + 
-                       std::to_string(CC_loc_mat.nonZeros()) + " non-zeros");
+                       std::to_string(filtered_CC_loc_mat.nonZeros()) + " non-zeros");
         } catch (const std::exception& e) {
-            log_message("ERROR in filter_connected_loc_exp: " + std::string(e.what()));
-            // Continue with unfiltered matrix
+            log_message("ERROR in filter_connected_loc_exp: " + std::string(e.what()) + ", using unfiltered matrix");
+            filtered_CC_loc_mat = CC_loc_mat_double;
         }
         
         // Compute row sums
-        Eigen::VectorXd row_sums = CC_loc_mat * Eigen::VectorXd::Ones(CC_loc_mat.cols());
+        Eigen::VectorXd row_sums = filtered_CC_loc_mat * Eigen::VectorXd::Ones(filtered_CC_loc_mat.cols());
         log_message("topological_comp_res: Computed row sums, sum = " + std::to_string(row_sums.sum()));
         
         return row_sums;
