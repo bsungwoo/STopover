@@ -5,7 +5,6 @@ from scipy.ndimage import gaussian_filter
 import os
 import time
 from .parallel_computing import (
-    parallel_with_progress_extract_adjacency,
     parallel_with_progress_topological_comp,
     parallel_with_progress_jaccard_composite,
 )
