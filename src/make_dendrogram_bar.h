@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <numeric>
 #include <set>
+#include "logging.h"  // Include logging header
 
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd, std::vector<std::vector<int>>>
 make_dendrogram_bar(const std::vector<std::vector<int>>& history,

@@ -77,16 +77,26 @@ std::vector<Eigen::VectorXd> parallel_topological_comp(
     // Use py::object to allow for None
     py::object progress_callback = progress_callback_obj.is_none() ? py::none() : progress_callback_obj;
     py::object log_callback = log_callback_obj.is_none() ? py::none() : log_callback_obj;
+    
+    // Log function start with parameters
+    std::string log_msg = "Starting parallel_topological_comp with parameters: ";
+    log_msg += "spatial_type=" + spatial_type + ", fwhm=" + std::to_string(fwhm);
+    log_msg += ", min_size=" + std::to_string(min_size) + ", thres_per=" + std::to_string(thres_per);
+    log_msg += ", return_mode=" + return_mode + ", num_workers=" + std::to_string(num_workers);
+    log_message(log_msg);
 
     // Validate input sizes
     size_t list_size = locs.size();
     if (feats.size() != list_size) {
         std::string error_msg = "locs and feats must have the same length.";
+        log_message(error_msg);
         if (!log_callback.is_none()) {
             log_callback(error_msg.c_str());
         }
         throw std::invalid_argument(error_msg);
     }
+    
+    log_message("Input validation passed. Processing " + std::to_string(list_size) + " items");
 
     // Convert to Eigen types
     std::vector<Eigen::MatrixXd> locs_eigen;
@@ -180,6 +190,11 @@ std::vector<double> parallel_jaccard_composite(
     // Use py::object to allow for None
     py::object progress_callback = progress_callback_obj.is_none() ? py::none() : progress_callback_obj;
     py::object log_callback = log_callback_obj.is_none() ? py::none() : log_callback_obj;
+    
+    // Log function start with parameters
+    std::string log_msg = "Starting parallel_jaccard_composite with parameters: ";
+    log_msg += "jaccard_type=" + jaccard_type + ", num_workers=" + std::to_string(num_workers);
+    log_message(log_msg);
 
     // Validate input sizes
     size_t list_size = CCx_loc_sums.size();
@@ -187,11 +202,14 @@ std::vector<double> parallel_jaccard_composite(
         feat_xs.size() != list_size ||
         feat_ys.size() != list_size) {
         std::string error_msg = "All input lists must have the same length.";
+        log_message(error_msg);
         if (!log_callback.is_none()) {
             log_callback(error_msg.c_str());
         }
         throw std::invalid_argument(error_msg);
     }
+    
+    log_message("Input validation passed. Processing " + std::to_string(list_size) + " items");
 
     // Convert to Eigen types
     std::vector<Eigen::VectorXd> CCx_loc_sums_vec;
@@ -238,49 +256,56 @@ std::vector<double> parallel_jaccard_composite(
     #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < static_cast<int>(list_size); ++i) {
         try {
-            double jaccard_index;
-            if (jaccard_type == "default") {
-                jaccard_index = jaccard_composite(CCx_loc_sums_vec[i], CCy_loc_sums_vec[i], nullptr, nullptr);
-            } else if (jaccard_type == "weighted") {
-                jaccard_index = jaccard_composite(CCx_loc_sums_vec[i], CCy_loc_sums_vec[i], &feat_xs_vec[i], &feat_ys_vec[i]);
-            } else {
-                throw std::invalid_argument("Invalid jaccard_type: " + jaccard_type);
-            }
-            output[i] = jaccard_index;
-        }
-        catch (const std::exception& e) {
-            // Acquire GIL before calling Python functions
+            // Log the start of processing for this item
+            std::string thread_log = "Thread " + std::to_string(omp_get_thread_num()) + 
+                                    " processing item " + std::to_string(i);
             #pragma omp critical
             {
-                std::string error_msg = "Error in jaccard_composite: ";
+                log_message(thread_log);
+            }
+            
+            // Get pointers to feature vectors if jaccard_type is not "default"
+            const Eigen::VectorXd* feat_x_ptr = nullptr;
+            const Eigen::VectorXd* feat_y_ptr = nullptr;
+            
+            if (jaccard_type != "default") {
+                feat_x_ptr = &feat_xs_vec[i];
+                feat_y_ptr = &feat_ys_vec[i];
+            }
+            
+            // Call jaccard_composite with appropriate arguments
+            output[i] = jaccard_composite(CCx_loc_sums_vec[i], CCy_loc_sums_vec[i], feat_x_ptr, feat_y_ptr);
+            
+            // Log successful completion
+            #pragma omp critical
+            {
+                log_message("Thread " + std::to_string(omp_get_thread_num()) + 
+                           " completed item " + std::to_string(i) + 
+                           " with result " + std::to_string(output[i]));
+            }
+            
+            // Update progress if callback is provided
+            if (!progress_callback.is_none()) {
+                py::gil_scoped_acquire acquire;
+                progress_callback(1);  // Increment progress by 1
+            }
+        }
+        catch (const std::exception& e) {
+            #pragma omp critical
+            {
+                std::string error_msg = "Error processing item " + std::to_string(i) + ": ";
                 error_msg += e.what();
+                log_message(error_msg);
                 if (!log_callback.is_none()) {
                     py::gil_scoped_acquire acquire;
                     log_callback(error_msg.c_str());
                 }
             }
-            // Assign a default value or handle as needed
-            output[i] = 0.0;
-        }
-
-        // Update progress
-        #pragma omp critical
-        {
-            if (!progress_callback.is_none()) {
-                try {
-                    // Acquire GIL before calling Python functions
-                    py::gil_scoped_acquire acquire;
-                    progress_callback(1);
-                }
-                catch (const py::error_already_set& e) {
-                    std::string error_msg = "Error in progress_callback: ";
-                    error_msg += e.what();
-                    if (!log_callback.is_none()) {
-                        py::gil_scoped_acquire acquire;
-                        log_callback(error_msg.c_str());
-                    }
-                    throw std::runtime_error(error_msg);
-                }
+            // Don't throw here as it would terminate the parallel region
+            // Instead, set a flag to indicate an error occurred
+            #pragma omp critical
+            {
+                output[i] = 0.0;  // Set a default value
             }
         }
     }

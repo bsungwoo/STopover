@@ -78,34 +78,47 @@ py::array_t<double> eigen_to_numpy_vector(const Eigen::VectorXd& vec) {
 
 // Function to convert Eigen::SparseMatrix<double> to SciPy's CSR components
 py::dict eigen_to_scipy_csr(const Eigen::SparseMatrix<double>& eigen_csr) {
-    std::vector<double> data;
-    std::vector<py::ssize_t> indices;
-    std::vector<py::ssize_t> indptr;
-    indptr.reserve(static_cast<py::ssize_t>(eigen_csr.rows()) + 1);
-    indptr.push_back(0);
+    try {
+        log_message("Converting Eigen sparse matrix to SciPy CSR format");
+        log_message("Matrix dimensions: " + std::to_string(eigen_csr.rows()) + " x " + 
+                   std::to_string(eigen_csr.cols()) + " with " + 
+                   std::to_string(eigen_csr.nonZeros()) + " non-zero entries");
+        
+        std::vector<double> data;
+        std::vector<py::ssize_t> indices;
+        std::vector<py::ssize_t> indptr;
+        indptr.reserve(static_cast<py::ssize_t>(eigen_csr.rows()) + 1);
+        indptr.push_back(0);
 
-    for (int k = 0; k < eigen_csr.outerSize(); ++k) {
-        for (Eigen::SparseMatrix<double>::InnerIterator it(eigen_csr, k); it; ++it) {
-            data.push_back(it.value());
-            indices.push_back(static_cast<py::ssize_t>(it.col()));
+        for (int k = 0; k < eigen_csr.outerSize(); ++k) {
+            for (Eigen::SparseMatrix<double>::InnerIterator it(eigen_csr, k); it; ++it) {
+                data.push_back(it.value());
+                indices.push_back(static_cast<py::ssize_t>(it.col()));
+            }
+            indptr.push_back(static_cast<py::ssize_t>(data.size()));
         }
-        indptr.push_back(static_cast<py::ssize_t>(data.size()));
+
+        py::dict csr_dict;
+
+        // Define shapes explicitly as separate vectors to avoid ambiguity
+        std::vector<py::ssize_t> data_shape = { static_cast<py::ssize_t>(data.size()) };
+        std::vector<py::ssize_t> indices_shape = { static_cast<py::ssize_t>(indices.size()) };
+        std::vector<py::ssize_t> indptr_shape = { static_cast<py::ssize_t>(indptr.size()) };
+
+        // Create NumPy arrays with a copy to ensure memory safety
+        csr_dict["data"] = py::array_t<double>(data_shape, data.data()).copy();
+        csr_dict["indices"] = py::array_t<py::ssize_t>(indices_shape, indices.data()).copy();
+        csr_dict["indptr"] = py::array_t<py::ssize_t>(indptr_shape, indptr.data()).copy();
+        csr_dict["shape"] = py::make_tuple(eigen_csr.rows(), eigen_csr.cols());
+        
+        log_message("Successfully converted to SciPy CSR format");
+        
+        return csr_dict;
     }
-
-    py::dict csr_dict;
-
-    // Define shapes explicitly as separate vectors to avoid ambiguity
-    std::vector<py::ssize_t> data_shape = { static_cast<py::ssize_t>(data.size()) };
-    std::vector<py::ssize_t> indices_shape = { static_cast<py::ssize_t>(indices.size()) };
-    std::vector<py::ssize_t> indptr_shape = { static_cast<py::ssize_t>(indptr.size()) };
-
-    // Create NumPy arrays without using .copy(), ensuring proper ownership
-    csr_dict["data"] = py::array_t<double>(data_shape, data.data());
-    csr_dict["indices"] = py::array_t<py::ssize_t>(indices_shape, indices.data());
-    csr_dict["indptr"] = py::array_t<py::ssize_t>(indptr_shape, indptr.data());
-    csr_dict["shape"] = py::make_tuple(eigen_csr.rows(), eigen_csr.cols());
-
-    return csr_dict;
+    catch (const std::exception& e) {
+        log_message("Error in eigen_to_scipy_csr: " + std::string(e.what()));
+        throw;
+    }
 }
 
 // Function to convert SciPy's CSR components to Eigen::SparseMatrix<double>

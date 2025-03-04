@@ -15,28 +15,36 @@
 #include <pybind11/numpy.h>
 #include <Eigen/Sparse>
 #include <Eigen/Dense>
+#include "logging.h"  // Include logging header
 
 namespace py = pybind11;
+
+// Utility functions for array conversion
+Eigen::VectorXd array_to_vector(const py::array_t<double>& array);
+Eigen::MatrixXd array_to_matrix(const py::array_t<double>& array);
 
 // Parallel function for topological_comp_res
 std::vector<Eigen::VectorXd> parallel_topological_comp(
     const std::vector<py::array_t<double>>& locs,
-    const std::string& spatial_type, double fwhm,
+    const std::string& spatial_type, 
+    double fwhm,
     const std::vector<py::array_t<double>>& feats,
-    int min_size, double thres_per, const std::string& return_mode, 
+    int min_size, 
+    double thres_per, 
+    const std::string& return_mode, 
     int num_workers,
-    py::function progress_callback,
-    py::function log_callback);
+    py::object progress_callback_obj,  // Changed from py::function to py::object
+    py::object log_callback_obj);      // Changed from py::function to py::object
 
 // Parallel function for jaccard_composite
 std::vector<double> parallel_jaccard_composite(
-    py::list CCx_loc_sums,
-    py::list CCy_loc_sums,
-    py::list feat_xs,
-    py::list feat_ys,
+    const std::vector<py::array_t<double>>& CCx_loc_sums,  // Changed from py::list
+    const std::vector<py::array_t<double>>& CCy_loc_sums,  // Changed from py::list
+    const std::vector<py::array_t<double>>& feat_xs,       // Changed from py::list
+    const std::vector<py::array_t<double>>& feat_ys,       // Changed from py::list
     const std::string& jaccard_type,
     int num_workers,
-    py::function progress_callback,
-    py::function log_callback);
+    py::object progress_callback_obj,  // Changed from py::function to py::object
+    py::object log_callback_obj);      // Changed from py::function to py::object
 
 #endif // PARALLELIZE_H

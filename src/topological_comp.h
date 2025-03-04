@@ -13,6 +13,7 @@
 #include <iostream>
 #include <numeric> // Added to use std::accumulate
 #include <unordered_map>
+#include "logging.h"  // Include logging header
 
 // Function declarations with consistent types
 

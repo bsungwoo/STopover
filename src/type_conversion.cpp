@@ -31,6 +31,10 @@ Eigen::SparseMatrix<double> scipy_sparse_to_eigen_sparse(const py::object& scipy
         int n_rows = py::cast<int>(shape[0]);
         int n_cols = py::cast<int>(shape[1]);
         
+        // Log matrix dimensions for debugging
+        log_message("Processing sparse matrix with shape (" + std::to_string(n_rows) + ", " + 
+                   std::to_string(n_cols) + ")");
+        
         // Get arrays
         py::array_t<int> row_indices = py::cast<py::array_t<int>>(matrix.attr("row"));
         py::array_t<int> col_indices = py::cast<py::array_t<int>>(matrix.attr("col"));

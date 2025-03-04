@@ -2,9 +2,19 @@ import numpy as np
 import tqdm
 import gc
 from .parallelize import parallel_topological_comp, parallel_jaccard_composite
+import datetime
 
 def default_log_callback(message):
-    print(f"C++ Log: {message}", end='')  # 'end' to avoid adding extra newlines
+    """Enhanced log callback that writes to both console and file"""
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    formatted_message = f"[{timestamp}] C++ Log: {message}"
+    
+    # Print to console
+    print(formatted_message)
+    
+    # Also write to a log file
+    with open("stopover_parallel.log", "a") as log_file:
+        log_file.write(formatted_message + "\n")
 
 def parallel_with_progress_topological_comp(
     locs, feats, spatial_type="visium", fwhm=2.5,
@@ -31,6 +41,10 @@ def parallel_with_progress_topological_comp(
     # Assign log_callback_func early to ensure it's not None during exception handling
     if log_callback_func is None:
         log_callback_func = default_log_callback
+    
+    log_callback_func(f"Starting parallel_with_progress_topological_comp with {len(locs)} items")
+    log_callback_func(f"Parameters: spatial_type={spatial_type}, fwhm={fwhm}, min_size={min_size}, "
+                     f"thres_per={thres_per}, return_mode={return_mode}, num_workers={num_workers}")
 
     # Reshape feats to one-dimensional arrays if necessary
     feats = [feat.reshape(-1) if feat.ndim > 1 else feat for feat in feats]
@@ -38,15 +52,23 @@ def parallel_with_progress_topological_comp(
     # Verify shapes
     for i, feat in enumerate(feats):
         if feat.ndim != 1:
-            log_callback_func(f"Error: feats[{i}] is not one-dimensional after reshape.\n")
-            raise ValueError(f"feats[{i}] is not one-dimensional after reshape.")
+            error_msg = f"Error: feats[{i}] is not one-dimensional after reshape."
+            log_callback_func(error_msg)
+            raise ValueError(error_msg)
 
     try:
         # Convert all NumPy arrays to contiguous arrays of type float64
+        log_callback_func("Converting arrays to contiguous float64 format")
         locs = [np.ascontiguousarray(loc, dtype=np.float64) for loc in locs]
         feats = [np.ascontiguousarray(feat, dtype=np.float64) for feat in feats]
+        
+        # Log shapes for debugging
+        for i, (loc, feat) in enumerate(zip(locs, feats)):
+            log_callback_func(f"Item {i}: loc shape={loc.shape}, feat shape={feat.shape}")
+            
     except Exception as e:
-        log_callback_func(f"Error during conversion to contiguous arrays: {e}\n")
+        error_msg = f"Error during conversion to contiguous arrays: {e}"
+        log_callback_func(error_msg)
         raise
 
     # Total number of tasks
@@ -73,7 +95,8 @@ def parallel_with_progress_topological_comp(
                 log_callback=None
             )
         except Exception as e:
-            log_callback_func(f"Error during topological_comp computation: {e}\n")
+            error_msg = f"Error during topological_comp computation: {e}"
+            log_callback_func(error_msg)
             raise
 
     # Optionally, trigger garbage collection

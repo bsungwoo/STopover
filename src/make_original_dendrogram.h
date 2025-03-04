@@ -10,6 +10,7 @@
 #include <set>
 #include <queue>
 #include <tuple>
+#include "logging.h"  // Include logging header
 
 // Function to extract connected nodes using breadth-first search (BFS)
 std::set<int> extract_connected_nodes(const std::vector<std::vector<int>>& edge_list, int sel_node_idx);
