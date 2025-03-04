@@ -403,88 +403,84 @@ Eigen::VectorXd topological_comp_res(
         }
         
         // Extract connected components
-        std::vector<std::vector<int>> CC_list;
+        log_message("Starting to process connected components");
         try {
-            log_message("Calling make_original_dendrogram_cc...");
-            auto [cCC_x, cE_x, cduration_x, chistory_x] = make_original_dendrogram_cc(t, A, threshold);
-            log_message("make_original_dendrogram_cc completed successfully");
-            
-            // Smooth the dendrogram
-            auto [nCC_x, nE_x, nduration_x, nhistory_x] = make_smoothed_dendrogram(cCC_x, cE_x, cduration_x, chistory_x, Eigen::Vector2d(min_size, loc.rows()));
-
-            // Estimate dendrogram bars for plotting
-            Eigen::MatrixXd cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x;
-            std::vector<std::vector<int>> clayer_x;
-            std::tie(cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x, clayer_x) = 
-                make_dendrogram_bar(chistory_x, cduration_x);
-
-            // Estimate smoothed dendrogram bars
-            Eigen::MatrixXd cvertical_x_new, cvertical_y_new, chorizontal_x_new, chorizontal_y_new, cdots_new;
-            std::vector<std::vector<int>> nlayer_x;
-            std::tie(cvertical_x_new, cvertical_y_new, chorizontal_x_new, chorizontal_y_new, cdots_new, nlayer_x) = 
-                make_dendrogram_bar(nhistory_x, nduration_x, cvertical_x_x, cvertical_y_x, chorizontal_x_x, chorizontal_y_x, cdots_x);
-
-            // Extract connected components based on layer information
-            if (nlayer_x.empty() || nlayer_x[0].empty()) {
-                // No connected components found; return an empty vector
-                return Eigen::VectorXd::Zero(loc.rows());
-            }
-
-            // Extract the first layer indices
-            std::vector<int> sind = nlayer_x[0];
-            CC_list.clear();
-            CC_list.reserve(sind.size());
-
-            // Populate CC_list with the connected components corresponding to sind
-            for (const auto& i : sind) {
-                if (i >= 0 && i < static_cast<int>(nCC_x.size())) { // Validate index
-                    CC_list.emplace_back(nCC_x[i]);
-                } else {
-                    // Handle invalid indices if necessary
-                    std::cerr << "Warning: Index " << i << " is out of bounds for nCC_x with size " << nCC_x.size() << ". Skipping.\n";
+            // Extract connected components based on size
+            log_message("Extracting connected components based on size");
+            std::vector<std::vector<int>> CC_list;
+            for (const auto& cc : cCC_x) {
+                if (cc.size() >= min_size) {
+                    CC_list.push_back(cc);
+                    log_message("Added CC with size " + std::to_string(cc.size()));
                 }
             }
-
-            log_message("topological_comp_res: Extracted " + std::to_string(CC_list.size()) + " connected components");
+            log_message("Extracted " + std::to_string(CC_list.size()) + " connected components with size >= " + 
+                       std::to_string(min_size));
+            
+            // Check if we have any valid connected components
+            if (CC_list.empty()) {
+                log_message("No connected components meet the minimum size requirement, returning zeros");
+                return Eigen::VectorXd::Zero(loc.rows());
+            }
+            
+            // Create connected component location matrix
+            log_message("Creating connected component location matrix");
+            Eigen::SparseMatrix<double> CC_loc_mat;
+            try {
+                log_message("Calling extract_connected_loc_mat with " + std::to_string(CC_list.size()) + 
+                           " components and " + std::to_string(loc.rows()) + " spots");
+                CC_loc_mat = extract_connected_loc_mat(CC_list, loc.rows(), "sparse");
+                log_message("extract_connected_loc_mat completed successfully");
+                log_message("CC_loc_mat: rows=" + std::to_string(CC_loc_mat.rows()) + 
+                           ", cols=" + std::to_string(CC_loc_mat.cols()) + 
+                           ", nonZeros=" + std::to_string(CC_loc_mat.nonZeros()));
+            } catch (const std::exception& e) {
+                log_message("ERROR in extract_connected_loc_mat: " + std::string(e.what()));
+                throw;
+            }
+            
+            // Filter connected components based on feature expression
+            log_message("Filtering connected components based on feature expression");
+            Eigen::SparseMatrix<double> filtered_CC_loc_mat;
+            try {
+                log_message("Calling filter_connected_loc_exp with thres_per=" + std::to_string(thres_per));
+                log_message("feat: size=" + std::to_string(feat.size()) + 
+                           ", min=" + std::to_string(feat.minCoeff()) + 
+                           ", max=" + std::to_string(feat.maxCoeff()) + 
+                           ", mean=" + std::to_string(feat.mean()));
+                filtered_CC_loc_mat = filter_connected_loc_exp(CC_loc_mat, feat, thres_per);
+                log_message("filter_connected_loc_exp completed successfully");
+                log_message("filtered_CC_loc_mat: rows=" + std::to_string(filtered_CC_loc_mat.rows()) + 
+                           ", cols=" + std::to_string(filtered_CC_loc_mat.cols()) + 
+                           ", nonZeros=" + std::to_string(filtered_CC_loc_mat.nonZeros()));
+            } catch (const std::exception& e) {
+                log_message("ERROR in filter_connected_loc_exp: " + std::string(e.what()));
+                log_message("Using unfiltered matrix");
+                filtered_CC_loc_mat = CC_loc_mat;
+            }
+            
+            // Compute row sums
+            log_message("Computing row sums");
+            try {
+                log_message("Creating ones vector of size " + std::to_string(filtered_CC_loc_mat.cols()));
+                Eigen::VectorXd ones = Eigen::VectorXd::Ones(filtered_CC_loc_mat.cols());
+                log_message("Multiplying filtered_CC_loc_mat by ones vector");
+                Eigen::VectorXd row_sums = filtered_CC_loc_mat * ones;
+                log_message("Row sums computed successfully");
+                log_message("row_sums: size=" + std::to_string(row_sums.size()) + 
+                           ", sum=" + std::to_string(row_sums.sum()) + 
+                           ", min=" + std::to_string(row_sums.minCoeff()) + 
+                           ", max=" + std::to_string(row_sums.maxCoeff()));
+                
+                return row_sums;
+            } catch (const std::exception& e) {
+                log_message("ERROR in computing row sums: " + std::string(e.what()));
+                throw;
+            }
         } catch (const std::exception& e) {
-            log_message("ERROR in make_original_dendrogram_cc: " + std::string(e.what()));
+            log_message("ERROR in processing connected components: " + std::string(e.what()));
             return Eigen::VectorXd::Zero(loc.rows());
         }
-        
-        // If no components, return empty result
-        if (CC_list.empty()) {
-            log_message("topological_comp_res: No connected components found, returning empty result");
-            return Eigen::VectorXd::Zero(loc.rows());
-        }
-        
-        // Create connected component location matrix
-        Eigen::SparseMatrix<double> CC_loc_mat_double;
-        try {
-            // First get the matrix as double type
-            CC_loc_mat_double = extract_connected_loc_mat(CC_list, loc.rows(), "sparse");
-            log_message("topological_comp_res: Created CC_loc_mat with " + 
-                       std::to_string(CC_loc_mat_double.nonZeros()) + " non-zeros");
-        } catch (const std::exception& e) {
-            log_message("ERROR in extract_connected_loc_mat: " + std::string(e.what()));
-            return Eigen::VectorXd::Zero(loc.rows());
-        }
-        
-        // Filter connected components based on feature expression percentile
-        Eigen::SparseMatrix<double> filtered_CC_loc_mat;
-        try {
-            filtered_CC_loc_mat = filter_connected_loc_exp(CC_loc_mat_double, feat, thres_per);
-            log_message("topological_comp_res: Filtered CC_loc_mat, now has " + 
-                       std::to_string(filtered_CC_loc_mat.nonZeros()) + " non-zeros");
-        } catch (const std::exception& e) {
-            log_message("ERROR in filter_connected_loc_exp: " + std::string(e.what()) + ", using unfiltered matrix");
-            filtered_CC_loc_mat = CC_loc_mat_double;
-        }
-        
-        // Compute row sums
-        Eigen::VectorXd row_sums = filtered_CC_loc_mat * Eigen::VectorXd::Ones(filtered_CC_loc_mat.cols());
-        log_message("topological_comp_res: Computed row sums, sum = " + std::to_string(row_sums.sum()));
-        
-        return row_sums;
     }
     catch (const std::exception& e) {
         log_message("ERROR in topological_comp_res: " + std::string(e.what()));
