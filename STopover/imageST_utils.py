@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import scanpy as sc
 from pyarrow import csv
+from pyarrow import parquet
 
 from scipy import sparse
 from anndata import AnnData as an
@@ -222,7 +223,11 @@ def read_imageST(load_path=None, sp_adata_cell=None, sc_adata=None, min_counts=1
 
     if grid_method == "transcript":
         ## Read transcript information file
-        tx_coord_all = csv.read_csv(os.path.join(load_path, tx_file_name)).to_pandas().loc[:,cell_id+[tx_xcoord_colname,tx_ycoord_colname,transcript_colname]]
+        if 'csv' in tx_file_name:
+            tx_coord_all = csv.read_csv(os.path.join(load_path, tx_file_name)).to_pandas().loc[:,cell_id+[tx_xcoord_colname,tx_ycoord_colname,transcript_colname]]
+        elif 'parquet' in tx_file_name:
+            tx_coord_all = parquet.read_table(parquet_file).to_pandas().loc[:,cell_id+[tx_xcoord_colname,tx_ycoord_colname,transcript_colname]]
+
         # Remove transcript data not included in a cell and from negative probes
         if ST_type == "cosmx": tx_coord_all = tx_coord_all[(tx_coord_all[cell_id_colname] != 0) & (~tx_coord_all[transcript_colname].str.contains("NegPrb"))]
 
