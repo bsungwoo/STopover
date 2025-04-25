@@ -229,7 +229,7 @@ def read_imageST(load_path=None, sp_adata_cell=None, sc_adata=None, min_counts=1
         if 'csv' in tx_file_name:
             tx_coord_all = csv.read_csv(os.path.join(load_path, tx_file_name)).to_pandas().loc[:,cell_id+[tx_xcoord_colname,tx_ycoord_colname,transcript_colname]]
         elif 'parquet' in tx_file_name:
-            tx_coord_all = parquet.read_table(parquet_file).to_pandas().loc[:,cell_id+[tx_xcoord_colname,tx_ycoord_colname,transcript_colname]]
+            tx_coord_all = parquet.read_table(os.path.join(load_path, tx_file_name)).to_pandas().loc[:,cell_id+[tx_xcoord_colname,tx_ycoord_colname,transcript_colname]]
             if ST_type == 'xenium':
                 tx_coord_all = tx_coord_all[tx_coord_all['is_gene'] & (tx_coord_all[cell_id_colname] != 'UNASSIGNED')]
 
