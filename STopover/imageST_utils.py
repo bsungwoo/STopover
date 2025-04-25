@@ -151,10 +151,10 @@ def read_imageST(load_path=None, sp_adata_cell=None, sc_adata=None, min_counts=1
     else:
         if sc_celltype_colname not in sc_adata.obs.columns:
             print("Cell type annotation (sc_celltype_colname) not found in sc_adata.obs")
-    if ST_type == "cosmx": 
+    if ST_type in ["cosmx","xenium"]: 
         if grid_method in ["transcript","cell"]: cell_id = [fov_colname, cell_id_colname]
         else: raise ValueError("'grid_method' should be either 'transcript' or 'cell'")
-    elif ST_type in ["merfish","xenium"]:
+    elif ST_type in ["merfish"]:
         if grid_method!="cell": raise NotImplementedError("'grid_method' should be 'cell' when 'ST_type' is 'merfish' or 'xenium'")
         cell_id = [cell_id_colname]
     else: raise ValueError("'ST_type' should be among 'cosmx','xenium', or 'merfish'")
