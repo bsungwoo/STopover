@@ -1,7 +1,7 @@
 # STopover
 Tool to capture spatial colocalization and interaction in the TME using topological analysis in spatial transcriptomics data  
-* Cite as: Bae S, Lee H, Na KJ, Lee DS, Choi H, Kim YT. STopover captures spatial colocalization and interaction in the tumor microenvironment using topological analysis in spatial transcriptomics data. bioRxiv, 2022.  
-* https://doi.org/10.1101/2022.11.16.516708  
+* Cite as: Bae S, Lee H, Na KJ, Lee DS, Choi H, Kim YT. STopover captures spatial colocalization and interaction in the tumor microenvironment using topological analysis in spatial transcriptomics data. Genome Med. 2025 Apr 1;17(1):33. doi: 10.1186/s13073-025-01457-1. PMID: 40170080; PMCID: PMC11963362.
+
 
 ## Installation and running
 ### 1. Python
